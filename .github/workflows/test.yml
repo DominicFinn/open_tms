@@ -30,6 +30,9 @@ jobs:
       - name: Check module boundaries
         run: npm run lint:boundaries
 
+      - name: Check tenancy
+        run: npm run lint:tenancy
+
       - name: Run backend tests
         run: npm -w backend run test -- --ci --forceExit
 

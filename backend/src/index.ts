@@ -45,6 +45,7 @@ import { ICarrierTrackingIntegrationRepository } from './repositories/CarrierTra
 import type { ITradingPartnerRepository } from './repositories/TradingPartnerRepository.js';
 import type { IOutboundEdiDeliveryService } from './services/OutboundEdiDeliveryService.js';
 import { authenticateJWT } from './middleware/jwtAuth.js';
+import { registerStrictOrgScope } from './auth/orgScopeMiddleware.js';
 import { registerCorePublicRoutes, registerCoreAuthenticatedRoutes } from './routes/modules/core.js';
 import { registerFinancePublicRoutes, registerFinanceAuthenticatedRoutes } from './routes/modules/finance.js';
 import { registerInventoryPublicRoutes, registerInventoryAuthenticatedRoutes } from './routes/modules/inventory.js';
@@ -130,6 +131,7 @@ async function start() {
   // the route handler runs.
   await server.register(async function authenticatedRoutes(app) {
     app.addHook('onRequest', authenticateJWT);
+    await registerStrictOrgScope(app);
     await registerCoreAuthenticatedRoutes(app);
     await registerFinanceAuthenticatedRoutes(app);
     await registerInventoryAuthenticatedRoutes(app);

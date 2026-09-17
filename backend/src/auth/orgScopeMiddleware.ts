@@ -11,17 +11,17 @@
  * This middleware moves that resolution to a single preHandler so:
  *   1. `req.orgId` is populated for every request that goes through the
  *      authenticated route plugin, with no per-handler boilerplate.
- *   2. Routes that require a tenant scope can opt into `requireOrgScope`,
- *      which fails closed (404) when no tenant context exists. This makes
- *      it impossible to ship a new route that silently spans tenants.
- *   3. The dev/seed fallback (first Organization) stays available as a
- *      soft mode for routes that genuinely don't need strict scope
- *      (public tracking, optional-auth load board, etc.).
+ *   2. `requireOrgScope` fails closed (401) when no tenant context exists.
+ *      `registerStrictOrgScope` applies both to every authenticated route
+ *      in index.ts, so a new authenticated route cannot forget either.
+ *   3. A token without `organizationId` resolves to the sole Organization
+ *      only when exactly one exists (#239). With two or more it resolves
+ *      to null and the strict scope refuses the request.
  *
  * Two flavours
  * ------------
  *  - `attachOrgScopeHook(prisma)`: a preHandler that resolves the JWT's
- *     orgId (or falls back to the first Organization) and stores it on
+ *     orgId (or the sole Organization, see `resolveOrgId`) and stores it on
  *     `req.orgId`. Leaves `req.orgId = null` if neither is available.
  *  - `requireOrgScope`: a preHandler that returns 401 when `req.orgId`
  *     is null. Use on routes that absolutely must run inside a tenant.
@@ -36,7 +36,7 @@ declare module 'fastify' {
     /**
      * The multi-tenancy scope for this request. Populated by
      * `attachOrgScopeHook`; null when neither the JWT nor the
-     * default-Organization fallback could provide one.
+     * sole-Organization fallback could provide one.
      */
     orgId?: string | null;
   }
@@ -56,9 +56,8 @@ export function attachOrgScopeHook(prisma: PrismaClient): preHandlerHookHandler 
     try {
       req.orgId = await resolveOrgId(req, prisma);
     } catch {
-      // `resolveOrgId` doesn't throw in practice (its DB lookup is wrapped
-      // in optional chaining), but defensively leave orgId null if it
-      // ever does. `requireOrgScope` will block the request downstream.
+      // A failed lookup means no tenant, never a guessed one.
+      // `requireOrgScope` blocks the request downstream.
       req.orgId = null;
     }
   };
@@ -96,6 +95,18 @@ export const requireOrgScope: preHandlerHookHandler = async (
  */
 export async function registerOrgScope(server: FastifyInstance): Promise<void> {
   server.addHook('preHandler', attachOrgScopeHook(server.prisma));
+}
+
+/**
+ * Resolve the tenant and refuse the request without one. index.ts registers this on the
+ * authenticated route block, so every route behind `authenticateJWT` runs inside a tenant whether
+ * or not its own plugin remembered to ask (#303). Registering it here rather than per plugin is the
+ * point: a hook registered on a parent runs before the child plugin's own preHandlers, and the
+ * child's `registerOrgScope` is then a no-op because the hook is idempotent.
+ */
+export async function registerStrictOrgScope(server: FastifyInstance): Promise<void> {
+  server.addHook('preHandler', attachOrgScopeHook(server.prisma));
+  server.addHook('preHandler', requireOrgScope);
 }
 
 /**
@@ -213,7 +224,7 @@ export function attachOrgScopeFromPartnerHook(prisma: PrismaClient): preHandlerH
 
     // No JWT and no partner candidate: leave req.orgId undefined so a
     // downstream `attachOrgScopeHook` (chained as a fallback) can run
-    // the default-Organization lookup. Setting null here would block it,
+    // the sole-Organization lookup. Setting null here would block it,
     // because the standard hook's idempotence check skips when orgId is
     // already defined.
     if (!candidate) return;
@@ -239,11 +250,11 @@ export function attachOrgScopeFromPartnerHook(prisma: PrismaClient): preHandlerH
 
 /**
  * Convenience for EDI route plugins. Chains the partner-aware hook with
- * the standard default-Organization fallback so:
+ * the standard sole-Organization fallback so:
  *  - admin reads use the JWT
  *  - webhook ingest derives orgId from `body.partnerId` / URL params
  *  - everything else (create-partner, unauthed seed flows) lands on the
- *    first Organization
+ *    sole Organization when there is exactly one, and null otherwise
  *
  * Use at the top of an EDI route plugin:
  *

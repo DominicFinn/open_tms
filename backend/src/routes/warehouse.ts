@@ -39,7 +39,9 @@ export async function warehouseRoutes(server: FastifyInstance) {
   // Multi-tenancy: now that operational routes carry a session JWT with
   // organizationId, the standard org-scope hook works the same way as
   // every other authed plugin. Unauthed auth endpoints fall through to
-  // the default-Organization fallback (matches their previous behaviour).
+  // the sole-Organization fallback, which is null once a second org
+  // exists (#239). Those endpoints should resolve the org from the link or
+  // user they are given instead (#303).
   await registerOrgScope(server);
 
   // ─── Auth: Magic Link ───────────────────────────────────────────────────────

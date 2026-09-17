@@ -30,11 +30,10 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  * `requireOrgScope` then refuses a request that resolved no tenant at all, so a WMS handler never
  * runs with a null scope.
  *
- * It does NOT make the surface strictly JWT-scoped. `resolveOrgId` still falls back to the first
- * Organization when the token carries no `organizationId`, which is the dev and seed path and
- * applies to every surface, not just this one. That fallback is #239. What this fixes is the
- * narrower and worse bug: `req.orgId` being undefined, which Prisma reads as no filter, so every
- * WMS list returned every tenant's rows.
+ * Since #239 a token without `organizationId` only resolves when exactly one Organization exists,
+ * and since #303 index.ts applies the same strict scope to every authenticated route. The guard
+ * keeps its own registration so a WMS plugin stays scoped wherever it is mounted, and so the
+ * permission check below always runs after the tenant is known.
  */
 export async function registerWmsGuard(server: FastifyInstance): Promise<void> {
   await registerOrgScope(server);

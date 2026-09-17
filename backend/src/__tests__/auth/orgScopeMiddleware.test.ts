@@ -4,26 +4,25 @@ import {
   attachOrgScopeFromCustomerUserHook,
   attachOrgScopeFromCarrierUserHook,
   attachOrgScopeFromPartnerHook,
+  registerStrictOrgScope,
 } from '../../auth/orgScopeMiddleware';
-import { resetOrgScopeCache } from '../../auth/orgScope';
+import Fastify from 'fastify';
 
 describe('attachOrgScopeHook', () => {
-  beforeEach(() => resetOrgScopeCache());
-
   it('populates req.orgId from the JWT when present', async () => {
-    const prisma: any = { organization: { findFirst: jest.fn() } };
+    const prisma: any = { organization: { findMany: jest.fn() } };
     const hook = attachOrgScopeHook(prisma);
     const req: any = { user: { organizationId: 'org-from-jwt' } };
 
     await (hook as any).call({}, req, {} as any, jest.fn());
     expect(req.orgId).toBe('org-from-jwt');
     // The JWT path short-circuits the DB lookup, by design.
-    expect(prisma.organization.findFirst).not.toHaveBeenCalled();
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
   });
 
-  it('falls back to the first Organization when the JWT lacks orgId', async () => {
+  it('falls back to the sole Organization when the JWT lacks orgId', async () => {
     const prisma: any = {
-      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'fallback-org' }) },
+      organization: { findMany: jest.fn().mockResolvedValue([{ id: 'fallback-org' }]) },
     };
     const hook = attachOrgScopeHook(prisma);
     const req: any = {};
@@ -32,35 +31,44 @@ describe('attachOrgScopeHook', () => {
     expect(req.orgId).toBe('fallback-org');
   });
 
-  it('leaves req.orgId as the default-org literal when no Organization exists', async () => {
+  it('leaves req.orgId null when no Organization exists', async () => {
     const prisma: any = {
-      organization: { findFirst: jest.fn().mockResolvedValue(null) },
+      organization: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const hook = attachOrgScopeHook(prisma);
     const req: any = {};
 
     await (hook as any).call({}, req, {} as any, jest.fn());
-    // resolveOrgId returns 'default-org' in this case — matches phase-2
-    // behaviour rather than forcing every dev fixture to seed an Org row.
-    expect(req.orgId).toBe('default-org');
+    expect(req.orgId).toBeNull();
+  });
+
+  it('leaves req.orgId null when the token has no org and several Organizations exist (#239)', async () => {
+    const prisma: any = {
+      organization: { findMany: jest.fn().mockResolvedValue([{ id: 'org-a' }, { id: 'org-b' }]) },
+    };
+    const hook = attachOrgScopeHook(prisma);
+    const req: any = { user: { sub: 'user-1' } };
+
+    await (hook as any).call({}, req, {} as any, jest.fn());
+    expect(req.orgId).toBeNull();
   });
 
   it('is idempotent — does NOT overwrite an existing req.orgId', async () => {
     const prisma: any = {
-      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'other-org' }) },
+      organization: { findMany: jest.fn().mockResolvedValue([{ id: 'other-org' }]) },
     };
     const hook = attachOrgScopeHook(prisma);
     const req: any = { orgId: 'preset-by-upstream' };
 
     await (hook as any).call({}, req, {} as any, jest.fn());
     expect(req.orgId).toBe('preset-by-upstream');
-    expect(prisma.organization.findFirst).not.toHaveBeenCalled();
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
   });
 
   it('leaves req.orgId null when resolveOrgId throws (defensive)', async () => {
     const prisma: any = {
       organization: {
-        findFirst: jest.fn().mockRejectedValue(new Error('DB connection lost')),
+        findMany: jest.fn().mockRejectedValue(new Error('DB connection lost')),
       },
     };
     const hook = attachOrgScopeHook(prisma);
@@ -377,10 +385,10 @@ describe('attachOrgScopeFromPartnerHook', () => {
     expect(prisma.tradingPartner.findUnique).not.toHaveBeenCalled();
   });
 
-  it('chains with attachOrgScopeHook: partner-hook leaves it undefined → fallback hook applies the default Organization', async () => {
+  it('chains with attachOrgScopeHook: partner-hook leaves it undefined → fallback hook applies the sole Organization', async () => {
     const prisma: any = {
       tradingPartner: { findUnique: jest.fn() },
-      organization: { findFirst: jest.fn().mockResolvedValue({ id: 'fallback-org' }) },
+      organization: { findMany: jest.fn().mockResolvedValue([{ id: 'fallback-org' }]) },
     };
     const partnerHook = attachOrgScopeFromPartnerHook(prisma);
     const fallbackHook = attachOrgScopeHook(prisma);
@@ -391,5 +399,46 @@ describe('attachOrgScopeFromPartnerHook', () => {
 
     await (fallbackHook as any).call({}, req, {} as any, jest.fn());
     expect(req.orgId).toBe('fallback-org');
+  });
+});
+
+describe('registerStrictOrgScope (#239, #303)', () => {
+  async function buildServer(orgIds: string[], user: Record<string, unknown> | undefined) {
+    const server = Fastify();
+    server.decorate('prisma', {
+      organization: { findMany: jest.fn().mockResolvedValue(orgIds.map((id) => ({ id }))) },
+    } as any);
+    await server.register(async (app) => {
+      app.addHook('onRequest', async (req) => {
+        (req as any).user = user;
+      });
+      await registerStrictOrgScope(app);
+      // A child plugin that forgot to register any scope of its own.
+      await app.register(async (child) => {
+        child.get('/scoped', async (req) => ({ data: { orgId: req.orgId }, error: null }));
+      });
+    });
+    return server;
+  }
+
+  it('serves a request whose token carries an org', async () => {
+    const server = await buildServer(['org-a', 'org-b'], { sub: 'u1', organizationId: 'org-b' });
+    const res = await server.inject({ method: 'GET', url: '/scoped' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.orgId).toBe('org-b');
+  });
+
+  it('refuses a token without an org once a second Organization exists', async () => {
+    const server = await buildServer(['org-a', 'org-b'], { sub: 'u1' });
+    const res = await server.inject({ method: 'GET', url: '/scoped' });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data).toBeNull();
+  });
+
+  it('still serves a token without an org when only one Organization exists', async () => {
+    const server = await buildServer(['only-org'], { sub: 'u1' });
+    const res = await server.inject({ method: 'GET', url: '/scoped' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.orgId).toBe('only-org');
   });
 });

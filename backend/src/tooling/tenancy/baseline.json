@@ -1,0 +1,287 @@
+[
+  {
+    "rule": "model-nullable-org",
+    "target": "EdiTransactionLog",
+    "reason": "Nullable org column. Backfill and make it NOT NULL."
+  },
+  {
+    "rule": "model-nullable-org",
+    "target": "User",
+    "reason": "Users without organizationId are what the sole-org fallback (#239) serves. Backfill and make it NOT NULL."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "Attachment",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "AuditLog",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "CargoDiscrepancy",
+    "reason": "Fixed by #295 (PR #300). Delete when it merges."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "CargoScan",
+    "reason": "Fixed by #295 (PR #300). Delete when it merges."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "ConnectivityLog",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "CustomFieldAudit",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "CustomFieldDefinition",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "CustomFieldVersion",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "DocumentTemplate",
+    "reason": "Fixed by #294 (PR #304). Delete when it merges."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "GeneratedDocument",
+    "reason": "Fixed by #294 (PR #304). Delete when it merges."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "ShipmentType",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "UserNotificationPreference",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "model-without-org",
+    "target": "WebhookLog",
+    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "commands/orders/CreateOrderCommand.ts",
+    "reason": "An orgId in the payload overrides the command orgId, so a caller can write an order into another tenant."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/apiKeys.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/cargoTracking.ts",
+    "reason": "Fixed by #295 (PR #300). Delete when it merges."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/carrierInvoices.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/carrierTracking.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/cartonCatalogue.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/cartonization.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/charges.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/comments.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/containerIntelligence.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/edi210.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/edi820.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/financialQueries.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/inventory.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/invoices.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/issues.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/manifestIngestion.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/packAudit.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/productUom.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/quotes.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/warehouseOperationsDashboard.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "routes/warehouseZones.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "services/CargoReconciliationService.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "org-fallback",
+    "target": "services/cutoff/ShipmentCutoffMonitorService.ts",
+    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
+  },
+  {
+    "rule": "route-without-scope",
+    "target": "routes/carrierTracking.ts",
+    "reason": "Public plugin with no org scope helper. Register one."
+  },
+  {
+    "rule": "route-without-scope",
+    "target": "routes/customerApi.ts",
+    "reason": "Public plugin with no org scope helper. Register one."
+  },
+  {
+    "rule": "route-without-scope",
+    "target": "routes/internalUsers.ts",
+    "reason": "Public plugin with no org scope helper. Register one."
+  },
+  {
+    "rule": "route-without-scope",
+    "target": "routes/orderLineItemRules.ts",
+    "reason": "Reads req.orgId without registering a scope, so it is undefined and Prisma applies no filter."
+  },
+  {
+    "rule": "route-without-scope",
+    "target": "routes/webhook.ts",
+    "reason": "Public plugin with no org scope helper. Register one."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "commands/quotes/AcceptQuoteCommand.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "events/handlers/AutoTenderHandler.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "events/handlers/ColdChainComplianceHandler.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "events/handlers/MarginAlertHandler.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "integrations/SystemLocoAdapter.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "repositories/OrganizationRepository.ts",
+    "reason": "getSettings reads and updates the first organization for every tenant, so /organization/settings is shared across tenants."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "services/carrierTracking/CarrierTrackingService.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "services/cutoff/ShipmentCutoffMonitorService.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "services/DailyReportService.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "services/DocumentGenerationService.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "services/LocationResolutionService.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "worker.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  },
+  {
+    "rule": "unscoped-org-lookup",
+    "target": "workers/inboundWebhookWorker.ts",
+    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
+  }
+]

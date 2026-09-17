@@ -163,6 +163,7 @@ When a rule here must be bypassed for a legitimate reason, document it in
 ## Security checklist
 
 - [ ] Every tenant-scoped query filtered by `orgId`; no inline `organization.findFirst()`
+- [ ] `npm run lint:tenancy` passes without growing its baseline
 - [ ] Cross-tenant misses return 404, not 403
 - [ ] Permission checks in a preHandler, covering both permission and tenant
 - [ ] Validation in the `schema` block; no client-supplied scope ids trusted
