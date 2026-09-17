@@ -116,6 +116,9 @@ import {
   CheckLeftOnVehicleCommandHandler,
   UpdateCargoDiscrepancyCommandHandler,
 } from '../../commands/cargoTracking/index.js';
+import { RecordGeofenceArrivalCommandHandler } from '../../commands/tracking/RecordGeofenceArrivalCommand.js';
+import { RecordGeofenceDepartureCommandHandler } from '../../commands/tracking/RecordGeofenceDepartureCommand.js';
+import { RecordJourneyCheckpointCommandHandler } from '../../commands/tracking/RecordJourneyCheckpointCommand.js';
 import { AcknowledgeExcursionCommandHandler } from '../../commands/coldChain/AcknowledgeExcursionCommand.js';
 import { ResolveExcursionCommandHandler } from '../../commands/coldChain/ResolveExcursionCommand.js';
 import { SetDispositionCommandHandler } from '../../commands/coldChain/SetDispositionCommand.js';
@@ -293,7 +296,8 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IArrivalCriteriaEvaluationService).toFactory(() => {
     return new ArrivalCriteriaEvaluationService(
       container.resolve(TOKENS.PrismaClient),
-      container.resolve(TOKENS.IOrderDeliveryService)
+      container.resolve(TOKENS.IOrderDeliveryService),
+      container.resolve(TOKENS.ICommandBus)
     );
   });
 
@@ -664,6 +668,11 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new ReconcileStopCargoCommandHandler(prisma, eventBus));
   bus.register(new CheckLeftOnVehicleCommandHandler(prisma, eventBus));
   bus.register(new UpdateCargoDiscrepancyCommandHandler(prisma, eventBus));
+
+  // Journey tracking commands (full-journey proof: departure/checkpoint/arrival)
+  bus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
+  bus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
+  bus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
 
   // Cold Chain commands
   bus.register(new AcknowledgeExcursionCommandHandler(prisma, eventBus));

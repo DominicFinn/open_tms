@@ -34,18 +34,14 @@ export class IssueClosureReportHandler implements IEventHandler {
 
     const issueId = event.entityId;
 
+    const reportService = new IssueClosureReportService(this.prisma, this.storageProvider);
+
     // Check if report already exists (idempotent)
-    const existing = await this.prisma.generatedDocument.findFirst({
-      where: {
-        documentType: 'issue_closure_report',
-        metadata: { path: ['issueId'], equals: issueId },
-      },
-    });
+    const existing = await reportService.findLatestReport(event.orgId, issueId);
     if (existing) return;
 
     try {
-      const reportService = new IssueClosureReportService(this.prisma, this.storageProvider);
-      const result = await reportService.generateReport(issueId);
+      const result = await reportService.generateReport(event.orgId, issueId);
       console.log(`[IssueClosureReportHandler] Generated closure report for issue ${issueId}: doc=${result.documentId}`);
     } catch (err: any) {
       console.error(`[IssueClosureReportHandler] Failed to generate report for issue ${issueId}: ${err.message}`);

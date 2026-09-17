@@ -159,7 +159,10 @@ export default function VNextWmsOperationsDashboard() {
 
   useEffect(() => {
     load();
-    const id = setInterval(() => load(true), 60_000);
+    // Skipped while the tab is hidden — see .claude/rules/realtime.md
+    const id = setInterval(() => {
+      if (!document.hidden) load(true);
+    }, 60_000);
     return () => clearInterval(id);
   }, []);
 

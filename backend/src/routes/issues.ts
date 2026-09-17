@@ -16,6 +16,7 @@ import { ESCALATE_ISSUE } from '../commands/issues/EscalateIssueCommand.js';
 import { ADD_ISSUE_LABEL } from '../commands/issues/AddIssueLabelCommand.js';
 import { REMOVE_ISSUE_LABEL } from '../commands/issues/RemoveIssueLabelCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { IssueClosureReportService, IssueNotFoundError } from '../services/IssueClosureReportService.js';
 import { guardWrites } from '../auth/guardWrites.js';
 import {
   CREATE_ISSUE_LABEL,
@@ -534,15 +535,14 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.post<{ Params: { id: string } }>('/api/v1/issues/:id/report', {
     schema: { tags: ['Issues'], summary: 'Generate issue closure report PDF' },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-    const { IssueClosureReportService } = await import('../services/IssueClosureReportService.js');
     const storageProvider = container.resolve<any>(TOKENS.IBinaryStorageProvider);
     const reportService = new IssueClosureReportService(prisma, storageProvider);
     try {
-      const result = await reportService.generateReport(req.params.id);
+      const result = await reportService.generateReport(req.orgId!, req.params.id);
       reply.code(201);
       return { data: result, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof IssueNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });
@@ -551,10 +551,8 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string } }>('/api/v1/issues/:id/report', {
     schema: { tags: ['Issues'], summary: 'Get issue closure report document' },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-    const doc = await prisma.generatedDocument.findFirst({
-      where: { documentType: 'issue_closure_report', metadata: { path: ['issueId'], equals: req.params.id } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const storageProvider = container.resolve<any>(TOKENS.IBinaryStorageProvider);
+    const doc = await new IssueClosureReportService(prisma, storageProvider).findLatestReport(req.orgId!, req.params.id);
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'No report generated yet. Use POST to generate.' };

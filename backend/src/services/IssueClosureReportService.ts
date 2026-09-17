@@ -28,15 +28,29 @@ interface IssueReportContext {
   labels: any[];
 }
 
+export class IssueNotFoundError extends Error {
+  constructor() {
+    super('Issue not found');
+    this.name = 'IssueNotFoundError';
+  }
+}
+
 export class IssueClosureReportService {
   constructor(
     private prisma: PrismaClient,
     private storageProvider: IBinaryStorageProvider,
   ) {}
 
-  async generateReport(issueId: string): Promise<{ documentId: string; storageKey: string }> {
+  async findLatestReport(orgId: string, issueId: string) {
+    return this.prisma.generatedDocument.findFirst({
+      where: { orgId, documentType: 'issue_closure_report', metadata: { path: ['issueId'], equals: issueId } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async generateReport(orgId: string, issueId: string): Promise<{ documentId: string; storageKey: string }> {
     // 1. Gather all data
-    const ctx = await this.gatherReportData(issueId);
+    const ctx = await this.gatherReportData(orgId, issueId);
 
     // 2. Build PDF
     const pdfBytes = await this.buildPdf(ctx);
@@ -51,6 +65,7 @@ export class IssueClosureReportService {
 
     const doc = await this.prisma.generatedDocument.create({
       data: {
+        orgId,
         documentType: 'issue_closure_report',
         fileName: `Issue-Closure-${ctx.issue.id.slice(0, 8)}.pdf`,
         shipmentId: ctx.issue.sourceEntityType === 'shipment' ? ctx.issue.sourceEntityId : undefined,
@@ -75,14 +90,15 @@ export class IssueClosureReportService {
     return { documentId: doc.id, storageKey };
   }
 
-  private async gatherReportData(issueId: string): Promise<IssueReportContext> {
-    const issue = await this.prisma.issue.findUniqueOrThrow({
-      where: { id: issueId },
+  private async gatherReportData(orgId: string, issueId: string): Promise<IssueReportContext> {
+    const issue = await this.prisma.issue.findFirst({
+      where: { id: issueId, orgId },
       include: {
         capaReports: { orderBy: { createdAt: 'desc' } },
         labelAssignments: { include: { label: true } },
       },
     });
+    if (!issue) throw new IssueNotFoundError();
 
     // Comments on this issue
     const comments = await this.prisma.comment.findMany({
@@ -117,8 +133,8 @@ export class IssueClosureReportService {
     let excursions: any[] = [];
 
     if (issue.sourceEntityType === 'shipment' && issue.sourceEntityId) {
-      shipment = await this.prisma.shipment.findUnique({
-        where: { id: issue.sourceEntityId },
+      shipment = await this.prisma.shipment.findFirst({
+        where: { id: issue.sourceEntityId, orgId },
         include: {
           customer: true,
           origin: true,
@@ -158,8 +174,8 @@ export class IssueClosureReportService {
     }
 
     if (issue.sourceEntityType === 'order' && issue.sourceEntityId) {
-      order = await this.prisma.order.findUnique({
-        where: { id: issue.sourceEntityId },
+      order = await this.prisma.order.findFirst({
+        where: { id: issue.sourceEntityId, orgId },
         include: { customer: true },
       });
     }

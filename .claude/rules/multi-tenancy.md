@@ -22,9 +22,28 @@ paths:
   highly-sensitive endpoints), chain `requireOrgScope` after `attachOrgScopeHook`. Use sparingly
   because the soft fallback covers dev/seed flows.
 - **NEVER call `prisma.organization.findFirst()` inline in a route** — it silently picks org-1 for
-  everyone when multiple Organizations exist. Use the helper instead.
+  everyone when multiple Organizations exist. Use the helper instead. 30 of these are still in the
+  tree (#296), and the helper itself still falls back the same way (#239).
+- **Never write `(req as any).orgId`, and never fall back to a `'default-org'` literal.** The cast
+  defeats the type system, and the literal is not an org id, so whatever it writes matches nothing.
+  Four sites still do this (#239).
 - The shared `resolveOrgId`/`resolveActorId` functions in `backend/src/auth/orgScope.ts` are now
   mostly internal; new routes should consume `req.orgId` via the middleware.
+
+## A scope that resolves to nothing is not a scope
+
+`req.orgId!` is a lie the compiler believes. If the hook that populates it was never registered,
+`req.orgId` is `undefined`, and **Prisma reads `where: { orgId: undefined }` as no filter at all** —
+so the query returns every tenant's rows while the source looks correct.
+
+That is not hypothetical. No WMS route registered the org scope until #238, so ten repositories,
+21 command-handler fixes and a whole `scopedWhere` helper were all filtering on `undefined`. It
+passed typecheck, ~1980 unit tests and CI, and leaked across tenants against a real database.
+
+**Two things follow.** Register the scope where it cannot be forgotten — for WMS that is
+`registerWmsGuard`, which every WMS route already calls. And when you change anything tenancy-
+related, **start the server, seed a second organization, and call the endpoint.** Unit tests mock
+Prisma, so they never see this class of bug.
 
 ## Per-surface scope helpers
 

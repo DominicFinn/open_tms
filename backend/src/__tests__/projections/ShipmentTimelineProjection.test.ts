@@ -60,6 +60,19 @@ describe('buildTimelineRow', () => {
     expect(row).toBeNull();
   });
 
+  it('maps a journey checkpoint to a timeline row (#305)', async () => {
+    const prisma = mockPrisma();
+    const row = await buildTimelineRow(
+      prisma,
+      createTestEvent('tracking.journey_checkpoint', 'shipment', 'ship-1', { checkpointIndex: 5, totalCheckpoints: 10 })
+    );
+    expect(row).toMatchObject({
+      shipmentId: 'ship-1',
+      eventType: 'journey_checkpoint',
+      description: 'Checkpoint 5/10 reached',
+    });
+  });
+
   describe('stop classification', () => {
     function stopPrisma(seq: number, min: number, max: number) {
       return mockPrisma({
@@ -122,5 +135,10 @@ describe('ShipmentTimelineProjection.handle', () => {
     await proj.handle(createTestEvent('shipment.cutoff_cleared', 'shipment', 'ship-1', {}));
     expect(prisma.shipmentEvent.findFirst).not.toHaveBeenCalled();
     expect(prisma.shipmentEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('subscribes to tracking.journey_checkpoint in addition to shipment.* (#305)', () => {
+    const proj = new ShipmentTimelineProjection(mockPrisma());
+    expect(proj.eventPatterns).toContain('tracking.journey_checkpoint');
   });
 });

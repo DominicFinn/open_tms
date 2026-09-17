@@ -38,7 +38,7 @@ describe('BolGenerationHandler', () => {
 
     await handler.handle(completedEvent({ bolRequested: true, shipmentId: 'ship-1' }));
 
-    expect(documentService.generateBOL).toHaveBeenCalledWith('ship-1', undefined, expect.anything());
+    expect(documentService.generateBOL).toHaveBeenCalledWith('test-org', 'ship-1', undefined, expect.anything());
     expect(prisma.loadPlan.updateMany).toHaveBeenCalledWith({
       where: { id: 'lp-1', orgId: 'test-org', bolDocumentId: null },
       data: { bolDocumentId: 'doc-1' },

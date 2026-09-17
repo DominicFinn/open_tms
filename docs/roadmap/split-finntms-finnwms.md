@@ -143,13 +143,32 @@ Seven FKs and one model stand between the two products.
   | 6a | Nullable | `locationId` nullable on the 14 WMS models | ✅ #245 |
   | 6b | Write path | create commands and the WMS create forms onto `facilityId` | ✅ #248 |
   | 6c | Contract | drop the `locationId` parameter and the `Location` FKs | ✅ #280 |
+  | — | Cleanup | the four models with no `Location` relation, missed by every batch | ✅ #285 |
 
-  **Phase 2a ends here, one step short of where the plan said.** 6c cut the foreign keys and the
+### Phase 2a: done, and what it left behind
+
+**Done.** All sixteen WMS models carry a `facilityId`, reads and writes both name the facility, the
+WMS UI has one shared picker, and **no foreign key crosses the tms/wms boundary**, so a schema
+without a `Location` table resolves. That was the point of the phase.
+
+**Open tickets, each self-contained:**
+
+| | |
+|---|---|
+| **#297** | Give `InventoryRecord` a facility. This is what blocks dropping the `locationId` columns, and it is the last piece of the split. |
+| **#239** | `resolveOrgId` falls back to the first Organization, plus four `'default-org'` literals that bypass the helper entirely. Carries an open decision on making `User.organizationId` NOT NULL. |
+| **#296** | 30 inline `organization.findFirst()` calls still in routes and services, left over from #117. |
+| **#298** | Jest never exits cleanly, which costs minutes on every local and CI run. |
+| **#124** | Retire the `vnext-design/` naming. Unrelated to the split, but every file this phase touched still carries it. |
+
+**Phase 2a ends here, one step short of where the plan said.** 6c cut the foreign keys and the
   `locationId` query parameter, but the columns stay: `InventoryRecord` is still keyed on Location
   and has no facility, so putaway, returns and wave release need one, and `CompletePutaway` resolves
   a scanned bin by `(locationId, label)`. Giving inventory a facility is Phase 4 work, and the
   columns go with it. What Phase 2a did deliver is the thing that mattered: no foreign key crosses
   the boundary, so a schema without a `Location` table resolves.
+
+### What the phase cost, and why
 
   6a had to come first: a command cannot stop writing `locationId` while the column is NOT NULL.
   Making it nullable surfaced three places that assumed it was always there, and one more unscoped

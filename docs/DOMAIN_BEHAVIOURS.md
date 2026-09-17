@@ -344,8 +344,21 @@ the access ledger.
 | Event | Source | Side Effects |
 |-------|--------|-------------|
 | `tracking.location_received` | Inbound webhook worker | ShipmentReadModel.currentLat/Lng updated, geofence check |
-| `tracking.geofence_entered` | Geofence calculation | ShipmentStop marked arrived, orders updated |
+| `tracking.geofence_entered` | `RecordGeofenceArrivalCommand` | ShipmentStop marked arrived, orders updated; also emits `shipment.stop_arrived` for the destination stop |
+| `tracking.geofence_exited` | `RecordGeofenceDepartureCommand` | Origin ShipmentStop marked completed; also emits `shipment.stop_completed` ("Departed origin" on the timeline) |
+| `tracking.journey_checkpoint` | `RecordJourneyCheckpointCommand` | Writes a `ShipmentJourneyCheckpoint` row; no shipment/stop side effect |
 | `tracking.eta_updated` | ETA recalculation | — |
+
+**Full-journey proof (#283).** `ArrivalCriteriaEvaluationService` dispatches all three geofence events
+through the command bus (previously `tracking.geofence_entered` was defined but never published —
+arrival was a silent direct write). On each device ping: a match against a `pending` stop dispatches
+`RecordGeofenceArrivalCommand`; a stop that was `arrived` and is now outside its geofence radius (origin
+only, v1) dispatches `RecordGeofenceDepartureCommand`; otherwise, if the shipment has departed its origin,
+has a `LaneRoute`, and hasn't yet arrived at its destination, its position is located along the route
+(`RouteProgressService.locateOnRoute`) and bucketed into one of 10 segments — a new segment dispatches
+`RecordJourneyCheckpointCommand`. A checkpoint never fires on the same ping as an arrival. Query a
+shipment's full journey via `GET /api/v1/shipments/:id/journey`. v1 scope: origin/destination only (no
+waypoints), location only (no sensor data), no GPS-jitter hysteresis on the geofence boundary.
 
 ### IoT Devices & Vendors
 
@@ -1751,6 +1764,25 @@ The frontend "Accept & Book" button (visible for broker orgs) triggers this flow
 **Endpoint:** `GET /api/v1/customers/:id/credit-status?additionalAmountCents=N`
 
 `CreditCheckService` sums unpaid invoices (draft, approved, sent, overdue, partial) and compares against `Customer.creditLimitCents`. Returns pass/fail with outstanding balance and available credit. Null credit limit = unlimited.
+
+### Document Tenancy (#294)
+
+`GeneratedDocument` and `DocumentTemplate` each belong to one organization (`orgId`, NOT NULL).
+
+- Every document route runs under `registerOrgScope` plus `requireOrgScope`, and every repository
+  read and write filters on `req.orgId`. A document, template, shipment or order id from another
+  organization returns 404, never 403.
+- Generation (`DocumentGenerationService`, `evaluateBolReadiness`, the compliance and issue closure
+  reports) looks its source up by `{ id, orgId }`. A miss throws `DocumentSourceNotFoundError`,
+  which the routes answer with 404. Nothing is written and no BOL number is consumed.
+- Async generation jobs carry the requesting user's `orgId`; the worker scopes every lookup to it.
+- Templates and defaults are per organization. Setting a default unsets only the caller's own
+  default for that document type.
+- The customer portal document list and download are narrowed by the customer's organization as
+  well as its `customerId`.
+- **Backfill:** each existing document took its org from its own shipment, then order, issue,
+  customer or carrier. Templates had no owner, so each one went to the org that first used it (or
+  the oldest org), and every other org received its own copy, with its documents repointed to it.
 
 ### Bill of Lading Generation & Readiness Gate
 

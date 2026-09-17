@@ -72,6 +72,9 @@ model Shipment {
   cargoScans         CargoScan[]
   cargoDiscrepancies CargoDiscrepancy[]
 
+  // Full-journey proof (departure/checkpoint/arrival geofence events)
+  journeyCheckpoints ShipmentJourneyCheckpoint[]
+
   // Read model relations
   orderReadModels OrderReadModel[]
 
@@ -837,7 +840,10 @@ model PendingLaneRequest {
 // ─── Document Models ────────────────────────────────────────────────────────
 
 model DocumentTemplate {
-  id           String  @id @default(uuid())
+  id           String       @id @default(uuid())
+  // Tenant-scoped (#294): each organization owns its own templates and defaults.
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
   name         String // "Standard BOL", "International Customs"
   documentType String // "bol", "label", "customs", "daily_report"
   description  String?
@@ -857,12 +863,17 @@ model DocumentTemplate {
 
   documents GeneratedDocument[]
 
-  @@index([documentType])
+  @@index([orgId, documentType])
   @@index([active])
 }
 
 model GeneratedDocument {
   id String @id @default(uuid())
+
+  // Tenant-scoped (#294). Every read and write filters on this; a document's
+  // shipment or order id alone is never enough to reach it.
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
 
   // What kind of document
   documentType   String // "bol", "label", "customs", "daily_report", "attachment"
@@ -899,12 +910,14 @@ model GeneratedDocument {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([shipmentId])
-  @@index([orderId])
+  // Already over the index budget, so #294 widened three existing indexes to
+  // lead with orgId rather than adding new ones.
+  @@index([orgId, shipmentId])
+  @@index([orgId, orderId])
   @@index([carrierId])
   @@index([customerId])
   @@index([documentType])
-  @@index([createdAt])
+  @@index([orgId, createdAt])
   @@index([retentionExpiresAt])
 }
 
@@ -1704,6 +1717,29 @@ model CargoScan {
   @@index([shipmentStopId])
   @@index([shipmentId])
   @@index([scannedAt])
+}
+
+// Ledger of in-transit location checkpoints along a shipment's planned route,
+// between the origin-departure and destination-arrival geofence events. One
+// row per checkpoint reached — see docs/DOMAIN_BEHAVIOURS.md.
+model ShipmentJourneyCheckpoint {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  orgId      String
+
+  checkpointIndex          Int // 1-9, position along the planned route (10 = destination)
+  lat                      Float
+  lng                      Float
+  distanceAlongRouteMeters Int
+  fractionComplete         Float
+
+  eventTime DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([shipmentId, checkpointIndex])
+  @@index([shipmentId])
+  @@index([orgId])
 }
 
 // Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries

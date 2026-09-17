@@ -13,6 +13,7 @@ import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import { randomUUID } from 'crypto';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { ColdChainService } from './ColdChainService.js';
+import { DocumentSourceNotFoundError } from './DocumentGenerationService.js';
 
 interface ReportContext {
   shipment: any;
@@ -33,9 +34,9 @@ export class ComplianceReportService {
     private storageProvider: IBinaryStorageProvider,
   ) {}
 
-  async generateComplianceReport(shipmentId: string): Promise<{ documentId: string; storageKey: string }> {
+  async generateComplianceReport(orgId: string, shipmentId: string): Promise<{ documentId: string; storageKey: string }> {
     // 1. Gather all data
-    const ctx = await this.gatherReportData(shipmentId);
+    const ctx = await this.gatherReportData(orgId, shipmentId);
 
     // 2. Build PDF
     const pdfBytes = await this.buildPdf(ctx);
@@ -50,6 +51,7 @@ export class ComplianceReportService {
 
     const doc = await this.prisma.generatedDocument.create({
       data: {
+        orgId,
         documentType: 'cold_chain_compliance',
         fileName: `Cold-Chain-Compliance-${ctx.shipment.reference}.pdf`,
         shipmentId,
@@ -72,9 +74,9 @@ export class ComplianceReportService {
     return { documentId: doc.id, storageKey };
   }
 
-  private async gatherReportData(shipmentId: string): Promise<ReportContext> {
-    const shipment = await this.prisma.shipment.findUniqueOrThrow({
-      where: { id: shipmentId },
+  private async gatherReportData(orgId: string, shipmentId: string): Promise<ReportContext> {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       include: {
         customer: true,
         origin: true,
@@ -82,6 +84,7 @@ export class ComplianceReportService {
         carrier: true,
       },
     });
+    if (!shipment) throw new DocumentSourceNotFoundError('Shipment');
 
     // Get devices assigned to this shipment
     const assignments = await this.prisma.deviceAssignment.findMany({

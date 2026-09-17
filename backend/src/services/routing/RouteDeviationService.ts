@@ -119,7 +119,7 @@ export class RouteDeviationService implements IRouteDeviationService {
  * Find the nearest point on a line segment to a given point.
  * Projects the point onto the segment and clamps to segment endpoints.
  */
-function nearestPointOnSegment(point: LatLng, segStart: LatLng, segEnd: LatLng): LatLng {
+export function nearestPointOnSegment(point: LatLng, segStart: LatLng, segEnd: LatLng): LatLng {
   const dx = segEnd.lng - segStart.lng;
   const dy = segEnd.lat - segStart.lat;
   const lenSq = dx * dx + dy * dy;

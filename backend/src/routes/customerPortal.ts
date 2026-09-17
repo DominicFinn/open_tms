@@ -8,6 +8,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { container, TOKENS } from '../di/index.js';
+import type { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { ICustomerAuthService } from '../services/CustomerAuthService.js';
 import { authenticateCustomerJWT } from '../middleware/jwtAuth.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -61,6 +62,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
   const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
+  const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
 
   // Multi-tenancy: every authed customer-portal route resolves req.orgId
   // by walking customerUser.customerId → Customer.orgId.
@@ -1051,18 +1053,9 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
+    if (!req.orgId) return { data: [], error: null };
 
-    const documents = await server.prisma.generatedDocument.findMany({
-      where: { customerId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true, documentType: true, fileName: true,
-        mimeType: true, fileSize: true, createdAt: true,
-        shipmentId: true,
-      },
-      take: 100,
-    });
-
+    const documents = await docRepo.findForCustomer(req.orgId, customerId, 100);
     return { data: documents, error: null };
   });
 
@@ -1074,9 +1067,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
 
-    const doc = await server.prisma.generatedDocument.findFirst({
-      where: { id, customerId },
-    });
+    const doc = req.orgId ? await docRepo.findByIdForCustomer(req.orgId, customerId, id) : null;
 
     if (!doc) { reply.code(404); return { data: null, error: 'Document not found' }; }
 
