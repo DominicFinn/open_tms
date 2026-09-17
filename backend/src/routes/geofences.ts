@@ -7,6 +7,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_GEOFENCE } from '../commands/geofences/CreateGeofenceCommand.js';
 import { UPDATE_GEOFENCE } from '../commands/geofences/UpdateGeofenceCommand.js';
 import { ARCHIVE_GEOFENCE } from '../commands/geofences/ArchiveGeofenceCommand.js';
+import { statusForGeofenceError } from '../commands/geofences/errors.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
 
@@ -20,9 +21,14 @@ const polygonGeometrySchema = z.object({
   points: z.array(z.object({ lat: z.number(), lng: z.number() })).min(3),
 });
 
+// Whitelisted, not freeform (security rule: whitelist allowed values). "location" is the only
+// entityType with UI/wiring today; extend this alongside CreateGeofenceCommand's existence check
+// when a second entity type is wired in.
+const GEOFENCE_ENTITY_TYPES = ['location'] as const;
+
 const createGeofenceBodySchema = z
   .object({
-    entityType: z.string().min(1),
+    entityType: z.enum(GEOFENCE_ENTITY_TYPES),
     entityId: z.string().min(1),
     name: z.string().optional(),
     shapeType: z.enum(['radial', 'polygon']),
@@ -114,7 +120,7 @@ export async function geofenceRoutes(server: FastifyInstance) {
     });
 
     if (!result.success) {
-      reply.code(400);
+      reply.code(statusForGeofenceError(result.error));
       return { data: null, error: result.error ?? 'Failed to create geofence' };
     }
 

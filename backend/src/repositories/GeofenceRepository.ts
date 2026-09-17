@@ -27,6 +27,7 @@ export interface UpdateGeofenceDTO {
 
 export interface IGeofenceRepository {
   findByEntity(entityType: string, entityId: string, orgId: string): Promise<Geofence[]>;
+  findByEntities(entityType: string, entityIds: string[], orgId: string): Promise<Geofence[]>;
   findById(id: string, orgId: string): Promise<Geofence | null>;
   create(data: CreateGeofenceDTO): Promise<Geofence>;
   update(id: string, data: UpdateGeofenceDTO): Promise<Geofence>;
@@ -39,6 +40,15 @@ export class GeofenceRepository implements IGeofenceRepository {
   async findByEntity(entityType: string, entityId: string, orgId: string): Promise<Geofence[]> {
     return this.prisma.geofence.findMany({
       where: { entityType, entityId, orgId, active: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /** Batch lookup for list/search endpoints that embed geofences on each entity in one query. */
+  async findByEntities(entityType: string, entityIds: string[], orgId: string): Promise<Geofence[]> {
+    if (entityIds.length === 0) return [];
+    return this.prisma.geofence.findMany({
+      where: { entityType, entityId: { in: entityIds }, orgId, active: true },
       orderBy: { createdAt: 'asc' },
     });
   }

@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { GEOFENCE_ENTITY_NOT_FOUND } from './errors.js';
 
 export interface CreateGeofencePayload {
   entityType: string;
@@ -32,6 +33,17 @@ export class CreateGeofenceCommandHandler extends BaseCommandHandler<
     const { entityType, entityId, name, shapeType, geometry } = command.payload;
     if (!command.orgId) {
       throw new Error('orgId is required to create a Geofence (multi-tenancy)');
+    }
+
+    // "location" is the only entityType with UI/wiring today (see routes/geofences.ts, which
+    // whitelists it at the schema level). Confirm the target actually exists in this org before
+    // attaching a geofence to it — a stale or cross-tenant id must read as not found.
+    if (entityType === 'location') {
+      const location = await tx.location.findFirst({
+        where: { id: entityId, orgId: command.orgId },
+        select: { id: true },
+      });
+      if (!location) throw new Error(GEOFENCE_ENTITY_NOT_FOUND);
     }
 
     const geofence = await tx.geofence.create({

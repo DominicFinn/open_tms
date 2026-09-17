@@ -37,6 +37,9 @@ const mockTx = {
     update: jest.fn().mockResolvedValue(radialGeofence),
     findFirst: jest.fn().mockResolvedValue({ id: 'geo-1', active: true }),
   },
+  location: {
+    findFirst: jest.fn().mockResolvedValue({ id: 'loc-1' }),
+  },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
 
@@ -120,6 +123,25 @@ describe('Geofence Command Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/orgId is required/);
+    });
+
+    it('fails with GEOFENCE_ENTITY_NOT_FOUND when the location does not exist for this org', async () => {
+      const { bus } = mockEventBus();
+      mockTx.location.findFirst.mockResolvedValueOnce(null);
+      const handler = new CreateGeofenceCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(CREATE_GEOFENCE, {
+          entityType: 'location',
+          entityId: 'missing-loc',
+          shapeType: 'radial' as const,
+          geometry: { centerLat: 41.88, centerLng: -87.63, radiusMeters: 200 },
+        })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('GEOFENCE_ENTITY_NOT_FOUND');
+      expect(mockTx.geofence.create).not.toHaveBeenCalled();
     });
   });
 

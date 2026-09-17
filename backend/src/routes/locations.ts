@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
+import { IGeofenceRepository } from '../repositories/GeofenceRepository.js';
 import { ILocationResolutionService } from '../services/LocationResolutionService.js';
 import { container, TOKENS } from '../di/index.js';
 import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
@@ -11,10 +12,29 @@ import { guardWrites } from '../auth/guardWrites.js';
 export async function locationRoutes(server: FastifyInstance) {
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
   const arrivalCriteriaRepo = container.resolve<IArrivalCriteriaRepository>(TOKENS.IArrivalCriteriaRepository);
+  const geofenceRepo = container.resolve<IGeofenceRepository>(TOKENS.IGeofenceRepository);
   const locationResolutionService = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
   await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('locations'));
+
+  /** Attach each location's active geofences (Geofence has no Prisma relation to
+   *  Location — it's the polymorphic entityType/entityId pattern shared with
+   *  Comment/Attachment — so this is a batched lookup, not an `include`). */
+  async function withGeofences<T extends { id: string }>(locations: T[], orgId: string) {
+    const byLocation = new Map<string, unknown[]>();
+    const geofences = await geofenceRepo.findByEntities('location', locations.map((l) => l.id), orgId);
+    for (const g of geofences) {
+      const bucket = byLocation.get(g.entityId);
+      if (bucket) bucket.push(g);
+      else byLocation.set(g.entityId, [g]);
+    }
+    return locations.map((l) => ({ ...l, geofences: byLocation.get(l.id) ?? [] }));
+  }
+
+  async function withGeofence<T extends { id: string }>(location: T, orgId: string) {
+    return { ...location, geofences: await geofenceRepo.findByEntity('location', location.id, orgId) };
+  }
 
   /** Publish a location domain event (best-effort, non-blocking) */
   async function publishLocationEvent(
@@ -64,7 +84,7 @@ export async function locationRoutes(server: FastifyInstance) {
       server.prisma.location.count({ where }),
     ]);
     reply.header('X-Total-Count', String(total));
-    return { data: locations, error: null };
+    return { data: await withGeofences(locations, orgId), error: null };
   });
 
   // Valid location types
@@ -122,7 +142,7 @@ export async function locationRoutes(server: FastifyInstance) {
       where: { id: result.location.id, orgId },
       include: { arrivalCriteria: { where: { active: true } } },
     });
-    return { data: full, error: null };
+    return { data: full && await withGeofence(full, orgId), error: null };
   });
 
   // Get location by ID (with arrival criteria)
@@ -137,7 +157,7 @@ export async function locationRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Location not found' };
     }
-    return { data: location, error: null };
+    return { data: await withGeofence(location, orgId), error: null };
   });
 
   // Update location
@@ -181,7 +201,7 @@ export async function locationRoutes(server: FastifyInstance) {
       changes,
     }, orgId, req.user?.sub);
 
-    return { data: updated, error: null };
+    return { data: await withGeofence(updated, orgId), error: null };
   });
 
   // Location search endpoint
@@ -194,7 +214,7 @@ export async function locationRoutes(server: FastifyInstance) {
 
     const orgId = req.orgId!;
     const locations = await locationsRepo.search(q, orgId);
-    return { data: locations, error: null };
+    return { data: await withGeofences(locations, orgId), error: null };
   });
 
   // Delete (archive) location — no command handler for archive yet,
