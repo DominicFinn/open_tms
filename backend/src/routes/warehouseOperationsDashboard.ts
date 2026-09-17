@@ -22,7 +22,7 @@ export async function warehouseOperationsDashboardRoutes(server: FastifyInstance
       summary: 'Aggregate warehouse operations KPIs (throughput, cycle times, quality, live work, exceptions, capacity)',
     },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId;
+    const orgId = req.orgId!;
     const snapshot = await service.buildSnapshot(orgId);
     return { data: snapshot, error: null };
   });

@@ -126,6 +126,7 @@ export class WarehouseOperationsDashboardService {
     // Simple v1: sample shipments dispatched in window, join back to order created time via OrderShipment
     const recentDispatched = await this.prisma.shipment.findMany({
       where: {
+        orgId,
         status: { in: ['in_transit', 'delivered'] },
         updatedAt: { gte: thirtyDaysAgo },
       },

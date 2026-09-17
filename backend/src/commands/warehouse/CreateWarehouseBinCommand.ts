@@ -38,8 +38,14 @@ export class CreateWarehouseBinCommandHandler extends BaseCommandHandler<
     emit: EmitFn
   ): Promise<{ id: string; label: string; binType: string }> {
     // Verify zone exists
-    const zone = await tx.warehouseZone.findUnique({ where: { id: command.payload.zoneId } });
+    const zone = await tx.warehouseZone.findFirst({ where: { id: command.payload.zoneId, orgId: command.orgId } });
     if (!zone) throw new Error(`Zone ${command.payload.zoneId} not found`);
+
+    // WarehouseAisle has no orgId of its own; it is tenant-safe only if it sits in the zone just checked.
+    if (command.payload.aisleId) {
+      const aisle = await tx.warehouseAisle.findFirst({ where: { id: command.payload.aisleId, zoneId: zone.id } });
+      if (!aisle) throw new Error(`Aisle ${command.payload.aisleId} not found`);
+    }
 
     // Phase 2a (#248): the caller names the facility. locationId is still written from the
     // facility's source location until 6c drops the column, and is null in a warehouse-only

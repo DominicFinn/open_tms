@@ -101,27 +101,12 @@
   },
   {
     "rule": "org-fallback",
-    "target": "routes/cartonCatalogue.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/cartonization.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/charges.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
     "rule": "org-fallback",
     "target": "routes/comments.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/containerIntelligence.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
@@ -141,11 +126,6 @@
   },
   {
     "rule": "org-fallback",
-    "target": "routes/inventory.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/invoices.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
@@ -156,32 +136,7 @@
   },
   {
     "rule": "org-fallback",
-    "target": "routes/manifestIngestion.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/packAudit.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/productUom.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/quotes.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/warehouseOperationsDashboard.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/warehouseZones.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {

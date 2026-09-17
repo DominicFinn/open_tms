@@ -29,7 +29,7 @@ export async function packAuditRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as { verdict?: string; packTaskId?: string; limit?: number };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const where: any = { orgId };
     if (q.verdict) where.verdict = q.verdict;
     if (q.packTaskId) where.packTaskId = q.packTaskId;
@@ -46,7 +46,7 @@ export async function packAuditRoutes(server: FastifyInstance) {
   server.get('/api/v1/pack-audits/stats', {
     schema: { tags: ['WMS - Pack Audit'], summary: 'Aggregate pack audit stats' },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
 
     const [total, pass, warning, fail] = await Promise.all([
@@ -72,8 +72,8 @@ export async function packAuditRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Pack Audit'], summary: 'Pack audit detail' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const audit = await prisma.packAudit.findUnique({
-      where: { id },
+    const audit = await prisma.packAudit.findFirst({
+      where: { id, orgId: req.orgId! },
       include: {
         packTask: { include: { packLines: true } },
       },
@@ -104,9 +104,16 @@ export async function packAuditRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
     const body = req.body as any;
+
+    const packTask = await prisma.packTask.findFirst({ where: { id: body.packTaskId, orgId }, select: { id: true } });
+    if (!packTask) { reply.code(404); return { data: null, error: 'Pack task not found' }; }
+    if (body.cartonCatalogueId) {
+      const carton = await prisma.cartonCatalogue.findFirst({ where: { id: body.cartonCatalogueId, orgId }, select: { id: true } });
+      if (!carton) { reply.code(404); return { data: null, error: 'Carton not found' }; }
+    }
 
     const result = await commandBus.dispatch({
       type: RECORD_PACK_AUDIT, orgId, actorId, payload: body,
@@ -125,9 +132,9 @@ export async function packAuditRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const packTask = await prisma.packTask.findUnique({
-      where: { id },
+    const orgId = req.orgId!;
+    const packTask = await prisma.packTask.findFirst({
+      where: { id, orgId },
       include: { packLines: true },
     });
     if (!packTask) { reply.code(404); return { data: null, error: 'Pack task not found' }; }
@@ -153,7 +160,7 @@ export async function packAuditRoutes(server: FastifyInstance) {
     });
 
     const existingAudits = await prisma.packAudit.findMany({
-      where: { packTaskId: id },
+      where: { packTaskId: id, orgId },
       orderBy: { createdAt: 'desc' },
     });
 

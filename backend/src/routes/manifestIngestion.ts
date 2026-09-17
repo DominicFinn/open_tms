@@ -26,7 +26,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
   server.get('/api/v1/manifest/templates', {
     schema: { tags: ['WMS - Manifest Ingestion'], summary: 'List saved column mapping templates' },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const templates = await prisma.manifestTemplate.findMany({
       where: { orgId },
       orderBy: { usageCount: 'desc' },
@@ -39,7 +39,9 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Manifest Ingestion'], summary: 'Delete a mapping template' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    await prisma.manifestTemplate.delete({ where: { id } }).catch(() => null);
+    const template = await prisma.manifestTemplate.findFirst({ where: { id, orgId: req.orgId! }, select: { id: true } });
+    if (!template) { reply.code(404); return { data: null, error: 'Template not found' }; }
+    await prisma.manifestTemplate.delete({ where: { id: template.id } });
     return { data: { deleted: true }, error: null };
   });
 
@@ -72,7 +74,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
       reference: z.string().nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
 
     // Parse CSV
     const parsed = parseCSV(body.csvContent, body.delimiter);
@@ -158,10 +160,10 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
       templateName: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
 
-    const upload = await prisma.manifestUpload.findUnique({ where: { id } });
+    const upload = await prisma.manifestUpload.findFirst({ where: { id, orgId } });
     if (!upload) { reply.code(404); return { data: null, error: 'Upload not found' }; }
     if (upload.status === 'completed') { reply.code(400); return { data: null, error: 'Already processed' }; }
 
@@ -270,7 +272,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const where: any = { orgId };
     if (q.locationId) where.locationId = q.locationId;
 

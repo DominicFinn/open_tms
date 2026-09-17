@@ -35,11 +35,11 @@ export class UpdateWarehouseZoneCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; name: string }> {
     const { zoneId, ...updates } = command.payload;
 
-    const existing = await tx.warehouseZone.findUnique({ where: { id: zoneId } });
+    const existing = await tx.warehouseZone.findFirst({ where: { id: zoneId, orgId: command.orgId } });
     if (!existing) throw new Error(`Zone ${zoneId} not found`);
 
     const zone = await tx.warehouseZone.update({
-      where: { id: zoneId },
+      where: { id: existing.id },
       data: updates,
     });
 

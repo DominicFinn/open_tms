@@ -30,7 +30,7 @@ export class AdjustInventoryCommandHandler extends BaseCommandHandler<
   ): Promise<{ inventoryRecordId: string; previousQuantity: number; newQuantity: number; reasonCode: string }> {
     const p = command.payload;
 
-    const record = await tx.inventoryRecord.findUnique({ where: { id: p.inventoryRecordId } });
+    const record = await tx.inventoryRecord.findFirst({ where: { id: p.inventoryRecordId, orgId: command.orgId } });
     if (!record) throw new Error(`Inventory record ${p.inventoryRecordId} not found`);
 
     if (p.quantityChange === 0) throw new Error('Quantity change cannot be zero');

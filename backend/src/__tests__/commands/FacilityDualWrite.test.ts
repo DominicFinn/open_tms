@@ -18,7 +18,7 @@ function buildPrisma(opts: { facility?: { id: string; sourceLocationId: string |
     facility: { findFirst: jest.fn().mockResolvedValue(facility) },
     warehouseZone: {
       create: jest.fn().mockResolvedValue({ id: 'zone-1', name: 'Bulk A', zoneType: 'bulk_storage', locationId: 'loc-1', temperatureZone: null, hazmatCertified: false }),
-      findUnique: jest.fn().mockResolvedValue({ id: 'zone-1', orgId: 'test-org' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'zone-1', orgId: 'test-org' }),
     },
     warehouseBin: {
       create: jest.fn().mockResolvedValue({ id: 'bin-1', label: 'BULK-A-01-01', binType: 'pallet', zoneId: 'zone-1', locationId: 'loc-1' }),

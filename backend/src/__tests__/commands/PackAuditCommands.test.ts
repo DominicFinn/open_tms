@@ -5,7 +5,7 @@ import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 function makeTx(overrides: Partial<any> = {}) {
   return {
     packTask: {
-      findUnique: jest.fn().mockResolvedValue({
+      findFirst: jest.fn().mockResolvedValue({
         id: 'pack-1',
         orderId: 'order-1',
         packLines: [
@@ -20,7 +20,7 @@ function makeTx(overrides: Partial<any> = {}) {
         { sku: 'SKU-B', weightGrams: 200 },
       ]),
     },
-    cartonCatalogue: { findUnique: jest.fn() },
+    cartonCatalogue: { findFirst: jest.fn() },
     issue: { create: jest.fn().mockResolvedValue({ id: 'issue-1' }) },
     packAudit: {
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'audit-1', ...data })),
@@ -153,7 +153,7 @@ describe('RecordPackAuditCommand', () => {
   it('computes dim-weight variance when actual and expected dimensions are provided', async () => {
     const tx = makeTx({
       cartonCatalogue: {
-        findUnique: jest.fn().mockResolvedValue({ lengthMm: 400, widthMm: 300, heightMm: 200 }),
+        findFirst: jest.fn().mockResolvedValue({ lengthMm: 400, widthMm: 300, heightMm: 200 }),
       },
     });
     const { bus } = mockEventBus();
@@ -195,12 +195,41 @@ describe('RecordPackAuditCommand', () => {
   });
 
   it('returns 404-equivalent error when pack task does not exist', async () => {
-    const tx = makeTx({ packTask: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const tx = makeTx({ packTask: { findFirst: jest.fn().mockResolvedValue(null) } });
     const handler = new RecordPackAuditCommandHandler(makePrisma(tx), mockEventBus().bus);
     const result = await handler.execute(
       createTestCommand(RECORD_PACK_AUDIT, { packTaskId: 'missing', actualWeightGrams: 1000 }),
     );
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/not found/);
+  });
+
+  describe('tenancy (#303)', () => {
+    it('looks the pack task up inside the command org', async () => {
+      const tx = makeTx();
+      const handler = new RecordPackAuditCommandHandler(makePrisma(tx), mockEventBus().bus);
+      await handler.execute(
+        createTestCommand(RECORD_PACK_AUDIT, { packTaskId: 'pack-1', actualWeightGrams: 1200 }, { orgId: 'org-a' }),
+      );
+      expect(tx.packTask.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'pack-1', orgId: 'org-a' } }),
+      );
+    });
+
+    it('refuses a carton that is not in the command org, and writes no audit', async () => {
+      const tx = makeTx({ cartonCatalogue: { findFirst: jest.fn().mockResolvedValue(null) } });
+      const handler = new RecordPackAuditCommandHandler(makePrisma(tx), mockEventBus().bus);
+      const result = await handler.execute(
+        createTestCommand(RECORD_PACK_AUDIT, {
+          packTaskId: 'pack-1', actualWeightGrams: 1200, cartonCatalogueId: 'carton-other-org',
+        }, { orgId: 'org-a' }),
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/not found/);
+      expect(tx.cartonCatalogue.findFirst).toHaveBeenCalledWith({
+        where: { id: 'carton-other-org', orgId: 'org-a' },
+      });
+      expect(tx.packAudit.create).not.toHaveBeenCalled();
+    });
   });
 });
