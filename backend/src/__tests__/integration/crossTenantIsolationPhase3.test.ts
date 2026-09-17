@@ -1,7 +1,7 @@
 /**
  * Cross-tenant isolation tests for Phase 3 (Location, Lane, Driver, Vehicle,
- * Device). Mirrors the phase-2 contract: pass orgId → strict scope; omit
- * orgId → legacy/admin reach.
+ * Device). Mirrors the phase-2 contract: every read requires an orgId and is
+ * strictly scoped by it.
  *
  * Driver/Vehicle don't have their own repos yet so their isolation rides on
  * the orgId column itself plus the Carrier-scoped queries used by the
@@ -16,7 +16,7 @@ function makeOrgScopedPrisma(rows: Array<Record<string, any>>) {
     return Promise.resolve(
       rows.find((r) =>
         (!where.id || r.id === where.id) &&
-        (!where.orgId || r.orgId === where.orgId) &&
+        (!('orgId' in where) || r.orgId === where.orgId) &&
         (where.archived === undefined || r.archived === where.archived) &&
         (!where.status || r.status === where.status)
       ) ?? null,
@@ -28,7 +28,7 @@ function makeOrgScopedPrisma(rows: Array<Record<string, any>>) {
   const findMany = jest.fn().mockImplementation(({ where }: any) => {
     return Promise.resolve(
       rows.filter((r) =>
-        (!where?.orgId || r.orgId === where.orgId) &&
+        (!(where && 'orgId' in where) || r.orgId === where.orgId) &&
         (where?.archived === undefined || r.archived === where.archived) &&
         (!where?.status || r.status === where.status)
       )
@@ -150,20 +150,12 @@ describe('Cross-tenant isolation — Lane', () => {
     const results = await repo.all('org-a');
     expect(results.map((l: any) => l.id)).toEqual(['l-a1']);
   });
-
-  it('omitting orgId reaches both tenants (legacy/admin behaviour)', async () => {
-    const repo = new LanesRepository(prismaFor());
-    expect((await repo.findById('l-b1'))?.id).toBe('l-b1');
-    expect((await repo.findById('l-a1'))?.id).toBe('l-a1');
-  });
 });
 
 describe('Phase 3 — defence in depth', () => {
-  // Document the contract: empty-string orgId behaves like omitted (does
-  // NOT scope) because every repo uses the `if (orgId)` truthy check.
-  // Same shape as the phase-2 suite.
+  // A blank orgId is still applied to the where, so it matches nothing.
 
-  it('Location.findById with empty-string orgId reaches both tenants', async () => {
+  it('Location.findById with an empty-string orgId matches nothing', async () => {
     const rows = [
       { id: 'a', orgId: 'org-a', archived: false },
       { id: 'b', orgId: 'org-b', archived: false },
@@ -180,6 +172,6 @@ describe('Phase 3 — defence in depth', () => {
     } as any;
     const repo = new LocationsRepository(prisma);
 
-    expect((await repo.findById('b', ''))?.id).toBe('b');
+    expect(await repo.findById('b', '')).toBeNull();
   });
 });

@@ -311,6 +311,17 @@ describe('ShipmentEtaMonitorService', () => {
       expect(result.completedAt).toBeDefined();
     });
 
+    it('sweeps every org from the cron, and only the caller org from the manual trigger', async () => {
+      const prisma = createMockPrisma([], []);
+      const service = new ShipmentEtaMonitorService(prisma, createMockRoutingProvider(), createMockEventBus(), config);
+
+      await service.runEtaCheck();
+      expect(prisma.shipment.findMany.mock.calls[0][0].where).not.toHaveProperty('orgId');
+
+      await service.runEtaCheck('org-a');
+      expect(prisma.shipment.findMany.mock.calls[1][0].where).toMatchObject({ orgId: 'org-a' });
+    });
+
     it('skips shipments without GPS data', async () => {
       const shipments = [
         createTestShipment({ id: 'ship-001', reference: 'SH-0001' }),

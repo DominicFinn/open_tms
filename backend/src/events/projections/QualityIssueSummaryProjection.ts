@@ -180,7 +180,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
   ): Promise<string[]> {
     if (dimensionType === 'carrier') {
       const shipments = await this.prisma.shipment.findMany({
-        where: { carrierId: dimensionId },
+        where: { carrierId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -195,7 +195,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     if (dimensionType === 'customer') {
       // Shipments are linked to customers directly
       const shipments = await this.prisma.shipment.findMany({
-        where: { customerId: dimensionId },
+        where: { customerId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -209,7 +209,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
 
     if (dimensionType === 'lane') {
       const shipments = await this.prisma.shipment.findMany({
-        where: { laneId: dimensionId },
+        where: { laneId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -224,6 +224,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     if (dimensionType === 'location') {
       const shipments = await this.prisma.shipment.findMany({
         where: {
+          orgId,
           OR: [
             { originId: dimensionId },
             { destinationId: dimensionId },

@@ -243,6 +243,39 @@ describe('RecordReceivingLineCommandHandler', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('completed');
   });
+
+  it('refuses a trackable unit from another org and writes nothing', async () => {
+    const tx = {
+      ...facilityMocks(),
+      receivingTask: {
+        findUnique: jest.fn().mockResolvedValue({ ...mockTask, status: 'in_progress' }),
+        update: jest.fn(),
+      },
+      receivingLine: { create: jest.fn(), update: jest.fn() },
+      trackableUnit: { findFirst: jest.fn().mockResolvedValue(null) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new RecordReceivingLineCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(RECORD_RECEIVING_LINE, {
+        taskId: 'task-1', receivedQuantity: 5, sku: 'X', trackableUnitId: 'unit-other-org',
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith({
+      where: { id: 'unit-other-org', order: { orgId: 'test-org' } },
+      select: { id: true },
+    });
+    expect(tx.receivingLine.create).not.toHaveBeenCalled();
+  });
 });
 
 /* ── CompleteReceivingCommandHandler ───────────────────────── */

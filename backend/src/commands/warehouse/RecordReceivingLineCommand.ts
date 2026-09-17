@@ -44,6 +44,14 @@ export class RecordReceivingLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Task is ${task.status}, cannot record lines`);
     }
 
+    if (p.trackableUnitId) {
+      const unit = await tx.trackableUnit.findFirst({
+        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
+        select: { id: true },
+      });
+      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+    }
+
     // Auto-start the task if still pending
     if (task.status === 'pending') {
       await tx.receivingTask.update({

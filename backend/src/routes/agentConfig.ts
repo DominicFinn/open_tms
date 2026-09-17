@@ -275,7 +275,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     if (!config) return { data: [], error: null };
 
     const versions = await server.prisma.agentConfigVersion.findMany({
-      where: { configId: config.id },
+      where: { configId: config.id, config: { orgId } },
       orderBy: { versionNumber: 'desc' },
     });
 

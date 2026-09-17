@@ -46,7 +46,7 @@ export async function linkOrdersToShipment(
   });
 
   const maxSeq = await tx.shipmentStop.aggregate({
-    where: { shipmentId: shipment.id },
+    where: { shipmentId: shipment.id, shipment: { orgId: ctx.orgId } },
     _max: { sequenceNumber: true },
   });
   let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
@@ -55,7 +55,7 @@ export async function linkOrdersToShipment(
 
   for (const order of orders) {
     let stop = await tx.shipmentStop.findFirst({
-      where: { shipmentId: shipment.id, locationId: order.destinationId! },
+      where: { shipmentId: shipment.id, locationId: order.destinationId!, shipment: { orgId: ctx.orgId } },
     });
     if (!stop) {
       stop = await tx.shipmentStop.create({

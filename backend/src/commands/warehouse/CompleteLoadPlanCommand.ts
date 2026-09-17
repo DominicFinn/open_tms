@@ -40,7 +40,7 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
 
     // Mark all pending lines as loaded
     await tx.loadPlanLine.updateMany({
-      where: { loadPlanId: plan.id, status: 'pending' },
+      where: { loadPlanId: plan.id, status: 'pending', loadPlan: { orgId: command.orgId } },
       data: { status: 'loaded' },
     });
 

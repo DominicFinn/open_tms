@@ -123,7 +123,7 @@ describe('WarehouseService', () => {
       await service.generateMagicLink('user-1', 'org-1');
 
       expect(prisma.magicLink.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', active: true },
+        where: { userId: 'user-1', user: { organizationId: 'org-1' }, active: true },
         data: { active: false },
       });
     });
@@ -659,7 +659,7 @@ describe('WarehouseService', () => {
 
       expect(result.success).toBe(true);
       expect(prisma.deviceAssignment.updateMany).toHaveBeenCalledWith({
-        where: { deviceId: 'dev-1', active: true },
+        where: { deviceId: 'dev-1', device: { orgId: 'org-1' }, active: true },
         data: expect.objectContaining({ active: false }),
       });
       expect(prisma.deviceAssignment.create).toHaveBeenCalledWith({

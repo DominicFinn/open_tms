@@ -60,7 +60,7 @@ export class SplitTrackableUnitCommandHandler extends BaseCommandHandler<SplitUn
     }
 
     const last = await tx.trackableUnit.findFirst({
-      where: { orderId: source.orderId },
+      where: { orderId: source.orderId, order: { orgId: command.orgId } },
       orderBy: { sequenceNumber: 'desc' },
       select: { sequenceNumber: true },
     });

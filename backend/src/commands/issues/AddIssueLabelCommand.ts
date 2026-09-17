@@ -43,7 +43,7 @@ export class AddIssueLabelCommandHandler extends BaseCommandHandler<AddIssueLabe
     if (!label) throw new Error('Label not found');
 
     const existing = await tx.issueLabelAssignment.findFirst({
-      where: { issueId, labelId },
+      where: { issueId, labelId, issue: { orgId: command.orgId } },
     });
 
     if (existing) {

@@ -95,7 +95,7 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
     }
 
     // Check if all lines have been received
-    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id } });
+    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id, rma: { orgId: command.orgId } } });
     const allReceived = lines.every(l => l.receivedQuantity >= l.requestedQuantity || l.id === line.id && p.receivedQuantity >= l.requestedQuantity);
 
     if (allReceived) {

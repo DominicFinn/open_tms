@@ -268,7 +268,7 @@ describe('MergeTrackableUnitsCommandHandler', () => {
     expect(result.success).toBe(true);
     expect(result.data?.movedLineItems).toBe(3);
     expect(tx.orderLineItem.updateMany).toHaveBeenCalledWith({
-      where: { trackableUnitId: 'tu-src' },
+      where: { trackableUnitId: 'tu-src', order: { orgId: 'test-org' } },
       data: { trackableUnitId: 'tu-tgt' },
     });
     expect(tx.trackableUnit.delete).toHaveBeenCalledWith({ where: { id: 'tu-src', order: { orgId: 'test-org' } } });

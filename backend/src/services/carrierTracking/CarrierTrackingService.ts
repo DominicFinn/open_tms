@@ -191,6 +191,7 @@ export class CarrierTrackingService {
       throw new Error(`Provider "${providerType}" does not support webhooks`);
     }
 
+    // tenancy-exempt: the webhook signing secret is the credential; only integrations whose secret verifies the payload are used, each under its own carrier's org.
     const candidates = await this.prisma.carrierTrackingIntegration.findMany({
       where: { providerType: providerType.toLowerCase(), status: 'active', webhookEnabled: true },
       select: { id: true, carrierId: true, webhookSecret: true, carrier: { select: { orgId: true } } },

@@ -255,7 +255,7 @@ export class ShipmentProjection implements IEventHandler {
     // Re-count stops and update
     const shipmentId = event.entityId;
     const stopCount = await this.prisma.shipmentStop.count({
-      where: { shipmentId },
+      where: { shipmentId, shipment: { orgId: event.orgId } },
     });
     await this.prisma.shipmentReadModel.update({
       where: { id: shipmentId, orgId: event.orgId },
@@ -272,7 +272,7 @@ export class ShipmentProjection implements IEventHandler {
 
     // Look up the ShipmentFinancialSummary for this shipment
     const summary = await this.prisma.shipmentFinancialSummary.findUnique({
-      where: { shipmentId },
+      where: { shipmentId, orgId: event.orgId },
     });
 
     if (!summary) return;

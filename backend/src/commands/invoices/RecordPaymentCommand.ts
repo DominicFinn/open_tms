@@ -104,13 +104,13 @@ export class RecordPaymentCommandHandler extends BaseCommandHandler<RecordPaymen
 
       // Update shipment financial summaries to paid
       const lineItems = await tx.invoiceLineItem.findMany({
-        where: { invoiceId: invoice.id },
+        where: { invoiceId: invoice.id, invoice: { orgId: command.orgId } },
         select: { shipmentId: true },
       });
       const shipmentIds = [...new Set(lineItems.map((l: any) => l.shipmentId).filter(Boolean) as string[])];
       if (shipmentIds.length > 0) {
         await tx.shipmentFinancialSummary.updateMany({
-          where: { shipmentId: { in: shipmentIds } },
+          where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
           data: { billingStatus: 'paid' },
         });
       }

@@ -87,7 +87,7 @@ export class EdiImportService implements IEdiImportService {
 
     // Check for duplicate in EdiTransactionLog
     const existingLog = await this.prisma.ediTransactionLog.findFirst({
-      where: { fileHash, status: { in: ['success', 'processing'] }, transactionType: '850' }
+      where: { orgId: options.orgId, fileHash, status: { in: ['success', 'processing'] }, transactionType: '850' }
     });
     if (existingLog) {
       return {
@@ -173,7 +173,7 @@ export class EdiImportService implements IEdiImportService {
           // Resolve customer
           let orderCustomerId = customerId;
           if (!orderCustomerId && parsedOrder.buyerName) {
-            const customers = await this.customersRepo.all();
+            const customers = await this.customersRepo.all(options.orgId);
             const customer = customers.find(c =>
               c.name.toLowerCase() === parsedOrder.buyerName!.toLowerCase()
             );
@@ -205,7 +205,7 @@ export class EdiImportService implements IEdiImportService {
               });
               originId = locResult.location.id;
             } else {
-              const locations = await this.locationsRepo.all();
+              const locations = await this.locationsRepo.all(resolvedOrgId);
               const match = locations.find(l =>
                 l.name.toLowerCase() === parsedOrder.origin!.name.toLowerCase() &&
                 l.city.toLowerCase() === parsedOrder.origin!.city.toLowerCase()
@@ -233,7 +233,7 @@ export class EdiImportService implements IEdiImportService {
               });
               destinationId = locResult.location.id;
             } else {
-              const locations = await this.locationsRepo.all();
+              const locations = await this.locationsRepo.all(resolvedOrgId);
               const match = locations.find(l =>
                 l.name.toLowerCase() === parsedOrder.destination!.name.toLowerCase() &&
                 l.city.toLowerCase() === parsedOrder.destination!.city.toLowerCase()

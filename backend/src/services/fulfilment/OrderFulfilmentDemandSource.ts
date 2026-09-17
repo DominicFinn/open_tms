@@ -67,6 +67,7 @@ export class OrderFulfilmentDemandSource implements IFulfilmentDemandSource {
   }
 
   async listSourceIds(): Promise<Array<{ orgId: string; sourceId: string }>> {
+    // tenancy-exempt: backfill sweep over every org on purpose; each id is returned with its own row's org and projected under it.
     const orders = await this.prisma.order.findMany({
       select: { id: true, orgId: true },
       orderBy: { createdAt: 'asc' },

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ICarrierAuthService } from '../services/CarrierAuthService.js';
 import { ICarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { computeLockoutStatus } from '../services/auth/lockout.js';
+import { PortalAccountNotFoundError, PortalUserNotFoundError } from '../services/auth/portalUserErrors.js';
 import { container, TOKENS } from '../di/index.js';
 
 export async function carrierUserRoutes(server: FastifyInstance) {
@@ -51,12 +52,12 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const user = await authService.register(carrierId, body.email, body.password, body.name, body.role);
+      const user = await authService.register(carrierId, req.orgId!, body.email, body.password, body.name, body.role);
       const { passwordHash, ...safeUser } = user;
       reply.code(201);
       return { data: safeUser, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof PortalAccountNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });
@@ -82,6 +83,12 @@ export async function carrierUserRoutes(server: FastifyInstance) {
       role: z.enum(['dispatcher', 'admin']).optional(),
       active: z.boolean().optional(),
     }).parse((req as any).body);
+
+    const existing = await carrierUserRepo.findById(id, req.orgId!);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
 
     try {
       const user = await carrierUserRepo.update(id, req.orgId!, body);
@@ -116,7 +123,7 @@ export async function carrierUserRoutes(server: FastifyInstance) {
       await authService.adminResetPassword(id, req.orgId!, newPassword);
       return { data: { reset: true }, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof PortalUserNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });
@@ -129,6 +136,12 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { carrierId: string; id: string };
+    const existing = await carrierUserRepo.findById(id, req.orgId!);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+
     try {
       const user = await carrierUserRepo.update(id, req.orgId!, { active: false });
       const { passwordHash, ...safeUser } = user;

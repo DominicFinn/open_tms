@@ -198,7 +198,7 @@ describe('OrderProjection', () => {
 
       await projection.handle(event);
 
-      expect(mockPrisma.trackableUnit.count).toHaveBeenCalledWith({ where: { orderId: 'order-1' } });
+      expect(mockPrisma.trackableUnit.count).toHaveBeenCalledWith({ where: { orderId: 'order-1', order: { orgId: 'test-org' } } });
       expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'order-1', orgId: 'test-org' },
@@ -241,7 +241,7 @@ describe('OrderProjection', () => {
       const event = createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_CREATED, 'order_line_item', 'li-1', { orderId: 'order-1' });
       await projection.handle(event);
 
-      expect(mockPrisma.orderLineItem.count).toHaveBeenCalledWith({ where: { orderId: 'order-1' } });
+      expect(mockPrisma.orderLineItem.count).toHaveBeenCalledWith({ where: { orderId: 'order-1', order: { orgId: 'test-org' } } });
       expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'order-1', orgId: 'test-org' },

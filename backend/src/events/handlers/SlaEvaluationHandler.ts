@@ -105,6 +105,7 @@ export class SlaEvaluationHandler implements IEventHandler {
     const count = await this.slaService.markEvaluationsMet(
       'shipment',
       event.entityId,
+      event.orgId,
       ['eta_delivery'],
     );
     if (count > 0) {
@@ -115,7 +116,7 @@ export class SlaEvaluationHandler implements IEventHandler {
   private async handleShipmentStatusChanged(event: DomainEvent): Promise<void> {
     const payload = event.payload as { newStatus?: string };
     if (payload.newStatus === 'delivered' || payload.newStatus === 'completed') {
-      await this.slaService.markEvaluationsMet('shipment', event.entityId, ['eta_delivery']);
+      await this.slaService.markEvaluationsMet('shipment', event.entityId, event.orgId, ['eta_delivery']);
     }
     // If shipment cancelled, cancel active evaluations
     if (payload.newStatus === 'cancelled') {
@@ -157,13 +158,13 @@ export class SlaEvaluationHandler implements IEventHandler {
     const payload = event.payload as { newStatus?: string };
     // Issue being assigned or moved to in_progress satisfies the "response" SLA
     if (event.type === EVENT_TYPES.ISSUE_ASSIGNED || payload.newStatus === 'in_progress') {
-      await this.slaService.markEvaluationsMet('issue', event.entityId, ['issue_response']);
+      await this.slaService.markEvaluationsMet('issue', event.entityId, event.orgId, ['issue_response']);
     }
   }
 
   private async handleIssueResolved(event: DomainEvent): Promise<void> {
     // Resolving an issue satisfies both response and resolution SLAs
-    await this.slaService.markEvaluationsMet('issue', event.entityId, ['issue_response', 'issue_resolution']);
+    await this.slaService.markEvaluationsMet('issue', event.entityId, event.orgId, ['issue_response', 'issue_resolution']);
   }
 
   private async handleExcursionResolved(event: DomainEvent): Promise<void> {
@@ -172,6 +173,7 @@ export class SlaEvaluationHandler implements IEventHandler {
       await this.slaService.markEvaluationsMet(
         'shipment',
         payload.shipmentId,
+        event.orgId,
         ['temperature_excursion'],
       );
     }
@@ -224,6 +226,7 @@ export class SlaEvaluationHandler implements IEventHandler {
     const count = await this.slaService.markEvaluationsMet(
       'shipment_stop',
       stopId,
+      event.orgId,
       ['dwell_time', 'dock_turnaround', 'sort_to_dispatch', 'facility_dwell'],
     );
     if (count > 0) {

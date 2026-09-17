@@ -52,7 +52,7 @@ export class FinancialImpactHandler implements IEventHandler {
     // Check if a query already exists for this discrepancy
     if (payload.discrepancyId) {
       const existing = await this.prisma.financialQuery.findFirst({
-        where: { cargoDiscrepancyId: payload.discrepancyId },
+        where: { cargoDiscrepancyId: payload.discrepancyId, orgId: event.orgId },
       });
       if (existing) return;
     }
@@ -89,7 +89,7 @@ export class FinancialImpactHandler implements IEventHandler {
 
     if (payload.discrepancyId) {
       const existing = await this.prisma.financialQuery.findFirst({
-        where: { cargoDiscrepancyId: payload.discrepancyId },
+        where: { cargoDiscrepancyId: payload.discrepancyId, orgId: event.orgId },
       });
       if (existing) return;
     }
@@ -128,6 +128,7 @@ export class FinancialImpactHandler implements IEventHandler {
     const existing = await this.prisma.financialQuery.findFirst({
       where: {
         shipmentId: payload.shipmentId,
+        orgId: event.orgId,
         reason: 'temperature_excursion',
         status: { in: ['raised', 'investigating'] },
       },

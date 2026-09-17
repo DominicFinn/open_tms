@@ -29,6 +29,7 @@ function readApiKeyHeader(req: FastifyRequest): string | undefined {
 export async function resolveApiKeyOrgId(req: FastifyRequest, prisma: PrismaClient): Promise<string | null> {
   const key = readApiKeyHeader(req);
   if (!key) return null;
+  // tenancy-exempt: the API key hash is the credential that establishes the tenant.
   const apiKey = await prisma.apiKey.findUnique({
     where: { keyHash: hashApiKey(key) },
     select: { orgId: true, active: true },
@@ -71,6 +72,7 @@ export async function resolveSystemLocoOrgId(
   rawBody: Buffer,
   signature: string,
 ): Promise<string | null> {
+  // tenancy-exempt: each org's System Loco signing secret is the credential, so every configured secret is tried and the one that verifies the body identifies the tenant.
   const vendors = await prisma.iotVendor.findMany({
     where: { vendorKey: 'system_loco', webhookSecret: { not: null } },
     select: { orgId: true, webhookSecret: true },

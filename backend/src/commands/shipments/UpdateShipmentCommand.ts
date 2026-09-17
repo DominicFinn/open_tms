@@ -83,6 +83,7 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
     // draft — in-flight shipments carry stop-level progress we must not wipe.
     if (data.waypoints !== undefined && updated.status === 'draft') {
       await syncShipmentStops(tx, {
+        orgId: command.orgId,
         shipmentId: id,
         originId: updated.originId,
         waypoints: data.waypoints,

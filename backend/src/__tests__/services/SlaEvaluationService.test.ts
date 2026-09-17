@@ -5,6 +5,8 @@ const mockSlaRepo = {
   findEvaluationsByEntity: jest.fn(),
   findActiveEvaluationsDueBefore: jest.fn(),
   findActiveEvaluationsWarningBefore: jest.fn(),
+  findActiveEvaluationsDueBeforeInOrg: jest.fn(),
+  findActiveEvaluationsWarningBeforeInOrg: jest.fn(),
   createEvaluation: jest.fn(),
   updateEvaluationStatus: jest.fn(),
 };
@@ -158,9 +160,10 @@ describe('SlaEvaluationService', () => {
       ]);
       mockSlaRepo.updateEvaluationStatus.mockResolvedValue({ id: 'eval-1', status: 'met' });
 
-      const count = await service.markEvaluationsMet('shipment', 'ship-1', ['eta_delivery']);
+      const count = await service.markEvaluationsMet('shipment', 'ship-1', 'org-1', ['eta_delivery']);
 
       expect(count).toBe(1);
+      expect(mockSlaRepo.findEvaluationsByEntity).toHaveBeenCalledWith('shipment', 'ship-1', 'org-1');
       expect(mockSlaRepo.updateEvaluationStatus).toHaveBeenCalledWith(
         'eval-1', 'org-1', 'active', expect.objectContaining({ status: 'met' })
       );
@@ -172,7 +175,7 @@ describe('SlaEvaluationService', () => {
         { id: 'eval-2', status: 'breached', ruleType: 'eta_delivery' },
       ]);
 
-      const count = await service.markEvaluationsMet('shipment', 'ship-1');
+      const count = await service.markEvaluationsMet('shipment', 'ship-1', 'org-1');
 
       expect(count).toBe(0);
       expect(mockSlaRepo.updateEvaluationStatus).not.toHaveBeenCalled();
@@ -185,7 +188,7 @@ describe('SlaEvaluationService', () => {
       ]);
       mockSlaRepo.updateEvaluationStatus.mockResolvedValue({ status: 'met' });
 
-      const count = await service.markEvaluationsMet('shipment', 'ship-1', ['eta_delivery']);
+      const count = await service.markEvaluationsMet('shipment', 'ship-1', 'org-1', ['eta_delivery']);
 
       expect(count).toBe(1);
     });
@@ -246,6 +249,21 @@ describe('SlaEvaluationService', () => {
       expect(result.warningsIssued).toBe(0);
       expect(result.breachesDetected).toBe(0);
       expect(result.issuesCreated).toBe(0);
+    });
+  });
+
+  describe('runBreachSweepForOrg', () => {
+    it('reads only the caller org candidates', async () => {
+      mockSlaRepo.findActiveEvaluationsWarningBeforeInOrg.mockResolvedValue([]);
+      mockSlaRepo.findActiveEvaluationsDueBeforeInOrg.mockResolvedValue([]);
+
+      const result = await service.runBreachSweepForOrg('org-1');
+
+      expect(result.evaluationsChecked).toBe(0);
+      expect(mockSlaRepo.findActiveEvaluationsWarningBeforeInOrg).toHaveBeenCalledWith(expect.any(Date), 'org-1');
+      expect(mockSlaRepo.findActiveEvaluationsDueBeforeInOrg).toHaveBeenCalledWith(expect.any(Date), 'org-1');
+      expect(mockSlaRepo.findActiveEvaluationsWarningBefore).not.toHaveBeenCalled();
+      expect(mockSlaRepo.findActiveEvaluationsDueBefore).not.toHaveBeenCalled();
     });
   });
 

@@ -175,7 +175,7 @@ export class ShipmentCutoffMonitorService {
     if (!shipment.carrierId) return base;
 
     const cutoffs = await this.prisma.carrierCutoff.findMany({
-      where: { carrierId: shipment.carrierId, active: true },
+      where: { orgId, carrierId: shipment.carrierId, active: true },
     });
     const resolved = resolveCutoffForNow(cutoffs, now);
     if (!resolved) return base; // carrier has no cutoff for today
@@ -186,13 +186,13 @@ export class ShipmentCutoffMonitorService {
     const [pickCount, packCount, loadPlanCount] = orderIds.length > 0
       ? await Promise.all([
           this.prisma.pickTask.count({
-            where: { orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
           }),
           this.prisma.packTask.count({
-            where: { orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
           }),
           this.prisma.loadPlan.count({
-            where: { shipmentId: shipment.id, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, shipmentId: shipment.id, status: { notIn: ['completed', 'cancelled'] } },
           }),
         ])
       : [0, 0, 0];

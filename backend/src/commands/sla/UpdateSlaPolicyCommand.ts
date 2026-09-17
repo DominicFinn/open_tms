@@ -61,7 +61,7 @@ export class UpdateSlaPolicyCommandHandler extends BaseCommandHandler<UpdateSlaP
 
     // Replace rules if provided
     if (rules) {
-      await tx.slaRule.deleteMany({ where: { policyId: id } });
+      await tx.slaRule.deleteMany({ where: { policyId: id, policy: { orgId: command.orgId } } });
       for (const rule of rules) {
         await tx.slaRule.create({
           data: { ...rule, policyId: id },

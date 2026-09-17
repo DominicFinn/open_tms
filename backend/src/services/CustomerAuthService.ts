@@ -9,6 +9,7 @@ import {
   minutesUntilUnlocked,
   nextFailedAttemptState,
 } from './auth/lockout.js';
+import { PortalAccountNotFoundError, PortalUserNotFoundError } from './auth/portalUserErrors.js';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -48,7 +49,7 @@ export interface PasswordValidation {
 export type { LockoutStatus } from './auth/lockout.js';
 
 export interface ICustomerAuthService {
-  register(customerId: string, email: string, password: string, name: string, role?: string): Promise<any>;
+  register(customerId: string, orgId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<CustomerLoginResult>;
   changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void>;
   adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void>;
@@ -71,7 +72,11 @@ export class CustomerAuthService implements ICustomerAuthService {
     return { valid: errors.length === 0, errors };
   }
 
-  async register(customerId: string, email: string, password: string, name: string, role?: string) {
+  async register(customerId: string, orgId: string, email: string, password: string, name: string, role?: string) {
+    if (!(await this.customerUserRepo.customerExistsInOrg(customerId, orgId))) {
+      throw new PortalAccountNotFoundError('customer');
+    }
+
     const existing = await this.customerUserRepo.findByEmail(email);
     if (existing) throw new Error('Email already registered');
 
@@ -140,7 +145,7 @@ export class CustomerAuthService implements ICustomerAuthService {
 
   async changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void> {
     const user = await this.customerUserRepo.findById(userId, orgId);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new PortalUserNotFoundError();
 
     const valid = await this.verifyPassword(oldPassword, user.passwordHash);
     if (!valid) throw new Error('Current password is incorrect');
@@ -154,7 +159,7 @@ export class CustomerAuthService implements ICustomerAuthService {
 
   async adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void> {
     const user = await this.customerUserRepo.findById(userId, orgId);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new PortalUserNotFoundError();
 
     const validation = this.validatePasswordStrength(newPassword);
     if (!validation.valid) throw new Error(validation.errors.join('; '));

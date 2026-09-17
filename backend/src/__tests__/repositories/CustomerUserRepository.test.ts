@@ -8,6 +8,9 @@ function buildPrisma() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
+    customer: {
+      count: jest.fn().mockResolvedValue(1),
+    },
   } as any;
 }
 
@@ -48,6 +51,24 @@ describe('CustomerUserRepository', () => {
       expect(idCall.where).toEqual({ id: 'cu-1', customer: { orgId: 'org-1' } });
       expect(idCall.include.customer.select).toEqual({ id: true, name: true });
       expect(emailCall.include.customer.select).toEqual({ id: true, orgId: true, name: true });
+    });
+  });
+
+  describe('customerExistsInOrg', () => {
+    it('counts the customer within the caller org only', async () => {
+      const prisma = buildPrisma();
+      const repo = new CustomerUserRepository(prisma);
+
+      await expect(repo.customerExistsInOrg('cust-1', 'org-1')).resolves.toBe(true);
+      expect(prisma.customer.count).toHaveBeenCalledWith({ where: { id: 'cust-1', orgId: 'org-1' } });
+    });
+
+    it('reports a customer from another org as missing', async () => {
+      const prisma = buildPrisma();
+      prisma.customer.count.mockResolvedValue(0);
+      const repo = new CustomerUserRepository(prisma);
+
+      await expect(repo.customerExistsInOrg('cust-1', 'org-2')).resolves.toBe(false);
     });
   });
 

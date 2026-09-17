@@ -297,7 +297,7 @@ export async function laneRoutes(server: FastifyInstance) {
       if (body.stops !== undefined) {
         // Delete existing stops
         await tx.laneStop.deleteMany({
-          where: { laneId: id }
+          where: { laneId: id, lane: { orgId } }
         });
 
         // Create new stops if any

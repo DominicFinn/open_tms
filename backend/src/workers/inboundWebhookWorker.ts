@@ -105,6 +105,7 @@ async function processSystemLoco(
   // Idempotency: System Loco may redeliver an event (3 attempts, 14-day DLQ). If we've already
   // processed this event id, no-op so we don't double-write readings or re-move the position.
   if (rawPayload.id) {
+    // tenancy-exempt: externalEventId is @unique across the whole DeviceEvent table, so this dedupe only needs the id, and only a boolean comes back.
     const already = await prisma.deviceEvent.findUnique({
       where: { externalEventId: rawPayload.id },
       select: { id: true },
@@ -209,7 +210,7 @@ async function resolveLegacyShipment(
     select: { id: true },
   });
   if (!order) return null;
-  const link = await prisma.orderShipment.findFirst({ where: { orderId: order.id } });
+  const link = await prisma.orderShipment.findFirst({ where: { orderId: order.id, order: { orgId } } });
   if (!link) return null;
   return prisma.shipment.findFirst({ where: { id: link.shipmentId, orgId }, select: { id: true, reference: true } });
 }

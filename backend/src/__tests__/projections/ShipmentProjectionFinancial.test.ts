@@ -53,7 +53,7 @@ describe('ShipmentProjection - Financial Columns', () => {
     await projection.handle(event);
 
     expect(prisma.shipmentFinancialSummary.findUnique).toHaveBeenCalledWith({
-      where: { shipmentId: 'ship-1' },
+      where: { shipmentId: 'ship-1', orgId: 'test-org' },
     });
 
     expect(prisma.shipmentReadModel.update).toHaveBeenCalledWith({

@@ -256,7 +256,7 @@ describe('Charge Command Handlers', () => {
 
       expect(mockTx.shipmentFinancialSummary.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { shipmentId: 'ship-1' },
+          where: { shipmentId: 'ship-1', orgId: 'test-org' },
         })
       );
     });
@@ -343,7 +343,7 @@ describe('Charge Command Handlers', () => {
 
       expect(mockTx.shipmentFinancialSummary.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { shipmentId: 'ship-1' },
+          where: { shipmentId: 'ship-1', orgId: 'test-org' },
         })
       );
     });
@@ -500,7 +500,7 @@ describe('Charge Command Handlers', () => {
 
       expect(summaryTx.shipmentFinancialSummary.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { shipmentId: 'ship-1' },
+          where: { shipmentId: 'ship-1', orgId: 'test-org' },
           create: expect.objectContaining({
             shipmentId: 'ship-1',
             expectedRevenueCents: 210000,

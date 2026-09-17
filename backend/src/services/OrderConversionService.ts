@@ -470,7 +470,7 @@ export class OrderConversionService implements IOrderConversionService {
       };
     }
 
-    const link = await this.prisma.orderShipment.findFirst({ where: { shipmentId, orderId } });
+    const link = await this.prisma.orderShipment.findFirst({ where: { shipmentId, orderId, order: { orgId } } });
     if (!link) return { success: false, error: 'Order is not linked to this shipment' };
 
     const order = await this.prisma.order.findFirst({ where: { id: orderId, orgId } });

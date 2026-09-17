@@ -170,7 +170,7 @@ export interface IOrdersRepository {
   removeLineItem(itemId: string, orgId: string): Promise<void>;
 
   // Trackable units management
-  addTrackableUnit(orderId: string, unit: CreateTrackableUnitDTO): Promise<TrackableUnit>;
+  addTrackableUnit(orderId: string, orgId: string, unit: CreateTrackableUnitDTO): Promise<TrackableUnit>;
   updateTrackableUnit(unitId: string, orgId: string, data: { identifier?: string; notes?: string; barcode?: string }): Promise<TrackableUnit>;
   removeTrackableUnit(unitId: string, orgId: string): Promise<void>;
   addLineItemToUnit(unitId: string, orgId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem>;
@@ -609,10 +609,10 @@ export class OrdersRepository implements IOrdersRepository {
     });
   }
 
-  async addTrackableUnit(orderId: string, unit: CreateTrackableUnitDTO): Promise<TrackableUnit> {
+  async addTrackableUnit(orderId: string, orgId: string, unit: CreateTrackableUnitDTO): Promise<TrackableUnit> {
     // Get the next sequence number
     const existingUnits = await this.prisma.trackableUnit.findMany({
-      where: { orderId },
+      where: { orderId, order: { orgId } },
       orderBy: { sequenceNumber: 'desc' },
       take: 1
     });
@@ -736,7 +736,7 @@ export class OrdersRepository implements IOrdersRepository {
 
     // Get the next sequence number for the new unit
     const existingUnits = await this.prisma.trackableUnit.findMany({
-      where: { orderId: originalUnit.orderId },
+      where: { orderId: originalUnit.orderId, order: { orgId } },
       orderBy: { sequenceNumber: 'desc' },
       take: 1
     });

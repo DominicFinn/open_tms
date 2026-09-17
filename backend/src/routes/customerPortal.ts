@@ -159,25 +159,27 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal'], summary: 'Customer dashboard summary stats' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
+    const orgId = req.orgId!;
 
     const customerShipmentIds = await server.prisma.shipment.findMany({
-      where: { customerId }, select: { id: true },
+      where: { customerId, orgId }, select: { id: true },
     }).then(rows => rows.map(r => r.id));
     const customerOrderIds = await server.prisma.order.findMany({
-      where: { customerId }, select: { id: true },
+      where: { customerId, orgId }, select: { id: true },
     }).then(rows => rows.map(r => r.id));
 
     const [activeShipments, recentDeliveries, openIssues, outstandingInvoices] = await Promise.all([
       server.prisma.shipmentReadModel.count({
-        where: { customerId, status: { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] } },
+        where: { customerId, orgId, status: { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] } },
       }),
       server.prisma.shipmentReadModel.count({
-        where: { customerId, status: 'delivered' },
+        where: { customerId, orgId, status: 'delivered' },
       }),
       customerShipmentIds.length === 0 && customerOrderIds.length === 0
         ? Promise.resolve(0)
         : server.prisma.issueReadModel.count({
             where: {
+              orgId,
               status: { in: ['open', 'in_progress'] },
               OR: [
                 customerShipmentIds.length > 0
@@ -190,7 +192,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
             },
           }),
       server.prisma.invoiceReadModel.aggregate({
-        where: { customerId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
+        where: { customerId, orgId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
         _sum: { balanceCents: true },
         _count: true,
       }),
@@ -201,7 +203,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // explicitly — an archive shouldn't surface a customer-facing shipment in
     // their own activity feed.
     const recentShipments = await server.prisma.shipmentReadModel.findMany({
-      where: { customerId, status: { not: 'archived' } },
+      where: { customerId, orgId, status: { not: 'archived' } },
       orderBy: { updatedAt: 'desc' },
       take: 5,
       select: {
@@ -246,7 +248,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { search?: string; status?: string; limit?: number; offset?: number };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     // Archived orders stay in OrderReadModel (status: 'archived') rather than
     // being deleted, so exclude them by default here too — the customer
     // portal has no "Archived" view of its own, unlike the admin app.
@@ -1003,7 +1005,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string; limit?: number };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (query.status === 'active') {
       where.status = { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] };
     } else if (query.status) {
@@ -1097,7 +1099,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (query.status === 'outstanding') {
       where.status = { in: ['sent', 'partial_paid', 'overdue'] };
     } else if (query.status) {
@@ -1159,7 +1161,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const orgId = req.orgId!;
 
     // Create a financial query (dispute)
-    const queryCount = await server.prisma.financialQuery.count();
+    const queryCount = await server.prisma.financialQuery.count({ where: { orgId } });
     const query = await server.prisma.financialQuery.create({
       data: {
         orgId,
@@ -1184,13 +1186,13 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // Anything else (carrier issues, ad-hoc issues with no source) is hidden
   // from the customer portal — there's no chain back to a single customer.
 
-  async function customerScopedIssueIds(customerId: string): Promise<string[]> {
+  async function customerScopedIssueIds(customerId: string, orgId: string): Promise<string[]> {
     const shipments = await server.prisma.shipment.findMany({
-      where: { customerId },
+      where: { customerId, orgId },
       select: { id: true },
     });
     const orders = await server.prisma.order.findMany({
-      where: { customerId },
+      where: { customerId, orgId },
       select: { id: true },
     });
     const shipmentIds = shipments.map(s => s.id);
@@ -1200,6 +1202,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     const issues = await server.prisma.issueReadModel.findMany({
       where: {
+        orgId,
         OR: [
           shipmentIds.length > 0
             ? { sourceEntityType: 'shipment', sourceEntityId: { in: shipmentIds } }
@@ -1227,10 +1230,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string };
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (ids.length === 0) return { data: [], error: null };
 
-    const where: any = { id: { in: ids } };
+    const where: any = { id: { in: ids }, orgId: req.orgId! };
     if (query.status === 'open') {
       where.status = { in: ['open', 'in_progress'] };
     } else if (query.status) {
@@ -1252,7 +1255,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
@@ -1270,7 +1273,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
@@ -1280,6 +1283,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // flagged visible by internal staff.
     const comments = await server.prisma.comment.findMany({
       where: {
+        orgId: req.orgId!,
         entityType: 'issue',
         entityId: id,
         deletedAt: null,
@@ -1308,7 +1312,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const user = req.customerUser!;
     const { body } = z.object({ body: z.string().min(1) }).parse((req as any).body);
 
-    const ids = await customerScopedIssueIds(user.customerId);
+    const ids = await customerScopedIssueIds(user.customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
@@ -1366,7 +1370,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const q = req.query as { status?: string; limit?: number; offset?: number };
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (q.status) where.status = q.status;
 
     const [rmas, total] = await Promise.all([
@@ -1510,7 +1514,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const q = req.query as { limit?: number };
     const orders = await server.prisma.order.findMany({
-      where: { customerId, status: { in: ['delivered', 'partially_delivered'] } },
+      where: { customerId, orgId: req.orgId!, status: { in: ['delivered', 'partially_delivered'] } },
       orderBy: { createdAt: 'desc' },
       take: q.limit || 25,
       include: { lineItems: true },

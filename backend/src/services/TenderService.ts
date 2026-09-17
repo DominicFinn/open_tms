@@ -37,7 +37,7 @@ export interface ITenderService {
   cancelTender(tenderId: string, orgId: string): Promise<TenderWithRelations>;
   declineTenderOffer(tenderOfferId: string, carrierId: string, orgId: string): Promise<void>;
   checkExpiredOffers(): Promise<number>;
-  getActiveTendersForCarrier(carrierId: string): Promise<any[]>;
+  getActiveTendersForCarrier(carrierId: string, orgId: string): Promise<any[]>;
   getTenderForCarrier(tenderId: string, carrierId: string, orgId: string): Promise<any>;
 }
 
@@ -350,8 +350,8 @@ export class TenderService implements ITenderService {
     }
   }
 
-  async getActiveTendersForCarrier(carrierId: string): Promise<any[]> {
-    return this.tenderRepo.findActiveOffersForCarrier(carrierId);
+  async getActiveTendersForCarrier(carrierId: string, orgId: string): Promise<any[]> {
+    return this.tenderRepo.findActiveOffersForCarrier(carrierId, orgId);
   }
 
   async getTenderForCarrier(tenderId: string, carrierId: string, orgId: string): Promise<any> {
@@ -427,6 +427,7 @@ export class TenderService implements ITenderService {
       // Attempt delivery via TradingPartner
       const result = await this.outboundDelivery.deliverToCarrier(
         offer.carrierId,
+        tender.shipment.orgId,
         '204',
         ediContent,
         tender.reference,

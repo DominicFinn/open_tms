@@ -73,10 +73,10 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
     // Update count progress
     const countedBins = await tx.cycleCountLine.count({
-      where: { cycleCountId: count.id, status: { not: 'pending' } },
+      where: { cycleCountId: count.id, status: { not: 'pending' }, cycleCount: { orgId: command.orgId } },
     });
     const varianceCount = await tx.cycleCountLine.count({
-      where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null } },
+      where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null }, cycleCount: { orgId: command.orgId } },
     });
 
     await tx.cycleCount.update({
@@ -124,7 +124,7 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
       // Auto-adjust inventory for variances
       const varianceLines = await tx.cycleCountLine.findMany({
-        where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null } },
+        where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null }, cycleCount: { orgId: command.orgId } },
       });
 
       for (const vLine of varianceLines) {
@@ -166,13 +166,13 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
       // Mark non-variance lines as adjusted too
       await tx.cycleCountLine.updateMany({
-        where: { cycleCountId: count.id, status: 'counted', variance: 0 },
+        where: { cycleCountId: count.id, status: 'counted', variance: 0, cycleCount: { orgId: command.orgId } },
         data: { status: 'adjusted' },
       });
 
       // Update lastCountedAt for all counted records
       const allLines = await tx.cycleCountLine.findMany({
-        where: { cycleCountId: count.id, inventoryRecordId: { not: null } },
+        where: { cycleCountId: count.id, inventoryRecordId: { not: null }, cycleCount: { orgId: command.orgId } },
       });
       const invIds = allLines.map(l => l.inventoryRecordId).filter(Boolean) as string[];
       if (invIds.length > 0) {

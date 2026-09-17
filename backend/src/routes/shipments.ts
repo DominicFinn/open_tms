@@ -527,7 +527,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const destinationStop = shipment.stops.find((s) => s.locationId === shipment.destinationId) ?? null;
 
     const checkpoints = await server.prisma.shipmentJourneyCheckpoint.findMany({
-      where: { shipmentId: id },
+      where: { shipmentId: id, orgId: req.orgId! },
       orderBy: { checkpointIndex: 'asc' },
     });
 
@@ -566,13 +566,13 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
     const [signals, issues] = await Promise.all([
       server.prisma.issueSignal.findMany({
-        where: { sourceEntityType: 'shipment', sourceEntityId: id },
+        where: { orgId, sourceEntityType: 'shipment', sourceEntityId: id },
         orderBy: { occurredAt: 'asc' },
         select: { id: true, issueType: true, eventType: true, priority: true, issueId: true, occurredAt: true },
         take: 1000,
       }),
       server.prisma.issue.findMany({
-        where: { sourceEntityType: 'shipment', sourceEntityId: id, issueType: { not: null } },
+        where: { orgId, sourceEntityType: 'shipment', sourceEntityId: id, issueType: { not: null } },
         orderBy: { createdAt: 'asc' },
         select: {
           id: true, issueType: true, title: true, priority: true, status: true, latched: true,

@@ -38,7 +38,7 @@ export class CustomerWebhookHandler implements IEventHandler {
     if (!customerId) return;
 
     const hooks = await this.prisma.customerWebhook.findMany({
-      where: { customerId, enabled: true },
+      where: { customerId, orgId: event.orgId, enabled: true },
     });
     if (hooks.length === 0) return;
 

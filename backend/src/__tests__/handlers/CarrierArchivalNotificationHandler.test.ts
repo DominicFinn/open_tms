@@ -33,7 +33,7 @@ describe('CarrierArchivalNotificationHandler', () => {
     const { handler, prisma } = makeHandler([{ id: 'u1', email: 'a@c.demo', name: 'A' }]);
     await handler.handle(archivedEvent);
     expect(prisma.carrierUser.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { carrierId: 'car-1', anonymizedAt: null },
+      where: { carrierId: 'car-1', carrier: { orgId: 'org-1' }, anonymizedAt: null },
     }));
   });
 

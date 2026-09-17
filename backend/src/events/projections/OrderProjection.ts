@@ -105,7 +105,7 @@ export class OrderProjection implements IEventHandler {
     }
 
     // Calculate total weight from line items and trackable units
-    const totalWeight = await this.calculateTotalWeight(event.entityId);
+    const totalWeight = await this.calculateTotalWeight(event.entityId, event.orgId);
 
     await this.prisma.orderReadModel.upsert({
       where: { id: order.id, orgId: event.orgId },
@@ -305,9 +305,9 @@ export class OrderProjection implements IEventHandler {
    */
   private async refreshAggregates(orderId: string, orgId: string): Promise<void> {
     const [unitCount, lineItemCount, totalWeight] = await Promise.all([
-      this.prisma.trackableUnit.count({ where: { orderId } }),
-      this.prisma.orderLineItem.count({ where: { orderId } }),
-      this.calculateTotalWeight(orderId),
+      this.prisma.trackableUnit.count({ where: { orderId, order: { orgId } } }),
+      this.prisma.orderLineItem.count({ where: { orderId, order: { orgId } } }),
+      this.calculateTotalWeight(orderId, orgId),
     ]);
     const data = { trackableUnitCount: unitCount, lineItemCount, totalWeight, updatedAt: new Date() };
 
@@ -344,7 +344,7 @@ export class OrderProjection implements IEventHandler {
       },
     });
     if (!order) return;
-    const totalWeight = await this.calculateTotalWeight(orderId);
+    const totalWeight = await this.calculateTotalWeight(orderId, orgId);
     await this.prisma.orderReadModel.upsert({
       where: { id: order.id, orgId },
       create: {
@@ -388,9 +388,9 @@ export class OrderProjection implements IEventHandler {
    * (sophisticated shipper built mixed-SKU pallets), trust the unit totals
    * rather than re-deriving from lines.
    */
-  private async calculateTotalWeight(orderId: string): Promise<number | null> {
+  private async calculateTotalWeight(orderId: string, orgId: string): Promise<number | null> {
     const units = await this.prisma.trackableUnit.findMany({
-      where: { orderId },
+      where: { orderId, order: { orgId } },
       select: { weight: true },
     });
     const hasUnitOverride = units.some(u => u.weight != null && u.weight > 0);
@@ -400,7 +400,7 @@ export class OrderProjection implements IEventHandler {
     }
 
     const items = await this.prisma.orderLineItem.findMany({
-      where: { orderId },
+      where: { orderId, order: { orgId } },
       select: { weight: true, quantity: true },
     });
     if (items.length === 0) return null;

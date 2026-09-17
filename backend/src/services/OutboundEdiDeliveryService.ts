@@ -31,7 +31,7 @@ export interface OutboundDeliveryRequest {
 
 export interface IOutboundEdiDeliveryService {
   deliver(request: OutboundDeliveryRequest): Promise<DeliveryResult>;
-  deliverToCarrier(carrierId: string, transactionType: string, ediContent: string, referenceId: string, meta?: { shipmentId?: string; tenderId?: string }): Promise<DeliveryResult | null>;
+  deliverToCarrier(carrierId: string, orgId: string, transactionType: string, ediContent: string, referenceId: string, meta?: { shipmentId?: string; tenderId?: string }): Promise<DeliveryResult | null>;
 }
 
 export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
@@ -105,12 +105,13 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
 
   async deliverToCarrier(
     carrierId: string,
+    orgId: string,
     transactionType: string,
     ediContent: string,
     referenceId: string,
     meta?: { shipmentId?: string; tenderId?: string },
   ): Promise<DeliveryResult | null> {
-    const partner = await this.partnerRepo.findByCarrierId(carrierId);
+    const partner = await this.partnerRepo.findByCarrierId(carrierId, orgId);
     if (!partner || !partner.outboundEnabled) return null;
 
     const txn = partner.transactions.find(

@@ -34,7 +34,7 @@ export class DeleteCarrierTrackingIntegrationCommandHandler extends BaseCommandH
     if (!integration) throw new CarrierTrackingNotFoundError('integration', id);
 
     // Delete related tracking events first
-    await tx.carrierTrackingEvent.deleteMany({ where: { integrationId: id } });
+    await tx.carrierTrackingEvent.deleteMany({ where: { integrationId: id, shipment: { orgId: command.orgId } } });
 
     // Delete the integration
     await tx.carrierTrackingIntegration.delete({ where: { id, carrier: { orgId: command.orgId } } });

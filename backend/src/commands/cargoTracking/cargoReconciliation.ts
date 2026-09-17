@@ -155,11 +155,11 @@ export async function checkLeftOnVehicle(
   if (!shipment) throw new CargoScopeError('Shipment not found');
 
   const result = emptyResult(shipmentId);
-  const stops = await tx.shipmentStop.findMany({ where: { shipmentId }, select: { status: true } });
+  const stops = await tx.shipmentStop.findMany({ where: { shipmentId, shipment: { orgId } }, select: { status: true } });
   if (!stops.every((s) => s.status === 'completed' || s.status === 'skipped')) return result;
 
   const orderShipments = await tx.orderShipment.findMany({
-    where: { shipmentId },
+    where: { shipmentId, order: { orgId } },
     include: { order: { include: { trackableUnits: true } } },
   });
 

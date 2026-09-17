@@ -26,7 +26,7 @@ export class UnassignDeviceCommandHandler extends BaseCommandHandler<UnassignDev
     const device = await tx.device.findFirst({ where: { id: deviceId, orgId: command.orgId }, select: { id: true } });
     if (!device) throw new Error(DEVICE_NOT_FOUND);
 
-    const released = await releaseActiveAssignments(tx, deviceId);
+    const released = await releaseActiveAssignments(tx, command.orgId, deviceId);
     for (const assignmentId of released) {
       emit(this.createEvent(command, {
         type: EVENT_TYPES.DEVICE_UNASSIGNED,

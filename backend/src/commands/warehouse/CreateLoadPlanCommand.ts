@@ -60,7 +60,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
     let orderSequence: Map<string, number>;
     if (p.shipmentId) {
       const stops = await tx.shipmentStop.findMany({
-        where: { shipmentId: p.shipmentId },
+        where: { shipmentId: p.shipmentId, shipment: { orgId: command.orgId } },
         orderBy: { sequenceNumber: 'desc' }, // Reverse: last stop = lowest sequence number = load first
       });
       // Map orders to their stop sequence

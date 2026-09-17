@@ -126,7 +126,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
 
     // Update task progress
     const completedLines = await tx.pickLine.count({
-      where: { pickTaskId: task.id, status: { in: ['picked', 'short', 'skipped'] } },
+      where: { pickTaskId: task.id, status: { in: ['picked', 'short', 'skipped'] }, pickTask: { orgId: command.orgId } },
     });
 
     await tx.pickTask.update({
@@ -138,7 +138,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
     const taskComplete = completedLines >= task.totalLines;
     if (taskComplete) {
       const hasShorts = await tx.pickLine.count({
-        where: { pickTaskId: task.id, status: 'short' },
+        where: { pickTaskId: task.id, status: 'short', pickTask: { orgId: command.orgId } },
       });
       await tx.pickTask.update({
         where: { id: task.id, orgId: command.orgId },
@@ -164,7 +164,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
       // Check if the entire wave is complete
       if (task.waveId) {
         const remainingTasks = await tx.pickTask.count({
-          where: { waveId: task.waveId, status: { notIn: ['completed', 'short_pick', 'cancelled'] } },
+          where: { waveId: task.waveId, status: { notIn: ['completed', 'short_pick', 'cancelled'] }, orgId: command.orgId },
         });
         if (remainingTasks === 0) {
           await tx.wave.update({

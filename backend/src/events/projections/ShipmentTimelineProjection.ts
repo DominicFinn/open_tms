@@ -40,7 +40,7 @@ async function classifyStop(
   });
   if (!stop || stop.shipmentId !== shipmentId) return null;
   const agg = await prisma.shipmentStop.aggregate({
-    where: { shipmentId },
+    where: { shipmentId, shipment: { orgId } },
     _min: { sequenceNumber: true },
     _max: { sequenceNumber: true },
   });
@@ -138,7 +138,7 @@ export class ShipmentTimelineProjection implements IEventHandler {
 
     // Idempotency: pg-boss can redeliver — never write the same source event twice.
     const existing = await this.prisma.shipmentEvent.findFirst({
-      where: { sourceEventId: row.sourceEventId },
+      where: { sourceEventId: row.sourceEventId, shipment: { orgId: event.orgId } },
       select: { id: true },
     });
     if (existing) return;

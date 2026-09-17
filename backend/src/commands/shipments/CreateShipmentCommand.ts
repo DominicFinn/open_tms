@@ -314,6 +314,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
 
     // Build the route's stop list (origin -> waypoints -> destination).
     await syncShipmentStops(tx, {
+      orgId: command.orgId,
       shipmentId: shipment.id,
       originId: finalOriginId,
       waypoints: body.waypoints,

@@ -60,10 +60,10 @@ export interface ITradingPartnerRepository {
   create(data: CreateTradingPartnerDTO): Promise<TradingPartner>;
   findById(id: string, orgId: string): Promise<TradingPartnerWithTransactions | null>;
   findAll(filters: { orgId: string; entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]>;
-  findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null>;
-  findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null>;
-  findInboundPartners(): Promise<TradingPartnerWithTransactions[]>;
-  findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]>;
+  findByCarrierId(carrierId: string, orgId: string): Promise<TradingPartnerWithTransactions | null>;
+  findByCustomerId(customerId: string, orgId: string): Promise<TradingPartnerWithTransactions | null>;
+  findInboundPartners(orgId: string): Promise<TradingPartnerWithTransactions[]>;
+  findOutboundPartnersByTransaction(transactionType: string, orgId: string): Promise<TradingPartnerWithTransactions[]>;
   update(id: string, orgId: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner>;
   softDelete(id: string, orgId: string, deletedBy: string | null): Promise<TradingPartner>;
   updateLastPolled(id: string, orgId: string): Promise<void>;
@@ -113,30 +113,31 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     }) as Promise<TradingPartnerWithTransactions[]>;
   }
 
-  async findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null> {
+  async findByCarrierId(carrierId: string, orgId: string): Promise<TradingPartnerWithTransactions | null> {
     return this.prisma.tradingPartner.findFirst({
-      where: { carrierId, active: true, deletedAt: null },
+      where: { carrierId, orgId, active: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
-  async findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null> {
+  async findByCustomerId(customerId: string, orgId: string): Promise<TradingPartnerWithTransactions | null> {
     return this.prisma.tradingPartner.findFirst({
-      where: { customerId, active: true, deletedAt: null },
+      where: { customerId, orgId, active: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
-  async findInboundPartners(): Promise<TradingPartnerWithTransactions[]> {
+  async findInboundPartners(orgId: string): Promise<TradingPartnerWithTransactions[]> {
     return this.prisma.tradingPartner.findMany({
-      where: { active: true, inboundEnabled: true, deletedAt: null },
+      where: { orgId, active: true, inboundEnabled: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions[]>;
   }
 
-  async findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]> {
+  async findOutboundPartnersByTransaction(transactionType: string, orgId: string): Promise<TradingPartnerWithTransactions[]> {
     return this.prisma.tradingPartner.findMany({
       where: {
+        orgId,
         active: true,
         deletedAt: null,
         outboundEnabled: true,

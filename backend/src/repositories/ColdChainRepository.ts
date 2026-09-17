@@ -18,12 +18,12 @@ export interface CAPAReportFilters {
 
 export interface IColdChainRepository {
   // Device Calibrations
-  getLatestCalibration(deviceId: string): Promise<DeviceCalibration | null>;
-  listCalibrations(deviceId: string): Promise<DeviceCalibration[]>;
+  getLatestCalibration(deviceId: string, orgId: string): Promise<DeviceCalibration | null>;
+  listCalibrations(deviceId: string, orgId: string): Promise<DeviceCalibration[]>;
 
   // Cold Chain Excursions
   getExcursion(id: string, orgId: string): Promise<ColdChainExcursion | null>;
-  listExcursions(shipmentId: string): Promise<ColdChainExcursion[]>;
+  listExcursions(shipmentId: string, orgId: string): Promise<ColdChainExcursion[]>;
 
   // CAPA Reports
   getCAPAReport(id: string, orgId: string): Promise<CAPAReport | null>;
@@ -37,10 +37,11 @@ export class ColdChainRepository implements IColdChainRepository {
 
   // ── Device Calibrations ──
 
-  async getLatestCalibration(deviceId: string): Promise<DeviceCalibration | null> {
+  async getLatestCalibration(deviceId: string, orgId: string): Promise<DeviceCalibration | null> {
     return this.prisma.deviceCalibration.findFirst({
       where: {
         deviceId,
+        orgId,
         status: 'valid',
         expiresAt: { gt: new Date() },
       },
@@ -48,9 +49,9 @@ export class ColdChainRepository implements IColdChainRepository {
     });
   }
 
-  async listCalibrations(deviceId: string): Promise<DeviceCalibration[]> {
+  async listCalibrations(deviceId: string, orgId: string): Promise<DeviceCalibration[]> {
     return this.prisma.deviceCalibration.findMany({
-      where: { deviceId },
+      where: { deviceId, orgId },
       orderBy: { calibratedAt: 'desc' },
     });
   }
@@ -63,9 +64,9 @@ export class ColdChainRepository implements IColdChainRepository {
     });
   }
 
-  async listExcursions(shipmentId: string): Promise<ColdChainExcursion[]> {
+  async listExcursions(shipmentId: string, orgId: string): Promise<ColdChainExcursion[]> {
     return this.prisma.coldChainExcursion.findMany({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       orderBy: { startedAt: 'desc' },
     });
   }

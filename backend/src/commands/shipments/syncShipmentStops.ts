@@ -13,13 +13,14 @@ import type { TransactionClient } from '../BaseCommandHandler.js';
 export async function syncShipmentStops(
   tx: TransactionClient,
   opts: {
+    orgId: string;
     shipmentId: string;
     originId?: string | null;
     waypoints?: string[];
     destinationId?: string | null;
   },
 ): Promise<void> {
-  const { shipmentId, originId, waypoints, destinationId } = opts;
+  const { orgId, shipmentId, originId, waypoints, destinationId } = opts;
 
   const rows: Array<{
     shipmentId: string;
@@ -39,7 +40,7 @@ export async function syncShipmentStops(
     rows.push({ shipmentId, locationId: destinationId, sequenceNumber: seq++, stopType: 'delivery', status: 'pending' });
   }
 
-  await tx.shipmentStop.deleteMany({ where: { shipmentId } });
+  await tx.shipmentStop.deleteMany({ where: { shipmentId, shipment: { orgId } } });
   if (rows.length > 0) {
     await tx.shipmentStop.createMany({ data: rows });
   }

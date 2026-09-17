@@ -272,7 +272,7 @@ export class IssueProjection implements IEventHandler {
     const issueId = event.entityId;
     try {
       const assignments = await this.prisma.issueLabelAssignment.findMany({
-        where: { issueId },
+        where: { issueId, issue: { orgId: event.orgId } },
         include: { label: true },
       });
       const labels = assignments.map((a: any) => ({

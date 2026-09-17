@@ -168,7 +168,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    const excursions = await coldChainRepo.listExcursions(shipmentId);
+    const excursions = await coldChainRepo.listExcursions(shipmentId, req.orgId!);
     return { data: excursions, error: null };
   });
 
@@ -411,7 +411,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { deviceId } = req.params as { deviceId: string };
-    const calibrations = await coldChainRepo.listCalibrations(deviceId);
+    const calibrations = await coldChainRepo.listCalibrations(deviceId, req.orgId!);
     return { data: calibrations, error: null };
   });
 
@@ -440,7 +440,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { deviceId } = req.params as { deviceId: string };
-    const calibration = await coldChainRepo.getLatestCalibration(deviceId);
+    const calibration = await coldChainRepo.getLatestCalibration(deviceId, req.orgId!);
     return { data: calibration, error: null };
   });
 

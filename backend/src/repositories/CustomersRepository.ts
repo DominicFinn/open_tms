@@ -13,8 +13,8 @@ export interface UpdateCustomerDTO {
 }
 
 export interface ICustomersRepository {
-  all(orgId?: string | null): Promise<Customer[]>;
-  findById(id: string, orgId?: string | null): Promise<Customer | null>;
+  all(orgId: string): Promise<Customer[]>;
+  findById(id: string, orgId: string): Promise<Customer | null>;
   create(data: CreateCustomerDTO): Promise<Customer>;
   update(id: string, orgId: string, data: UpdateCustomerDTO): Promise<Customer>;
   archive(id: string, orgId: string): Promise<Customer>;
@@ -23,22 +23,16 @@ export interface ICustomersRepository {
 export class CustomersRepository implements ICustomersRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null): Promise<Customer[]> {
-    const where: any = { archived: false };
-    // Multi-tenancy: filter by orgId when the caller supplies one. Legacy
-    // rows with NULL orgId are excluded from scoped queries so they can't
-    // leak across tenants — they remain accessible only via internal/admin
-    // paths that explicitly pass `null` / `undefined`.
-    if (orgId) where.orgId = orgId;
+  async all(orgId: string): Promise<Customer[]> {
+    const where: any = { archived: false, orgId };
     return this.prisma.customer.findMany({
       where,
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  async findById(id: string, orgId?: string | null): Promise<Customer | null> {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findById(id: string, orgId: string): Promise<Customer | null> {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.customer.findFirst({ where });
   }
 

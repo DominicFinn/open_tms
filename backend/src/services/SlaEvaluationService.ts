@@ -31,10 +31,13 @@ export interface ISlaEvaluationService {
   createEvaluationsForStop(stopId: string, shipmentId: string, orgId: string, customerId?: string): Promise<number>;
 
   /** Mark SLA evaluations as met for an entity event (e.g., issue resolved, shipment delivered) */
-  markEvaluationsMet(entityType: string, entityId: string, ruleTypes?: string[]): Promise<number>;
+  markEvaluationsMet(entityType: string, entityId: string, orgId: string, ruleTypes?: string[]): Promise<number>;
 
-  /** Run the periodic breach detection sweep (called by cron worker) */
+  /** Run the periodic breach detection sweep across every org (called by cron worker) */
   runBreachSweep(): Promise<BreachSweepResult>;
+
+  /** Run the breach detection sweep for one org (manual trigger from the API) */
+  runBreachSweepForOrg(orgId: string): Promise<BreachSweepResult>;
 }
 
 export interface BreachSweepResult {
@@ -329,9 +332,10 @@ export class SlaEvaluationService implements ISlaEvaluationService {
   async markEvaluationsMet(
     entityType: string,
     entityId: string,
+    orgId: string,
     ruleTypes?: string[],
   ): Promise<number> {
-    const evaluations = await this.slaRepo.findEvaluationsByEntity(entityType, entityId);
+    const evaluations = await this.slaRepo.findEvaluationsByEntity(entityType, entityId, orgId);
     const now = new Date();
     let marked = 0;
 
@@ -364,6 +368,23 @@ export class SlaEvaluationService implements ISlaEvaluationService {
   }
 
   async runBreachSweep(): Promise<BreachSweepResult> {
+    return this.sweep(
+      (now) => this.slaRepo.findActiveEvaluationsWarningBefore(now),
+      (now) => this.slaRepo.findActiveEvaluationsDueBefore(now),
+    );
+  }
+
+  async runBreachSweepForOrg(orgId: string): Promise<BreachSweepResult> {
+    return this.sweep(
+      (now) => this.slaRepo.findActiveEvaluationsWarningBeforeInOrg(now, orgId),
+      (now) => this.slaRepo.findActiveEvaluationsDueBeforeInOrg(now, orgId),
+    );
+  }
+
+  private async sweep(
+    loadWarningCandidates: (now: Date) => Promise<any[]>,
+    loadBreachCandidates: (now: Date) => Promise<any[]>,
+  ): Promise<BreachSweepResult> {
     const runId = randomUUID();
     const startedAt = new Date();
     let evaluationsChecked = 0;
@@ -374,7 +395,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     const now = new Date();
 
     // 1. Find evaluations that should transition to 'warning'
-    const warningCandidates = await this.slaRepo.findActiveEvaluationsWarningBefore(now);
+    const warningCandidates = await loadWarningCandidates(now);
     for (const evaluation of warningCandidates) {
       evaluationsChecked++;
       const updated = await this.slaRepo.updateEvaluationStatus(
@@ -406,7 +427,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     }
 
     // 2. Find evaluations that should transition to 'breached'
-    const breachCandidates = await this.slaRepo.findActiveEvaluationsDueBefore(now);
+    const breachCandidates = await loadBreachCandidates(now);
     for (const evaluation of breachCandidates) {
       evaluationsChecked++;
       const breachDuration = evaluation.slaDueAt

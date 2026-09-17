@@ -113,7 +113,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
-    const offers = await tenderService.getActiveTendersForCarrier(carrierId);
+    const offers = await tenderService.getActiveTendersForCarrier(carrierId, req.orgId!);
     return { data: offers, error: null };
   });
 
@@ -229,7 +229,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
-    const bids = await tenderRepo.findBidsByCarrierId(carrierId);
+    const bids = await tenderRepo.findBidsByCarrierId(carrierId, req.orgId!);
     return { data: bids, error: null };
   });
 
@@ -239,7 +239,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
-    const offers = await tenderRepo.findAllOffersForCarrier(carrierId);
+    const offers = await tenderRepo.findAllOffersForCarrier(carrierId, req.orgId!);
 
     // Enrich each offer with an outcome label
     const history = offers.map((offer: any) => {

@@ -47,7 +47,7 @@ export class RecordCarrierPaymentCommandHandler extends BaseCommandHandler<Recor
     const shipmentIds = [...new Set(invoice.lineItems.map(l => l.shipmentId).filter(Boolean) as string[])];
     if (shipmentIds.length > 0) {
       await tx.shipmentFinancialSummary.updateMany({
-        where: { shipmentId: { in: shipmentIds } },
+        where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
         data: { carrierPaymentStatus: 'paid' },
       });
     }

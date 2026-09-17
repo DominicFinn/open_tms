@@ -37,7 +37,7 @@ export class RecordJourneyCheckpointCommandHandler extends BaseCommandHandler<Re
     } = command.payload;
 
     const latest = await tx.shipmentJourneyCheckpoint.findFirst({
-      where: { shipmentId },
+      where: { shipmentId, orgId: command.orgId },
       orderBy: { checkpointIndex: 'desc' },
     });
     if (latest && latest.checkpointIndex >= checkpointIndex) return { recorded: false };

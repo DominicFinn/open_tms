@@ -41,7 +41,7 @@ export async function reconcileShipmentDevices(
   }
 
   const current = await tx.deviceAssignment.findMany({
-    where: { shipmentId, active: true },
+    where: { shipmentId, active: true, device: { orgId } },
     include: { device: { select: { id: true, externalId: true } } },
   });
   const currentExternalIds = new Set(current.map(a => a.device.externalId));
@@ -61,18 +61,19 @@ export async function reconcileShipmentDevices(
   for (const [externalId, name] of desired) {
     // externalId is unique across the platform, so an upsert on it alone would rename another
     // org's device and pull it onto this shipment. Refuse instead.
+    // tenancy-exempt: externalId is unique platform-wide; this is the guard that refuses another org's device
     const owned = await tx.device.findUnique({ where: { externalId }, select: { orgId: true } });
     if (owned && owned.orgId !== orgId) throw new Error(DEVICE_UNAVAILABLE);
 
     const device = await tx.device.upsert({
-      where: { externalId },
+      where: { externalId, orgId },
       update: { name },
       create: { orgId, externalId, name, provider: 'system_loco' },
     });
 
     if (currentExternalIds.has(externalId)) continue; // already active on this shipment
 
-    for (const releasedId of await releaseActiveAssignments(tx, device.id)) {
+    for (const releasedId of await releaseActiveAssignments(tx, orgId, device.id)) {
       emitUnassigned(device.id, releasedId);
     }
 

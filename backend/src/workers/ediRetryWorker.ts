@@ -25,6 +25,7 @@ export function createEdiRetryWorker(
     console.log('[EdiRetryWorker] Starting retry cycle');
 
     // Find failed logs eligible for retry
+    // tenancy-exempt: the retry cron sweeps failed logs across every org, and each follow-up update and delivery uses the orgId of the log it found.
     const failedLogs = await prisma.ediTransactionLog.findMany({
       where: {
         status: 'error',

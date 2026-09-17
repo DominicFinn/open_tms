@@ -158,10 +158,11 @@ describe('OrdersRepository', () => {
       prisma.trackableUnit.findMany.mockResolvedValue([]);
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
 
       const data = prisma.trackableUnit.create.mock.calls[0][0].data;
       expect(data.sequenceNumber).toBe(1);
+      expect(prisma.trackableUnit.findMany.mock.calls[0][0].where).toEqual({ orderId: 'o-1', order: { orgId: 'org-1' } });
     });
 
     it('increments past the highest existing sequence', async () => {
@@ -169,7 +170,7 @@ describe('OrdersRepository', () => {
       prisma.trackableUnit.findMany.mockResolvedValue([{ sequenceNumber: 7 }]);
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'carton', identifier: 'CTN-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'carton', identifier: 'CTN-1', lineItems: [] });
 
       const data = prisma.trackableUnit.create.mock.calls[0][0].data;
       expect(data.sequenceNumber).toBe(8);
@@ -179,10 +180,10 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
 
       const findArgs = prisma.trackableUnit.findMany.mock.calls[0][0];
-      expect(findArgs.where).toEqual({ orderId: 'o-1' });
+      expect(findArgs.where).toEqual({ orderId: 'o-1', order: { orgId: 'org-1' } });
       expect(findArgs.orderBy).toEqual({ sequenceNumber: 'desc' });
       expect(findArgs.take).toBe(1);
     });

@@ -25,6 +25,7 @@ export class CarrierUserAnonymizationService {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
 
     // Users of carriers deleted or archived before the cutoff, not yet scrubbed.
+    // tenancy-exempt: retention cron sweeps every org on purpose; each update is scoped to the org of the row it found.
     const candidates = await this.prisma.carrierUser.findMany({
       where: {
         anonymizedAt: null,

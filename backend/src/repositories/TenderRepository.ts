@@ -78,9 +78,9 @@ export interface ITenderRepository {
   // Offers
   createOffer(data: CreateTenderOfferDTO): Promise<TenderOffer>;
   findOfferById(id: string, orgId: string): Promise<TenderOffer | null>;
-  findOffersByTenderId(tenderId: string): Promise<TenderOffer[]>;
-  findActiveOffersForCarrier(carrierId: string): Promise<(TenderOffer & { tender: TenderWithRelations })[]>;
-  findAllOffersForCarrier(carrierId: string): Promise<any[]>;
+  findOffersByTenderId(tenderId: string, orgId: string): Promise<TenderOffer[]>;
+  findActiveOffersForCarrier(carrierId: string, orgId: string): Promise<(TenderOffer & { tender: TenderWithRelations })[]>;
+  findAllOffersForCarrier(carrierId: string, orgId: string): Promise<any[]>;
   updateOffer(id: string, orgId: string, data: Partial<TenderOffer>): Promise<TenderOffer>;
   findExpiredOffers(): Promise<ExpiredTenderOffer[]>;
 
@@ -88,7 +88,7 @@ export interface ITenderRepository {
   createBid(data: CreateTenderBidDTO): Promise<TenderBid>;
   findBidById(id: string, orgId: string): Promise<TenderBid | null>;
   findBidsByTenderId(tenderId: string, orgId: string): Promise<TenderBid[]>;
-  findBidsByCarrierId(carrierId: string): Promise<TenderBid[]>;
+  findBidsByCarrierId(carrierId: string, orgId: string): Promise<TenderBid[]>;
   updateBid(id: string, orgId: string, data: Partial<TenderBid>): Promise<TenderBid>;
 }
 
@@ -159,6 +159,7 @@ export class TenderRepository implements ITenderRepository {
   }
 
   async getNextReference(): Promise<string> {
+    // tenancy-exempt: the tender reference is unique across every org, so the sequence reads the latest reference table-wide and returns nothing else.
     const last = await this.prisma.tender.findFirst({
       orderBy: { createdAt: 'desc' },
       select: { reference: true },
@@ -185,9 +186,9 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async findOffersByTenderId(tenderId: string): Promise<TenderOffer[]> {
+  async findOffersByTenderId(tenderId: string, orgId: string): Promise<TenderOffer[]> {
     return this.prisma.tenderOffer.findMany({
-      where: { tenderId },
+      where: { tenderId, tender: { shipment: { orgId } } },
       include: {
         carrier: { select: { id: true, name: true, scacCode: true, contactEmail: true } },
         bids: true,
@@ -196,12 +197,12 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async findActiveOffersForCarrier(carrierId: string): Promise<any[]> {
+  async findActiveOffersForCarrier(carrierId: string, orgId: string): Promise<any[]> {
     return this.prisma.tenderOffer.findMany({
       where: {
         carrierId,
         status: { in: ['sent', 'viewed'] },
-        tender: { status: 'open' },
+        tender: { status: 'open', shipment: { orgId } },
       },
       include: {
         tender: {
@@ -212,9 +213,9 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async findAllOffersForCarrier(carrierId: string): Promise<any[]> {
+  async findAllOffersForCarrier(carrierId: string, orgId: string): Promise<any[]> {
     return this.prisma.tenderOffer.findMany({
-      where: { carrierId },
+      where: { carrierId, tender: { shipment: { orgId } } },
       include: {
         bids: true,
         tender: {
@@ -238,6 +239,7 @@ export class TenderRepository implements ITenderRepository {
   }
 
   async findExpiredOffers(): Promise<ExpiredTenderOffer[]> {
+    // tenancy-exempt: the tender expiry cron sweeps every org on purpose, and each follow-up write uses the org of the offer's shipment.
     return this.prisma.tenderOffer.findMany({
       where: {
         status: { in: ['sent', 'viewed'] },
@@ -276,9 +278,9 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async findBidsByCarrierId(carrierId: string): Promise<TenderBid[]> {
+  async findBidsByCarrierId(carrierId: string, orgId: string): Promise<TenderBid[]> {
     return this.prisma.tenderBid.findMany({
-      where: { carrierId },
+      where: { carrierId, tender: { shipment: { orgId } } },
       include: {
         tender: {
           select: { id: true, reference: true, status: true, shipmentId: true },

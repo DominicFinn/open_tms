@@ -182,9 +182,9 @@ export async function seedRoutes(server: FastifyInstance) {
         data: seedLocationRows.map(r => ({ ...r, orgId: seedOrgId })),
       });
 
-      const allLocations = await server.prisma.location.findMany();
-      const allCustomers = await server.prisma.customer.findMany();
-      const allCarriers = await server.prisma.carrier.findMany();
+      const allLocations = await server.prisma.location.findMany({ where: { orgId: seedOrgId } });
+      const allCustomers = await server.prisma.customer.findMany({ where: { orgId: seedOrgId } });
+      const allCarriers = await server.prisma.carrier.findMany({ where: { orgId: seedOrgId } });
 
       const loc = (name: string) => allLocations.find((l: any) => l.name === name)!;
       const cust = (name: string) => allCustomers.find((c: any) => c.name === name)!;
@@ -591,7 +591,7 @@ export async function seedRoutes(server: FastifyInstance) {
       await server.prisma.shipment.createMany({ data: shipmentData });
 
       // ── Orders ────────────────────────────────────────────────────────────
-      const allShipments = await server.prisma.shipment.findMany();
+      const allShipments = await server.prisma.shipment.findMany({ where: { orgId: seedOrgId } });
       const sh = (ref: string) => allShipments.find((s: any) => s.reference === ref)!;
 
       const orderData = [
@@ -1042,7 +1042,7 @@ export async function seedRoutes(server: FastifyInstance) {
       await server.prisma.order.createMany({ data: orderData });
 
       // Link converted orders to their corresponding shipments
-      const createdOrders = await server.prisma.order.findMany();
+      const createdOrders = await server.prisma.order.findMany({ where: { orgId: seedOrgId } });
       const ord = (num: string) => createdOrders.find((o: any) => o.orderNumber === num)!;
 
       const orderShipmentLinks = [
@@ -1065,7 +1065,7 @@ export async function seedRoutes(server: FastifyInstance) {
         }
       }
 
-      const laneCount = await server.prisma.lane.count();
+      const laneCount = await server.prisma.lane.count({ where: { orgId: seedOrgId } });
 
       // Writes above go straight to the tables and emit no domain events, so
       // the *ReadModel tables list endpoints actually query (see the backend

@@ -122,7 +122,7 @@ export class LocationResolutionService implements ILocationResolutionService {
     const location = await this.locationsRepo.findById(locationId, orgId);
     if (!location) return;
 
-    const existing = await this.arrivalCriteriaRepo.findByLocationId(locationId);
+    const existing = await this.arrivalCriteriaRepo.findByLocationId(locationId, orgId);
     if (existing.length > 0) return;
 
     await this.arrivalCriteriaRepo.createDefaultGeofence(

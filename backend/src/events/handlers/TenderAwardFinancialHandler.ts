@@ -43,6 +43,7 @@ export class TenderAwardFinancialHandler implements IEventHandler {
       const existingCharge = await this.prisma.charge.findFirst({
         where: {
           shipmentId: tender.shipmentId,
+          orgId: event.orgId,
           source: 'tender_bid',
           sourceId: payload.bidId,
         },
@@ -100,7 +101,7 @@ export class TenderAwardFinancialHandler implements IEventHandler {
 
   private async recalculateShipmentSummary(shipmentId: string, orgId: string) {
     const charges = await this.prisma.charge.findMany({
-      where: { shipmentId, status: { not: 'written_off' } },
+      where: { shipmentId, orgId, status: { not: 'written_off' } },
     });
 
     const revenueCents = charges
@@ -122,7 +123,7 @@ export class TenderAwardFinancialHandler implements IEventHandler {
     const currency = charges.length > 0 ? charges[0].currency : 'USD';
 
     await this.prisma.shipmentFinancialSummary.upsert({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       create: {
         shipmentId,
         orgId,

@@ -165,7 +165,7 @@ export async function roleRoutes(server: FastifyInstance) {
     if (!user) { reply.code(404); return { data: null, error: 'User not found' }; }
 
     const existing = await server.prisma.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId } },
+      where: { userId_roleId: { userId, roleId }, user: { organizationId: req.orgId! } },
     });
     if (existing) return { data: existing, error: null };
 

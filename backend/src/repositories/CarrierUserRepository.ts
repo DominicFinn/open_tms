@@ -18,6 +18,7 @@ export interface ICarrierUserRepository {
   create(data: CreateCarrierUserDTO): Promise<CarrierUser>;
   findById(id: string, orgId: string): Promise<CarrierUser | null>;
   findByEmail(email: string): Promise<CarrierUser | null>;
+  carrierExistsInOrg(carrierId: string, orgId: string): Promise<boolean>;
   findByCarrierId(carrierId: string, orgId: string): Promise<CarrierUser[]>;
   update(id: string, orgId: string, data: UpdateCarrierUserDTO): Promise<CarrierUser>;
   updatePassword(id: string, orgId: string, passwordHash: string): Promise<CarrierUser>;
@@ -43,12 +44,18 @@ export class CarrierUserRepository implements ICarrierUserRepository {
   }
 
   async findByEmail(email: string): Promise<CarrierUser | null> {
+    // tenancy-exempt: email is unique across every org; portal login takes the org from the row it finds, and registration only checks the unique constraint after confirming the carrier is in the caller's org.
     return this.prisma.carrierUser.findUnique({
       where: { email },
       include: {
         carrier: { select: { id: true, orgId: true, name: true, archived: true, deletedAt: true } },
       },
     });
+  }
+
+  async carrierExistsInOrg(carrierId: string, orgId: string): Promise<boolean> {
+    const count = await this.prisma.carrier.count({ where: { id: carrierId, orgId } });
+    return count > 0;
   }
 
   async findByCarrierId(carrierId: string, orgId: string): Promise<CarrierUser[]> {

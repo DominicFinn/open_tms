@@ -18,6 +18,7 @@ function buildMockRepo(overrides: any = {}) {
     create: jest.fn().mockResolvedValue(mockUser),
     findById: jest.fn().mockResolvedValue(mockUser),
     findByEmail: jest.fn().mockResolvedValue(overrides.existingUser === undefined ? null : overrides.existingUser),
+    customerExistsInOrg: jest.fn().mockResolvedValue(true),
     findByCustomerId: jest.fn().mockResolvedValue([mockUser]),
     update: jest.fn().mockResolvedValue(mockUser),
     updatePassword: jest.fn().mockResolvedValue(mockUser),
@@ -75,7 +76,7 @@ describe('CustomerAuthService', () => {
       const repo = buildMockRepo();
       const service = new CustomerAuthService(repo as any);
 
-      await service.register('cust-1', 'new@acme.com', 'SecurePass1', 'Jane Doe');
+      await service.register('cust-1', 'org-1', 'new@acme.com', 'SecurePass1', 'Jane Doe');
 
       expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({
         customerId: 'cust-1',
@@ -93,7 +94,7 @@ describe('CustomerAuthService', () => {
       const repo = buildMockRepo({ existingUser: { id: 'existing', email: 'john@acme.com' } });
       const service = new CustomerAuthService(repo as any);
 
-      await expect(service.register('cust-1', 'john@acme.com', 'SecurePass1', 'Jane'))
+      await expect(service.register('cust-1', 'org-1', 'john@acme.com', 'SecurePass1', 'Jane'))
         .rejects.toThrow('Email already registered');
     });
 
@@ -101,8 +102,19 @@ describe('CustomerAuthService', () => {
       const repo = buildMockRepo();
       const service = new CustomerAuthService(repo as any);
 
-      await expect(service.register('cust-1', 'new@acme.com', 'weak', 'Jane'))
+      await expect(service.register('cust-1', 'org-1', 'new@acme.com', 'weak', 'Jane'))
         .rejects.toThrow();
+    });
+
+    it('treats a customer from another org as not found', async () => {
+      const repo = buildMockRepo();
+      repo.customerExistsInOrg.mockResolvedValue(false);
+      const service = new CustomerAuthService(repo as any);
+
+      await expect(service.register('cust-1', 'org-2', 'new@acme.com', 'SecurePass1', 'Jane'))
+        .rejects.toThrow('Customer not found');
+      expect(repo.customerExistsInOrg).toHaveBeenCalledWith('cust-1', 'org-2');
+      expect(repo.create).not.toHaveBeenCalled();
     });
   });
 
@@ -112,7 +124,7 @@ describe('CustomerAuthService', () => {
       const service = new CustomerAuthService(repo as any);
 
       // First register to get a valid hash
-      await service.register('cust-1', 'login@acme.com', 'SecurePass1', 'Test User');
+      await service.register('cust-1', 'org-1', 'login@acme.com', 'SecurePass1', 'Test User');
       const createdHash = repo.create.mock.calls[0][0].passwordHash;
 
       // Now mock findByEmail to return the user with the hash
@@ -201,7 +213,7 @@ describe('CustomerAuthService', () => {
     it('clears lockout state on successful login', async () => {
       const repo = buildMockRepo();
       const service = new CustomerAuthService(repo as any);
-      await service.register('cust-1', 'login@acme.com', 'SecurePass1', 'Test User');
+      await service.register('cust-1', 'org-1', 'login@acme.com', 'SecurePass1', 'Test User');
       const createdHash = repo.create.mock.calls[0][0].passwordHash;
       repo.findByEmail.mockResolvedValue({
         ...repo._mockUser,
@@ -253,7 +265,7 @@ describe('CustomerAuthService', () => {
       const service = new CustomerAuthService(repo as any);
 
       // Register and login to get a valid token
-      await service.register('cust-1', 'verify@acme.com', 'SecurePass1', 'Test');
+      await service.register('cust-1', 'org-1', 'verify@acme.com', 'SecurePass1', 'Test');
       const hash = repo.create.mock.calls[0][0].passwordHash;
       repo.findByEmail.mockResolvedValue({ ...repo._mockUser, email: 'verify@acme.com', passwordHash: hash });
 

@@ -18,6 +18,7 @@ function buildMockRepo(overrides: any = {}) {
     create: jest.fn().mockResolvedValue(mockUser),
     findById: jest.fn().mockResolvedValue(mockUser),
     findByEmail: jest.fn().mockResolvedValue(overrides.existingUser === undefined ? null : overrides.existingUser),
+    carrierExistsInOrg: jest.fn().mockResolvedValue(true),
     findByCarrierId: jest.fn().mockResolvedValue([mockUser]),
     update: jest.fn().mockResolvedValue(mockUser),
     updatePassword: jest.fn().mockResolvedValue(mockUser),
@@ -113,6 +114,27 @@ describe('CarrierAuthService', () => {
       await expect(service.adminResetPassword('cu-1', 'org-2', 'NewSecurePass1')).rejects.toThrow('User not found');
       expect(repo.findById).toHaveBeenCalledWith('cu-1', 'org-2');
       expect(repo.updatePassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('register', () => {
+    it('creates the user when the carrier is in the caller org', async () => {
+      const repo = buildMockRepo();
+      const service = new CarrierAuthService(repo as any);
+
+      await service.register('carrier-1', 'org-1', 'new@swift.com', 'SecurePass1', 'New Driver');
+      expect(repo.carrierExistsInOrg).toHaveBeenCalledWith('carrier-1', 'org-1');
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ carrierId: 'carrier-1', email: 'new@swift.com' }));
+    });
+
+    it('treats a carrier from another org as not found', async () => {
+      const repo = buildMockRepo();
+      repo.carrierExistsInOrg.mockResolvedValue(false);
+      const service = new CarrierAuthService(repo as any);
+
+      await expect(service.register('carrier-1', 'org-2', 'new@swift.com', 'SecurePass1', 'New Driver'))
+        .rejects.toThrow('Carrier not found');
+      expect(repo.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -35,7 +35,7 @@ export class Edi945AutoSendHandler implements IEventHandler {
       const payload = event.payload as ShipmentDeliveredPayload;
 
       const shipment = await this.prisma.shipment.findFirst({
-        where: { reference: payload.shipmentReference },
+        where: { reference: payload.shipmentReference, orgId: event.orgId },
         include: {
           origin: true,
           destination: true,
@@ -60,6 +60,7 @@ export class Edi945AutoSendHandler implements IEventHandler {
 
       const partners = await this.prisma.tradingPartner.findMany({
         where: {
+          orgId: event.orgId,
           active: true,
           outboundEnabled: true,
           customerId,

@@ -24,6 +24,7 @@ export async function reportsDashboardRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as { dateFrom?: string; dateTo?: string };
+    const orgId = req.orgId!;
 
     const now = new Date();
     const dateTo = query.dateTo ? new Date(query.dateTo + 'T23:59:59Z') : now;
@@ -34,8 +35,8 @@ export async function reportsDashboardRoutes(server: FastifyInstance) {
     const priorTo = new Date(dateFrom.getTime());
     const priorFrom = new Date(dateFrom.getTime() - periodMs);
 
-    const periodFilter = { createdAt: { gte: dateFrom, lte: dateTo } };
-    const priorFilter = { createdAt: { gte: priorFrom, lte: priorTo } };
+    const periodFilter = { orgId, createdAt: { gte: dateFrom, lte: dateTo } };
+    const priorFilter = { orgId, createdAt: { gte: priorFrom, lte: priorTo } };
 
     // ── All queries in parallel ─────────────────────────────────────────
     const [
@@ -58,25 +59,28 @@ export async function reportsDashboardRoutes(server: FastifyInstance) {
       // 1. Shipments by status (snapshot - no date filter)
       server.prisma.shipmentReadModel.groupBy({
         by: ['status'],
+        where: { orgId },
         _count: true,
       }),
 
       // 2. Orders by status (snapshot)
       server.prisma.orderReadModel.groupBy({
         by: ['status'],
+        where: { orgId },
         _count: true,
       }),
 
       // 3. Orders by delivery status (snapshot)
       server.prisma.orderReadModel.groupBy({
         by: ['deliveryStatus'],
+        where: { orgId },
         _count: true,
       }),
 
       // 4-6. Issue counts
-      server.prisma.issueReadModel.count({ where: { status: 'open' } }),
-      server.prisma.issueReadModel.count({ where: { status: 'in_progress' } }),
-      server.prisma.issueReadModel.count({ where: { priority: 'critical', status: { in: ['open', 'in_progress'] } } }),
+      server.prisma.issueReadModel.count({ where: { orgId, status: 'open' } }),
+      server.prisma.issueReadModel.count({ where: { orgId, status: 'in_progress' } }),
+      server.prisma.issueReadModel.count({ where: { orgId, priority: 'critical', status: { in: ['open', 'in_progress'] } } }),
 
       // 7. Financial totals for current period
       server.prisma.shipmentFinancialSummary.aggregate({
@@ -99,14 +103,14 @@ export async function reportsDashboardRoutes(server: FastifyInstance) {
 
       // 9. Outstanding invoices
       server.prisma.invoiceReadModel.aggregate({
-        where: { status: { in: ['sent', 'partial_paid', 'overdue'] } },
+        where: { orgId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
         _sum: { balanceCents: true },
         _count: true,
       }),
 
       // 10. Overdue invoices
       server.prisma.invoiceReadModel.aggregate({
-        where: { daysPastDue: { gt: 0 }, status: { not: 'paid' } },
+        where: { orgId, daysPastDue: { gt: 0 }, status: { not: 'paid' } },
         _sum: { balanceCents: true },
         _count: true,
       }),

@@ -109,12 +109,12 @@ describe('TenderRepository', () => {
       const prisma = buildPrisma();
       const repo = new TenderRepository(prisma);
 
-      await repo.findActiveOffersForCarrier('car-1');
+      await repo.findActiveOffersForCarrier('car-1', 'org-1');
 
       const where = prisma.tenderOffer.findMany.mock.calls[0][0].where;
       expect(where.carrierId).toBe('car-1');
       expect(where.status).toEqual({ in: ['sent', 'viewed'] });
-      expect(where.tender).toEqual({ status: 'open' });
+      expect(where.tender).toEqual({ status: 'open', shipment: { orgId: 'org-1' } });
     });
   });
 

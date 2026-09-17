@@ -70,6 +70,7 @@ export class AuthService implements IAuthService {
   async login(email: string, password: string): Promise<LoginResult> {
     const normalizedEmail = email.trim().toLowerCase();
 
+    // tenancy-exempt: login by email is how the tenant is established; the org comes from the user row found here.
     const user = await this.prisma.user.findFirst({
       where: { email: normalizedEmail },
       include: { roles: { include: { role: true } } },

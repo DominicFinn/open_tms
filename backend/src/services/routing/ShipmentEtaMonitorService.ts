@@ -70,7 +70,8 @@ export interface EtaMonitorRunResult {
 
 export interface IShipmentEtaMonitorService {
   /** Run a full ETA check cycle across all in-transit shipments */
-  runEtaCheck(): Promise<EtaMonitorRunResult>;
+  /** Checks every org's in-transit shipments, or only `orgId`'s when given (the manual trigger). */
+  runEtaCheck(orgId?: string): Promise<EtaMonitorRunResult>;
   /** Check ETA for a single shipment (manual trigger) */
   checkSingleShipment(orgId: string, shipmentId: string): Promise<EtaCheckResult>;
 }
@@ -90,13 +91,13 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     this.routeDeviationService = routeDeviationService || null;
   }
 
-  async runEtaCheck(): Promise<EtaMonitorRunResult> {
+  async runEtaCheck(orgId?: string): Promise<EtaMonitorRunResult> {
     const runId = randomUUID();
     const startedAt = new Date().toISOString();
     console.log(`[EtaMonitor] Run ${runId} starting — provider: ${this.routingProvider.name}`);
 
     // Find all in-transit shipments with GPS data
-    const shipments = await this.findInTransitShipments();
+    const shipments = await this.findInTransitShipments(orgId);
     console.log(`[EtaMonitor] Found ${shipments.length} in-transit shipments to check`);
 
     const results: EtaCheckResult[] = [];
@@ -193,12 +194,14 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
   }
 
   /** Find in-transit shipments with their locations and stops */
-  private async findInTransitShipments() {
+  private async findInTransitShipments(orgId?: string) {
     // Get shipments that are in-transit (not draft, not delivered, not archived)
     const inTransitStatuses = ['in_transit', 'dispatched', 'picked_up', 'at_stop'];
 
+    // tenancy-exempt: the ETA cron sweeps every org when no org is given; each follow-up read and write uses the org of the shipment it found.
     const shipments = await this.prisma.shipment.findMany({
       where: {
+        ...(orgId ? { orgId } : {}),
         status: { in: inTransitStatuses },
         archived: false,
       },

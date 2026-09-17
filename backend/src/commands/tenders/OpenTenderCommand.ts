@@ -17,7 +17,7 @@ export class OpenTenderCommandHandler extends BaseCommandHandler<{ id: string },
     });
 
     await tx.tenderOffer.updateMany({
-      where: { tenderId: tender.id, status: 'pending' },
+      where: { tenderId: tender.id, status: 'pending', tender: { shipment: { orgId: command.orgId } } },
       data: { status: 'sent', sentAt: new Date() },
     });
 

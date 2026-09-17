@@ -88,7 +88,7 @@ export class ComplianceReportService {
 
     // Get devices assigned to this shipment
     const assignments = await this.prisma.deviceAssignment.findMany({
-      where: { shipmentId },
+      where: { shipmentId, device: { orgId } },
       include: { device: true },
     });
     const devices = assignments.map(a => a.device);
@@ -97,7 +97,7 @@ export class ComplianceReportService {
     const calibrations = new Map<string, any>();
     for (const device of devices) {
       const cal = await this.prisma.deviceCalibration.findFirst({
-        where: { deviceId: device.id, status: 'valid' },
+        where: { orgId, deviceId: device.id, status: 'valid' },
         orderBy: { calibratedAt: 'desc' },
       });
       if (cal) calibrations.set(device.id, cal);
@@ -109,13 +109,13 @@ export class ComplianceReportService {
 
     // Excursions
     const excursions = await this.prisma.coldChainExcursion.findMany({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       orderBy: { startedAt: 'asc' },
     });
 
     // Recent temperature logs (last 500 for the table)
     const recentLogs = await this.prisma.immutableTemperatureLog.findMany({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       orderBy: { recordedAt: 'asc' },
       take: 500,
     });

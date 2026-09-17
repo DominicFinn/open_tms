@@ -9,6 +9,7 @@ import {
   minutesUntilUnlocked,
   nextFailedAttemptState,
 } from './auth/lockout.js';
+import { PortalAccountNotFoundError, PortalUserNotFoundError } from './auth/portalUserErrors.js';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -48,7 +49,7 @@ export interface PasswordValidation {
 export type { LockoutStatus } from './auth/lockout.js';
 
 export interface ICarrierAuthService {
-  register(carrierId: string, email: string, password: string, name: string, role?: string): Promise<any>;
+  register(carrierId: string, orgId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<LoginResult>;
   changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void>;
   adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void>;
@@ -71,7 +72,11 @@ export class CarrierAuthService implements ICarrierAuthService {
     return { valid: errors.length === 0, errors };
   }
 
-  async register(carrierId: string, email: string, password: string, name: string, role?: string) {
+  async register(carrierId: string, orgId: string, email: string, password: string, name: string, role?: string) {
+    if (!(await this.carrierUserRepo.carrierExistsInOrg(carrierId, orgId))) {
+      throw new PortalAccountNotFoundError('carrier');
+    }
+
     const existing = await this.carrierUserRepo.findByEmail(email);
     if (existing) throw new Error('Email already registered');
 
@@ -151,7 +156,7 @@ export class CarrierAuthService implements ICarrierAuthService {
 
   async changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void> {
     const user = await this.carrierUserRepo.findById(userId, orgId);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new PortalUserNotFoundError();
 
     const valid = await this.verifyPassword(oldPassword, user.passwordHash);
     if (!valid) throw new Error('Current password is incorrect');
@@ -165,7 +170,7 @@ export class CarrierAuthService implements ICarrierAuthService {
 
   async adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void> {
     const user = await this.carrierUserRepo.findById(userId, orgId);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new PortalUserNotFoundError();
 
     const validation = this.validatePasswordStrength(newPassword);
     if (!validation.valid) throw new Error(validation.errors.join('; '));

@@ -135,7 +135,7 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
 
     // Get all stops for the shipment with their expected orders and trackable units
     const stops = await this.prisma.shipmentStop.findMany({
-      where: { shipmentId },
+      where: { shipmentId, shipment: { orgId } },
       orderBy: { sequenceNumber: 'asc' },
       include: {
         location: true,
@@ -166,7 +166,7 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
 
     // Get all orders for this shipment (including those not assigned to stops)
     const orderShipments = await this.prisma.orderShipment.findMany({
-      where: { shipmentId },
+      where: { shipmentId, order: { orgId } },
       include: {
         order: {
           include: {

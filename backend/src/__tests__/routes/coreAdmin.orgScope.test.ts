@@ -47,7 +47,7 @@ function scopedRow<T extends { orgId?: string; organizationId?: string }>(rows: 
 }
 
 async function buildApp(
-  register: (app: FastifyInstance) => Promise<void>,
+  register: (app: FastifyInstance) => PromiseLike<unknown>,
   prisma: any,
   presetOrg: boolean,
 ): Promise<FastifyInstance> {

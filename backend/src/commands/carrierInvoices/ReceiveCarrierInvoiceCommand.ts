@@ -159,7 +159,7 @@ export class ReceiveCarrierInvoiceCommandHandler extends BaseCommandHandler<Rece
     const shipmentIds = [...new Set(payload.lineItems.map(l => l.shipmentId).filter(Boolean) as string[])];
     if (shipmentIds.length > 0) {
       await tx.shipmentFinancialSummary.updateMany({
-        where: { shipmentId: { in: shipmentIds } },
+        where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
         data: {
           carrierPaymentStatus: autoApproved ? 'approved' : 'invoice_received',
         },

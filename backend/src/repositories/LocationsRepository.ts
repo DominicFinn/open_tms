@@ -46,34 +46,32 @@ export interface UpdateLocationDTO {
 }
 
 export interface ILocationsRepository {
-  all(orgId?: string | null): Promise<Location[]>;
-  findById(id: string, orgId?: string | null): Promise<Location | null>;
+  all(orgId: string): Promise<Location[]>;
+  findById(id: string, orgId: string): Promise<Location | null>;
   findByIdUnique(id: string, orgId: string): Promise<Location | null>;
-  search(query: string, orgId?: string | null): Promise<Location[]>;
+  search(query: string, orgId: string): Promise<Location[]>;
   create(data: CreateLocationDTO): Promise<Location>;
   update(id: string, orgId: string, data: UpdateLocationDTO): Promise<Location>;
   archive(id: string, orgId: string): Promise<Location>;
-  findMany(orgId?: string | null): Promise<Location[]>;
-  findManyByIds(ids: string[], orgId?: string | null): Promise<Location[]>;
+  findMany(orgId: string): Promise<Location[]>;
+  findManyByIds(ids: string[], orgId: string): Promise<Location[]>;
   createMany(data: CreateLocationDTO[]): Promise<void>;
-  deleteMany(): Promise<void>;
+  deleteMany(orgId: string): Promise<void>;
 }
 
 export class LocationsRepository implements ILocationsRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null): Promise<Location[]> {
-    const where: any = { archived: false };
-    if (orgId) where.orgId = orgId;
+  async all(orgId: string): Promise<Location[]> {
+    const where: any = { archived: false, orgId };
     return this.prisma.location.findMany({
       where,
       orderBy: { name: 'asc' }
     });
   }
 
-  async findById(id: string, orgId?: string | null): Promise<Location | null> {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findById(id: string, orgId: string): Promise<Location | null> {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.location.findFirst({ where });
   }
 
@@ -81,10 +79,11 @@ export class LocationsRepository implements ILocationsRepository {
     return this.prisma.location.findUnique({ where: { id, orgId } });
   }
 
-  async search(query: string, orgId?: string | null): Promise<Location[]> {
+  async search(query: string, orgId: string): Promise<Location[]> {
     const searchTerm = query.trim().toLowerCase();
     const where: any = {
       archived: false,
+      orgId,
       OR: [
         { name: { contains: searchTerm, mode: 'insensitive' } },
         { city: { contains: searchTerm, mode: 'insensitive' } },
@@ -94,7 +93,6 @@ export class LocationsRepository implements ILocationsRepository {
         { postalCode: { contains: searchTerm, mode: 'insensitive' } }
       ]
     };
-    if (orgId) where.orgId = orgId;
     return this.prisma.location.findMany({
       where,
       orderBy: [
@@ -133,18 +131,16 @@ export class LocationsRepository implements ILocationsRepository {
     });
   }
 
-  async findMany(orgId?: string | null): Promise<Location[]> {
-    const where: any = {};
-    if (orgId) where.orgId = orgId;
-    return this.prisma.location.findMany({ where });
+  async findMany(orgId: string): Promise<Location[]> {
+    return this.prisma.location.findMany({ where: { orgId } });
   }
 
-  async findManyByIds(ids: string[], orgId?: string | null): Promise<Location[]> {
+  async findManyByIds(ids: string[], orgId: string): Promise<Location[]> {
     const where: any = {
       id: { in: ids },
-      archived: false
+      archived: false,
+      orgId,
     };
-    if (orgId) where.orgId = orgId;
     return this.prisma.location.findMany({ where });
   }
 
@@ -160,7 +156,7 @@ export class LocationsRepository implements ILocationsRepository {
     });
   }
 
-  async deleteMany(): Promise<void> {
-    await this.prisma.location.deleteMany();
+  async deleteMany(orgId: string): Promise<void> {
+    await this.prisma.location.deleteMany({ where: { orgId } });
   }
 }

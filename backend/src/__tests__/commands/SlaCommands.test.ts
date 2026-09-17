@@ -122,7 +122,9 @@ describe('SLA Policy Command Handlers', () => {
         })
       );
 
-      expect(mockTx.slaRule.deleteMany).toHaveBeenCalledWith({ where: { policyId: 'policy-1' } });
+      expect(mockTx.slaRule.deleteMany).toHaveBeenCalledWith({
+        where: { policyId: 'policy-1', policy: { orgId: 'test-org' } },
+      });
       expect(mockTx.slaRule.create).toHaveBeenCalled();
     });
 

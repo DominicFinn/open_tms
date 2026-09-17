@@ -30,7 +30,7 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
       return { data: null, error: 'Location not found' };
     }
 
-    const criteria = await arrivalCriteriaRepo.findByLocationId(locationId);
+    const criteria = await arrivalCriteriaRepo.findByLocationId(locationId, req.orgId!);
     return { data: criteria, error: null };
   });
 

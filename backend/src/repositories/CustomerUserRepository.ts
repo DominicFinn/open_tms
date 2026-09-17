@@ -18,6 +18,7 @@ export interface ICustomerUserRepository {
   create(data: CreateCustomerUserDTO): Promise<CustomerUser>;
   findById(id: string, orgId: string): Promise<CustomerUser | null>;
   findByEmail(email: string): Promise<CustomerUser | null>;
+  customerExistsInOrg(customerId: string, orgId: string): Promise<boolean>;
   findByCustomerId(customerId: string, orgId: string): Promise<CustomerUser[]>;
   update(id: string, orgId: string, data: UpdateCustomerUserDTO): Promise<CustomerUser>;
   updatePassword(id: string, orgId: string, passwordHash: string): Promise<CustomerUser>;
@@ -43,12 +44,18 @@ export class CustomerUserRepository implements ICustomerUserRepository {
   }
 
   async findByEmail(email: string): Promise<CustomerUser | null> {
+    // tenancy-exempt: email is unique across every org; portal login takes the org from the row it finds, and registration only checks the unique constraint after confirming the customer is in the caller's org.
     return this.prisma.customerUser.findUnique({
       where: { email },
       include: {
         customer: { select: { id: true, orgId: true, name: true } },
       },
     });
+  }
+
+  async customerExistsInOrg(customerId: string, orgId: string): Promise<boolean> {
+    const count = await this.prisma.customer.count({ where: { id: customerId, orgId } });
+    return count > 0;
   }
 
   async findByCustomerId(customerId: string, orgId: string): Promise<CustomerUser[]> {

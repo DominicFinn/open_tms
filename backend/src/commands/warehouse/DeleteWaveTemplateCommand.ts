@@ -35,7 +35,7 @@ export class DeleteWaveTemplateCommandHandler extends BaseCommandHandler<
 
     // BUSINESS RULE: waves keep a foreign key to the template they came from, so deleting one that
     // has already released waves would orphan them. Deactivate it instead.
-    const waveCount = await tx.wave.count({ where: { templateId } });
+    const waveCount = await tx.wave.count({ where: { templateId, orgId: command.orgId } });
     if (waveCount > 0) {
       throw new Error('Cannot delete a template that has released waves; deactivate it instead');
     }

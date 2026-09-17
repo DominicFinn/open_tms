@@ -24,6 +24,7 @@ export async function authenticateApiKey(server: FastifyInstance, req: FastifyRe
   }
 
   const keyHash = hashApiKey(apiKeyHeader);
+  // tenancy-exempt: the API key hash is the credential that establishes the tenant.
   const apiKey = await server.prisma.apiKey.findUnique({
     where: { keyHash },
     select: {

@@ -230,6 +230,7 @@ export class CustomerWebhookDeliveryService {
     maxAttempts = 5,
     now: Date = new Date(),
   ): Promise<Array<{ id: string; orgId: string; attemptCount: number }>> {
+    // tenancy-exempt: retry queue sweep over every org on purpose; each retry runs under the org of the delivery's own webhook.
     const rows = await this.prisma.customerWebhookDelivery.findMany({
       where: {
         status: 'failed',

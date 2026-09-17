@@ -14,21 +14,23 @@ export interface ISlaRepository {
   deactivatePolicy(id: string, orgId: string): Promise<any>;
 
   // Rule CRUD (managed through policy)
-  findRulesByPolicyId(policyId: string): Promise<any[]>;
-  findActiveRulesByType(policyId: string, ruleType: string): Promise<any[]>;
+  findRulesByPolicyId(policyId: string, orgId: string): Promise<any[]>;
+  findActiveRulesByType(policyId: string, ruleType: string, orgId: string): Promise<any[]>;
 
   // Evaluation operations
   findEvaluations(filters: EvaluationFilters): Promise<{ items: any[]; total: number }>;
-  findEvaluationsByEntity(entityType: string, entityId: string): Promise<any[]>;
+  findEvaluationsByEntity(entityType: string, entityId: string, orgId: string): Promise<any[]>;
   findActiveEvaluationsDueBefore(dueDate: Date): Promise<any[]>;
   findActiveEvaluationsWarningBefore(warningDate: Date): Promise<any[]>;
+  findActiveEvaluationsDueBeforeInOrg(dueDate: Date, orgId: string): Promise<any[]>;
+  findActiveEvaluationsWarningBeforeInOrg(warningDate: Date, orgId: string): Promise<any[]>;
   createEvaluation(data: any): Promise<any>;
   updateEvaluationStatus(id: string, orgId: string, currentStatus: string, update: any): Promise<any | null>;
   getEvaluationSummary(orgId: string): Promise<EvaluationSummary>;
 }
 
 export interface EvaluationFilters {
-  orgId?: string;
+  orgId: string;
   status?: string[];
   ruleType?: string[];
   entityType?: string;
@@ -112,7 +114,7 @@ export class SlaRepository implements ISlaRepository {
 
       // If rules are provided, replace them (delete existing, create new)
       if (rules) {
-        await tx.slaRule.deleteMany({ where: { policyId: id } });
+        await tx.slaRule.deleteMany({ where: { policyId: id, policy: { orgId } } });
         for (const rule of rules) {
           await tx.slaRule.create({
             data: { ...rule, policyId: id },
@@ -134,24 +136,23 @@ export class SlaRepository implements ISlaRepository {
     });
   }
 
-  async findRulesByPolicyId(policyId: string): Promise<any[]> {
+  async findRulesByPolicyId(policyId: string, orgId: string): Promise<any[]> {
     return this.prisma.slaRule.findMany({
-      where: { policyId },
+      where: { policyId, policy: { orgId } },
       orderBy: { ruleType: 'asc' },
     });
   }
 
-  async findActiveRulesByType(policyId: string, ruleType: string): Promise<any[]> {
+  async findActiveRulesByType(policyId: string, ruleType: string, orgId: string): Promise<any[]> {
     return this.prisma.slaRule.findMany({
-      where: { policyId, ruleType, active: true },
+      where: { policyId, policy: { orgId }, ruleType, active: true },
     });
   }
 
   // ── Evaluation operations ──
 
   async findEvaluations(filters: EvaluationFilters): Promise<{ items: any[]; total: number }> {
-    const where: any = {};
-    if (filters.orgId) where.orgId = filters.orgId;
+    const where: any = { orgId: filters.orgId };
     if (filters.status?.length) where.status = { in: filters.status };
     if (filters.ruleType?.length) where.ruleType = { in: filters.ruleType };
     if (filters.entityType) where.entityType = filters.entityType;
@@ -173,14 +174,15 @@ export class SlaRepository implements ISlaRepository {
     return { items, total };
   }
 
-  async findEvaluationsByEntity(entityType: string, entityId: string): Promise<any[]> {
+  async findEvaluationsByEntity(entityType: string, entityId: string, orgId: string): Promise<any[]> {
     return this.prisma.slaEvaluation.findMany({
-      where: { entityType, entityId },
+      where: { entityType, entityId, orgId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findActiveEvaluationsDueBefore(dueDate: Date): Promise<any[]> {
+    // tenancy-exempt: the SLA monitor cron sweeps every org on purpose, and each transition is written and published under the evaluation's own org.
     return this.prisma.slaEvaluation.findMany({
       where: {
         status: { in: ['active', 'warning'] },
@@ -190,8 +192,29 @@ export class SlaRepository implements ISlaRepository {
   }
 
   async findActiveEvaluationsWarningBefore(warningDate: Date): Promise<any[]> {
+    // tenancy-exempt: the SLA monitor cron sweeps every org on purpose, and each transition is written and published under the evaluation's own org.
     return this.prisma.slaEvaluation.findMany({
       where: {
+        status: 'active',
+        warningAt: { lte: warningDate },
+      },
+    });
+  }
+
+  async findActiveEvaluationsDueBeforeInOrg(dueDate: Date, orgId: string): Promise<any[]> {
+    return this.prisma.slaEvaluation.findMany({
+      where: {
+        orgId,
+        status: { in: ['active', 'warning'] },
+        slaDueAt: { lte: dueDate },
+      },
+    });
+  }
+
+  async findActiveEvaluationsWarningBeforeInOrg(warningDate: Date, orgId: string): Promise<any[]> {
+    return this.prisma.slaEvaluation.findMany({
+      where: {
+        orgId,
         status: 'active',
         warningAt: { lte: warningDate },
       },

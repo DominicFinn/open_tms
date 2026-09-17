@@ -35,7 +35,7 @@ export class UnarchiveCarrierCommandHandler extends BaseCommandHandler<{ id: str
     });
 
     // Reactivate the carrier's portal users.
-    await tx.carrierUser.updateMany({ where: { carrierId: id, anonymizedAt: null }, data: { active: true } });
+    await tx.carrierUser.updateMany({ where: { carrierId: id, anonymizedAt: null, carrier: { orgId: command.orgId } }, data: { active: true } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_UNARCHIVED,

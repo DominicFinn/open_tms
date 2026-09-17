@@ -42,6 +42,14 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Pack task is ${task.status}`);
     }
 
+    if (p.trackableUnitId) {
+      const unit = await tx.trackableUnit.findFirst({
+        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
+        select: { id: true },
+      });
+      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+    }
+
     // Auto-start task if pending
     if (task.status === 'pending') {
       await tx.packTask.update({
@@ -77,9 +85,9 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     }));
 
     // Check if all lines are done
-    const totalLines = await tx.packLine.count({ where: { packTaskId: task.id } });
+    const totalLines = await tx.packLine.count({ where: { packTaskId: task.id, packTask: { orgId: command.orgId } } });
     const completedLines = await tx.packLine.count({
-      where: { packTaskId: task.id, status: { in: ['packed', 'verified'] } },
+      where: { packTaskId: task.id, status: { in: ['packed', 'verified'] }, packTask: { orgId: command.orgId } },
     });
 
     const taskComplete = completedLines >= totalLines;

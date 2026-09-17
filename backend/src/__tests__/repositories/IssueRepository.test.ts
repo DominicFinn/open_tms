@@ -128,6 +128,7 @@ describe('IssueRepository.findByOrg', () => {
 
     const assignmentCall = prisma.issueLabelAssignment.findMany.mock.calls[0][0];
     expect(assignmentCall.where.labelId).toEqual({ in: ['lbl-cold', 'lbl-rush'] });
+    expect(assignmentCall.where.issue).toEqual({ orgId: 'org-1' });
 
     const where = prisma.issueReadModel.findMany.mock.calls[0][0].where;
     expect(where.id).toEqual({ in: ['i-1', 'i-2'] });

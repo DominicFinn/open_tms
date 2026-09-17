@@ -217,7 +217,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueLabelAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { issueId: 'issue-1' },
+        where: { issueId: 'issue-1', issue: { orgId: 'test-org' } },
         include: { label: true },
       })
     );

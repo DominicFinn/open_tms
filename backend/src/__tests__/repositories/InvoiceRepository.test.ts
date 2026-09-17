@@ -131,9 +131,10 @@ describe('InvoiceRepository', () => {
       const prisma = buildPrisma();
       const repo = new InvoiceRepository(prisma);
 
-      await repo.findOverdue();
+      await repo.findOverdue('org-1');
 
       const where = prisma.invoice.findMany.mock.calls[0][0].where;
+      expect(where.orgId).toBe('org-1');
       expect(where.status).toEqual({ in: ['sent', 'partial_paid'] });
       expect(where.dueDate.lt).toBeInstanceOf(Date);
     });

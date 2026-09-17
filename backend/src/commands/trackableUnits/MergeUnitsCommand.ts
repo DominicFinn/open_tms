@@ -49,7 +49,7 @@ export class MergeTrackableUnitsCommandHandler extends BaseCommandHandler<MergeU
     }
 
     const moved = await tx.orderLineItem.updateMany({
-      where: { trackableUnitId: sourceUnitId },
+      where: { trackableUnitId: sourceUnitId, order: { orgId: command.orgId } },
       data: { trackableUnitId: targetUnitId },
     });
 

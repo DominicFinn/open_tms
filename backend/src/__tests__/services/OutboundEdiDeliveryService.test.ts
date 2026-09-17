@@ -188,10 +188,10 @@ describe('OutboundEdiDeliveryService', () => {
 
       // Will still fail on SFTP, but should attempt delivery
       await service.deliverToCarrier(
-        'carrier-001', '204', 'ISA*test', 'REF-001', { shipmentId: 'ship-001' }
+        'carrier-001', 'org-1', '204', 'ISA*test', 'REF-001', { shipmentId: 'ship-001' }
       );
 
-      expect(repo.findByCarrierId).toHaveBeenCalledWith('carrier-001');
+      expect(repo.findByCarrierId).toHaveBeenCalledWith('carrier-001', 'org-1');
     });
 
     it('returns null when no partner found for carrier', async () => {
@@ -200,7 +200,7 @@ describe('OutboundEdiDeliveryService', () => {
       const service = new OutboundEdiDeliveryService(repo);
 
       const result = await service.deliverToCarrier(
-        'nonexistent-carrier', '204', 'ISA*test', 'REF-001'
+        'nonexistent-carrier', 'org-1', '204', 'ISA*test', 'REF-001'
       );
 
       expect(result).toBeNull();
@@ -213,7 +213,7 @@ describe('OutboundEdiDeliveryService', () => {
       const service = new OutboundEdiDeliveryService(repo);
 
       const result = await service.deliverToCarrier(
-        'carrier-001', '204', 'ISA*test', 'REF-001'
+        'carrier-001', 'org-1', '204', 'ISA*test', 'REF-001'
       );
 
       expect(result).toBeNull();

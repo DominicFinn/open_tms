@@ -87,6 +87,7 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
   }
 
   async findActivePollingIntegrations(): Promise<CarrierTrackingIntegrationWithCarrier[]> {
+    // tenancy-exempt: the polling cron sweeps every org on purpose, and each poll then runs under the integration's own carrier org.
     return this.prisma.carrierTrackingIntegration.findMany({
       where: {
         pollingEnabled: true,
@@ -154,6 +155,7 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
   }
 
   async resetAllRateLimitCounters(): Promise<void> {
+    // tenancy-exempt: the daily cron resets the provider call counter for every org and reads nothing back.
     await this.prisma.carrierTrackingIntegration.updateMany({
       data: {
         rateLimitCallsToday: 0,

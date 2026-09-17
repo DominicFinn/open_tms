@@ -286,7 +286,7 @@ describe('ShipmentProjection', () => {
       await projection.handle(event);
 
       expect(mockPrisma.shipmentStop.count).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { shipmentId: 'ship-1' } })
+        expect.objectContaining({ where: { shipmentId: 'ship-1', shipment: { orgId: 'test-org' } } })
       );
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({

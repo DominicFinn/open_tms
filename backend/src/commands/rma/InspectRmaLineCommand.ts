@@ -111,7 +111,7 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
     }));
 
     // Update RMA status if all lines dispositioned
-    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id } });
+    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id, rma: { orgId: command.orgId } } });
     const allDispositioned = lines.every(l => l.disposition !== 'pending' || l.id === line.id);
 
     if (allDispositioned && rma.status !== 'dispositioning') {

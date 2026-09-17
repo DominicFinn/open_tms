@@ -224,7 +224,9 @@ describe('Issue label catalogue commands', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(tx.issueLabelAssignment.deleteMany).toHaveBeenCalledWith({ where: { labelId: 'lbl-1' } });
+      expect(tx.issueLabelAssignment.deleteMany).toHaveBeenCalledWith({
+        where: { labelId: 'lbl-1', issue: { orgId: 'test-org' } },
+      });
       expect(tx.issueLabel.delete).toHaveBeenCalledWith({ where: { id: 'lbl-1', orgId: 'test-org' } });
 
       // 1 ISSUE_LABEL_DELETED + 2 ISSUE_LABEL_REMOVED (deduped)

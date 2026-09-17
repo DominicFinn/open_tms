@@ -361,6 +361,7 @@ export class SystemLocoAdapter {
 
   private async upsertDevice(orgId: string, deviceInfo: any, location: any, payload: any) {
     const externalId = String(deviceInfo.id || deviceInfo.displayId || '');
+    // tenancy-exempt: device external ids are unique across every org, and the lookup is deliberately unscoped so a device owned by another org is refused below instead of being attributed here.
     const existing = await this.prisma.device.findUnique({ where: { externalId } });
     if (existing && existing.orgId !== orgId) throw new DeviceTenantMismatchError(existing.id);
 
@@ -398,7 +399,7 @@ export class SystemLocoAdapter {
   private async resolveAssignment(orgId: string, deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null; trackableUnitId: string | null }> {
     // 1. Check active DeviceAssignment
     const assignment = await this.prisma.deviceAssignment.findFirst({
-      where: { deviceId, active: true },
+      where: { deviceId, device: { orgId }, active: true },
     });
     if (assignment) {
       return { shipmentId: assignment.shipmentId, orderId: assignment.orderId, trackableUnitId: assignment.trackableUnitId };

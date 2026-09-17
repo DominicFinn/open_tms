@@ -120,7 +120,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // Also update any nested child units
     await tx.trackableUnit.updateMany({
-      where: { parentUnitId: unit.id },
+      where: { parentUnitId: unit.id, order: { orgId: command.orgId } },
       data: {
         currentBinId: actualBinId,
         currentZoneId: actualZone?.id ?? null,

@@ -158,7 +158,7 @@ export class ChargeService implements IChargeService {
     if (!snapshot) return;
 
     await this.prisma.shipmentFinancialSummary.upsert({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       create: {
         shipmentId,
         orgId,

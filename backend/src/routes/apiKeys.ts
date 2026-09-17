@@ -178,6 +178,7 @@ export async function apiKeyRoutes(server: FastifyInstance) {
     }
 
     const keyHash = hashApiKey(apiKeyHeader);
+    // tenancy-exempt: the API key hash is the credential; the key row it finds carries the org.
     const apiKey = await server.prisma.apiKey.findUnique({
       where: { keyHash },
       select: {

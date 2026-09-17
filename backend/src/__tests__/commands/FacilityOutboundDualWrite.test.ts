@@ -51,6 +51,8 @@ function buildPrisma(opts: {
       findFirst: jest.fn().mockResolvedValue('trackableUnit' in opts ? opts.trackableUnit : { id: 'tu-1' }),
       update: jest.fn().mockResolvedValue({}),
     },
+    order: { findFirst: jest.fn().mockResolvedValue({ id: 'ord-1' }) },
+    shipment: { findFirst: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
     receivingTask: {
       findFirst: jest.fn().mockResolvedValue('receivingTask' in opts ? opts.receivingTask : null),
       update: jest.fn().mockResolvedValue({}),

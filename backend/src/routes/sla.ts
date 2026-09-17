@@ -440,7 +440,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
-    const evaluations = await slaRepo.findEvaluationsByEntity('shipment', request.params.id);
+    const evaluations = await slaRepo.findEvaluationsByEntity('shipment', request.params.id, request.orgId!);
     return { data: evaluations, error: null };
   });
 
@@ -466,7 +466,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
-    const evaluations = await slaRepo.findEvaluationsByEntity('issue', request.params.id);
+    const evaluations = await slaRepo.findEvaluationsByEntity('issue', request.params.id, request.orgId!);
     return { data: evaluations, error: null };
   });
 
@@ -488,7 +488,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
   }, async (request, reply) => {
     try {
       const slaService = container.resolve<ISlaEvaluationService>(TOKENS.ISlaEvaluationService);
-      const result = await slaService.runBreachSweep();
+      const result = await slaService.runBreachSweepForOrg(request.orgId!);
       return { data: result, error: null };
     } catch (err) {
       reply.status(500);

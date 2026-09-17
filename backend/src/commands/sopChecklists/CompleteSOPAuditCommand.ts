@@ -51,6 +51,13 @@ export class CompleteSOPAuditCommandHandler extends BaseCommandHandler<CompleteS
       throw new Error(`SOP Audit ${auditId} not found`);
     }
 
+    // A response can only answer an item on the checklist this audit is running.
+    const checklistItemIds = new Set(audit.checklist.items.map(i => i.id));
+    const foreignItem = responses.find(r => !checklistItemIds.has(r.checklistItemId));
+    if (foreignItem) {
+      throw new Error(`Checklist item ${foreignItem.checklistItemId} not found`);
+    }
+
     // Create responses
     for (const resp of responses) {
       await tx.sOPAuditResponse.create({

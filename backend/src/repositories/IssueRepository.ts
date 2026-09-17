@@ -163,7 +163,7 @@ export class IssueRepository implements IIssueRepository {
     // Label filtering: find issueIds that have all specified labels, then filter
     if (filters.labelIds && filters.labelIds.length > 0) {
       const assignments = await this.prisma.issueLabelAssignment.findMany({
-        where: { labelId: { in: filters.labelIds } },
+        where: { labelId: { in: filters.labelIds }, issue: { orgId: filters.orgId } },
         select: { issueId: true },
       });
       const matchingIssueIds = [...new Set(assignments.map((a) => a.issueId))];

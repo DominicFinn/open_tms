@@ -72,7 +72,7 @@ export class WarehouseService {
 
     // Deactivate existing active magic links
     await this.prisma.magicLink.updateMany({
-      where: { userId, active: true },
+      where: { userId, user: { organizationId: orgId }, active: true },
       data: { active: false },
     });
 
@@ -104,6 +104,7 @@ export class WarehouseService {
     userAgent: string | null,
   ): Promise<{ success: true; data: LoginResult } | { success: false; error: string }> {
     const tokenHash = createHash('sha256').update(token).digest('hex');
+    // tenancy-exempt: the magic link token hash is the credential that establishes the tenant.
     const magicLink = await this.prisma.magicLink.findUnique({
       where: { tokenHash },
       include: {
@@ -174,6 +175,7 @@ export class WarehouseService {
     comparePassword: (plain: string, hash: string) => Promise<boolean>,
     scope: 'warehouse' | 'inventory' = 'warehouse',
   ): Promise<{ success: true; data: LoginResult } | { success: false; error: string; statusCode: number }> {
+    // tenancy-exempt: login by email is how the tenant is established; the org comes from the user row found here.
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: { roles: { include: { role: true } } },
@@ -387,7 +389,7 @@ export class WarehouseService {
 
     // Deactivate existing assignments
     await this.prisma.deviceAssignment.updateMany({
-      where: { deviceId, active: true },
+      where: { deviceId, device: { orgId }, active: true },
       data: { active: false, unassignedAt: new Date() },
     });
 

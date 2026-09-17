@@ -45,6 +45,7 @@ export class Edi214ForwardHandler implements IEventHandler {
       // Find customer trading partners with outbound 214 enabled
       const partners = await this.prisma.tradingPartner.findMany({
         where: {
+          orgId: event.orgId,
           active: true,
           outboundEnabled: true,
           customerId: shipment.customerId,
