@@ -33,6 +33,10 @@ jobs:
       - name: Check tenancy
         run: npm run lint:tenancy
 
+      # jest only transpiles (#310), so the backend's types are checked here
+      - name: Type-check backend
+        run: npx tsc --noEmit -p backend/tsconfig.json
+
       - name: Run backend tests
         run: npm -w backend run test -- --ci --forceExit
 

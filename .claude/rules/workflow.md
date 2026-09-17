@@ -107,6 +107,21 @@ git worktree list                      # check what's still around
 is how a stale branch gets deployed by accident. `.claude/worktrees/` currently holds leftovers —
 that's the failure mode this rule exists to prevent.
 
+## One heavy run at a time
+
+Several full test or type-check runs in parallel have locked up 16GB laptops until a forced restart
+(#310). Worktrees make it easy to start one in each, so:
+
+- **Run at most one full `tsc --noEmit` or full jest suite at a time**, across the main checkout
+  and every worktree. Finish one before starting the next.
+- **Subagents run only the tests for the files they changed** (`npx jest <path>`), never the whole
+  suite. The full suite runs once, from the main session, when their work is merged together.
+- Don't background a full run and then start another. Wait for it.
+- Don't raise `maxWorkers` in `backend/jest.config.cjs` or remove the transpile-only tsconfig to
+  make a run faster. Type-checking belongs to `tsc`, which CI runs as its own step.
+- Stay in the working directory. Don't add parent folders such as `~/git` as extra directories,
+  and don't search or build outside the repo unless asked.
+
 ## Commits & PRs
 
 - Commit messages describe the change and carry the issue number:
