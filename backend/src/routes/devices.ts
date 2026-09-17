@@ -13,6 +13,14 @@ import {
 } from '../commands/devices/index.js';
 import { IDeviceRepository } from '../repositories/DeviceRepository.js';
 import { ISensorReadingRepository } from '../repositories/SensorReadingRepository.js';
+import {
+  assignmentResponse,
+  deviceListResponse,
+  deviceResponse,
+  errorEnvelope,
+  readingListResponse,
+  unassignResponse,
+} from './schemas/iotResponses.js';
 
 const TAGS = ['Devices'];
 const DEFAULT_PAGE_SIZE = 500;
@@ -47,6 +55,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     schema: {
       tags: TAGS,
       summary: 'List IoT devices',
+      response: { 200: deviceListResponse },
       querystring: {
         type: 'object',
         properties: {
@@ -63,7 +72,12 @@ export default async function deviceRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/devices/:id', {
-    schema: { tags: TAGS, summary: 'Get an IoT device with its assignments and recent activity', params: idParams },
+    schema: {
+      tags: TAGS,
+      summary: 'Get an IoT device with its assignments and recent activity',
+      params: idParams,
+      response: { 200: deviceResponse, 404: errorEnvelope },
+    },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const device = await devices.findDetail(req.orgId!, id);
@@ -78,6 +92,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     schema: {
       tags: TAGS,
       summary: 'Register an IoT device',
+      response: { 201: deviceResponse, 400: errorEnvelope, 409: errorEnvelope },
       body: {
         type: 'object',
         required: ['externalId', 'name'],
@@ -105,6 +120,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     schema: {
       tags: TAGS,
       summary: 'Update an IoT device',
+      response: { 200: deviceResponse, 400: errorEnvelope, 404: errorEnvelope },
       params: idParams,
       body: {
         type: 'object',
@@ -131,6 +147,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     schema: {
       tags: TAGS,
       summary: 'Assign a device to a shipment, order or trackable unit',
+      response: { 201: assignmentResponse, 400: errorEnvelope, 404: errorEnvelope },
       params: idParams,
       body: {
         type: 'object',
@@ -155,7 +172,12 @@ export default async function deviceRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/devices/:id/assign', {
-    schema: { tags: TAGS, summary: 'Release a device from its current assignment', params: idParams },
+    schema: {
+      tags: TAGS,
+      summary: 'Release a device from its current assignment',
+      params: idParams,
+      response: { 200: unassignResponse, 404: errorEnvelope },
+    },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const result = await dispatch(req, UNASSIGN_DEVICE, { deviceId: id });
@@ -170,6 +192,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     schema: {
       tags: TAGS,
       summary: 'List sensor readings for a device, newest first',
+      response: { 200: readingListResponse, 404: errorEnvelope },
       params: idParams,
       querystring: {
         type: 'object',

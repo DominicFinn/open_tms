@@ -9,6 +9,7 @@ import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
+import { errorEnvelope, vendorListResponse, vendorResponse } from './schemas/iotResponses.js';
 import { IIotVendorSettingsService } from '../services/iot/IotVendorSettingsService.js';
 import {
   UNKNOWN_IOT_VENDOR,
@@ -27,6 +28,7 @@ export async function iotVendorRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Settings'],
       summary: 'List IoT vendors and their enabled state',
+      response: { 200: vendorListResponse },
     },
   }, async (req: FastifyRequest) => {
     return { data: await settings.list(req.orgId!), error: null };
@@ -37,6 +39,7 @@ export async function iotVendorRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Settings'],
       summary: 'Enable or disable an IoT vendor, or set its webhook secret',
+      response: { 200: vendorResponse, 400: errorEnvelope, 404: errorEnvelope },
       params: {
         type: 'object',
         required: ['vendorKey'],

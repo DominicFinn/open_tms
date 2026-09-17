@@ -3,13 +3,15 @@ import { container, TOKENS } from '../di/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { ITelemetryService } from '../services/iot/TelemetryService.js';
 import { ReadingWindow } from '../repositories/SensorReadingRepository.js';
+import { errorEnvelope, orderTelemetryResponse, shipmentTelemetryResponse } from './schemas/iotResponses.js';
 
 const DEFAULT_READINGS = 500;
 const MAX_READINGS = 2000;
 
-const telemetrySchema = (summary: string) => ({
+const telemetrySchema = (summary: string, ok: object) => ({
   tags: ['Telemetry'],
   summary,
+  response: { 200: ok, 404: errorEnvelope },
   params: {
     type: 'object',
     required: ['id'],
@@ -39,7 +41,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
   const telemetry = container.resolve<ITelemetryService>(TOKENS.ITelemetryService);
 
   server.get('/api/v1/shipments/:id/telemetry', {
-    schema: telemetrySchema('Get sensor time-series readings for a shipment'),
+    schema: telemetrySchema('Get sensor time-series readings for a shipment', shipmentTelemetryResponse),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const data = await telemetry.forShipment(req.orgId!, id, readingWindow(req));
@@ -51,7 +53,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/orders/:id/telemetry', {
-    schema: telemetrySchema('Get sensor time-series readings for an order'),
+    schema: telemetrySchema('Get sensor time-series readings for an order', orderTelemetryResponse),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const data = await telemetry.forOrder(req.orgId!, id, readingWindow(req));
