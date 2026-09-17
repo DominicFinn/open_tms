@@ -4,18 +4,23 @@ function buildPrisma() {
   return {
     issue: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
     },
     issueReadModel: {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     issueLabelAssignment: {
       findMany: jest.fn().mockResolvedValue([]),
     },
     comment: {
       count: jest.fn().mockResolvedValue(0),
+    },
+    slaEvaluation: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;
 }
@@ -199,7 +204,7 @@ describe('IssueRepository.getStats', () => {
 describe('IssueRepository.findByIdWithRelations', () => {
   it('shapes the response with labels[] and commentCount', async () => {
     const prisma = buildPrisma();
-    prisma.issue.findUnique.mockResolvedValue({
+    prisma.issue.findFirst.mockResolvedValue({
       id: 'i-1',
       title: 'Late delivery',
       labelAssignments: [
@@ -211,7 +216,7 @@ describe('IssueRepository.findByIdWithRelations', () => {
     prisma.comment.count.mockResolvedValue(3);
 
     const repo = new IssueRepository(prisma);
-    const issue = await repo.findByIdWithRelations('i-1');
+    const issue = await repo.findByIdWithRelations('i-1', 'org-1');
 
     expect(issue.labels).toEqual([
       { id: 'lbl-1', name: 'cold-chain', color: '#0066CC' },
@@ -219,16 +224,19 @@ describe('IssueRepository.findByIdWithRelations', () => {
     ]);
     expect(issue.commentCount).toBe(3);
     expect(prisma.comment.count).toHaveBeenCalledWith({
-      where: { entityType: 'issue', entityId: 'i-1' },
+      where: { orgId: 'org-1', entityType: 'issue', entityId: 'i-1' },
     });
+    expect(prisma.issue.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'i-1', orgId: 'org-1' } })
+    );
   });
 
   it('returns null when the issue does not exist', async () => {
     const prisma = buildPrisma();
-    prisma.issue.findUnique.mockResolvedValue(null);
+    prisma.issue.findFirst.mockResolvedValue(null);
     const repo = new IssueRepository(prisma);
 
-    const issue = await repo.findByIdWithRelations('missing');
+    const issue = await repo.findByIdWithRelations('missing', 'org-1');
     expect(issue).toBeNull();
   });
 });
@@ -242,10 +250,10 @@ describe('IssueRepository.updateLabelsCache', () => {
     ]);
     const repo = new IssueRepository(prisma);
 
-    await repo.updateLabelsCache('i-1');
+    await repo.updateLabelsCache('i-1', 'org-1');
 
-    expect(prisma.issueReadModel.update).toHaveBeenCalledWith({
-      where: { id: 'i-1' },
+    expect(prisma.issueReadModel.updateMany).toHaveBeenCalledWith({
+      where: { id: 'i-1', orgId: 'org-1' },
       data: { labels: ['cold-chain', 'rush'] },
     });
   });

@@ -5,7 +5,7 @@ import { createTestEvent } from '../helpers/testUtils';
 function buildMockPrisma(overrides: any = {}) {
   return {
     organization: {
-      findFirst: jest.fn().mockResolvedValue({
+      findUnique: jest.fn().mockResolvedValue({
         id: 'org-1',
         marginAlertEnabled: true,
         minMarginPercent: 10,
@@ -13,7 +13,7 @@ function buildMockPrisma(overrides: any = {}) {
       }),
     },
     shipmentFinancialSummary: {
-      findUnique: jest.fn().mockResolvedValue({
+      findFirst: jest.fn().mockResolvedValue({
         shipmentId: 'ship-1',
         expectedRevenueCents: 10000,
         expectedCostCents: 5000,
@@ -23,7 +23,7 @@ function buildMockPrisma(overrides: any = {}) {
       }),
     },
     shipment: {
-      findUnique: jest.fn().mockResolvedValue({
+      findFirst: jest.fn().mockResolvedValue({
         id: 'ship-1',
         reference: 'SH-001',
         ...overrides.shipment,
@@ -135,7 +135,7 @@ describe('MarginAlertHandler', () => {
 
     await handler.handle(event);
 
-    expect(prisma.shipmentFinancialSummary.findUnique).not.toHaveBeenCalled();
+    expect(prisma.shipmentFinancialSummary.findFirst).not.toHaveBeenCalled();
     expect(prisma.issue.create).not.toHaveBeenCalled();
   });
 
@@ -170,7 +170,7 @@ describe('MarginAlertHandler', () => {
 
     await handler.handle(event);
 
-    expect(prisma.organization.findFirst).not.toHaveBeenCalled();
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
   });
 
   it('skips events that are not charge.created or charge.approved', async () => {
@@ -186,7 +186,7 @@ describe('MarginAlertHandler', () => {
 
     await handler.handle(event);
 
-    expect(prisma.organization.findFirst).not.toHaveBeenCalled();
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
   });
 
   it('handles charge.approved events', async () => {

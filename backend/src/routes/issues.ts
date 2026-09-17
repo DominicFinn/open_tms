@@ -89,7 +89,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string } }>('/api/v1/issues/:id', {
     schema: { tags: ['Issues'], summary: 'Get issue detail with labels, CAPA reports, SLA' },
   }, async (req, reply) => {
-    const issue = await issueRepo.findByIdWithRelations(req.params.id);
+    const issue = await issueRepo.findByIdWithRelations(req.params.id, req.orgId!);
     if (!issue) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };

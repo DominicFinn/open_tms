@@ -232,7 +232,9 @@ export async function check(
   for (const file of files) {
     const source = await readFile(path.join(sourceRoot, file), 'utf8');
 
-    if (file.startsWith('routes/') && !file.startsWith('routes/modules/')) {
+    // routes/modules/ registers the plugins and routes/schemas/ holds shared JSON schemas;
+    // neither is a route plugin, so neither registers org scope.
+    if (file.startsWith('routes/') && !file.startsWith('routes/modules/') && !file.startsWith('routes/schemas/')) {
       all.push(...checkRoute(file, source, registration, policy));
     }
 
