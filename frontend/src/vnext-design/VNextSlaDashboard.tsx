@@ -130,7 +130,10 @@ export default function VNextSlaDashboard() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(fetchAll, 30_000);
+    // Skipped while the tab is hidden — see .claude/rules/realtime.md
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchAll();
+    }, 30_000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchAll]);
 

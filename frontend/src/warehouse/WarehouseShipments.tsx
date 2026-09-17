@@ -67,8 +67,10 @@ export default function WarehouseShipments() {
 
   useEffect(() => {
     loadShipments();
-    // Refresh every 30s
-    const interval = setInterval(loadShipments, 30000);
+    // Refresh every 30s, skipped while the tab is hidden — see .claude/rules/realtime.md
+    const interval = setInterval(() => {
+      if (!document.hidden) loadShipments();
+    }, 30000);
     return () => clearInterval(interval);
   }, [loadShipments]);
 

@@ -13,6 +13,7 @@ import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createDocumentGenerationWorker } from './workers/documentGenerationWorker.js';
 import type { IDocumentGenerationService } from './services/DocumentGenerationService.js';
+import type { IGeneratedDocumentRepository } from './repositories/GeneratedDocumentRepository.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
 import { createCutoffMonitorWorker, registerCutoffMonitorSchedule, CUTOFF_MONITOR_QUEUE } from './workers/cutoffMonitorWorker.js';
@@ -167,7 +168,8 @@ async function start() {
       }
 
       const deliveryService = new OrderDeliveryService(server.prisma);
-      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
+      const webhookCommandBus = container.resolve<any>(TOKENS.ICommandBus);
+      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService, webhookCommandBus);
       // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
 
@@ -176,7 +178,8 @@ async function start() {
       // for completion.
       try {
         const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
-        await queue.subscribe(QUEUES.DOCUMENT_GENERATION, createDocumentGenerationWorker(docService, server.prisma));
+        const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
+        await queue.subscribe(QUEUES.DOCUMENT_GENERATION, createDocumentGenerationWorker(docService, docRepo));
         server.log.info('Document generation worker registered');
       } catch (err) {
         server.log.warn('Document generation worker failed to register: ' + (err as Error).message);

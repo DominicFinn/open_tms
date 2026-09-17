@@ -30,8 +30,10 @@ import {
   MessageSquare,
   MoreVertical,
   Package,
+  Pause,
   Pen,
   Pencil,
+  Play,
   Plus,
   Radio,
   RefreshCw,
@@ -298,49 +300,69 @@ function TelemetryTab({ shipmentId, deviceAssignments }: { shipmentId: string; d
   const [period, setPeriod] = useState<TelemetryPeriodKey>('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const range = computeTelemetryRange(period, customFrom, customTo);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setTLoading(true);
-        const params = new URLSearchParams({ limit: '2000' });
-        if (range.since) params.set('since', range.since);
-        if (range.until) params.set('until', range.until);
-        const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/telemetry?${params}`);
-        if (!res.ok) throw new Error(`Failed to load telemetry (${res.status})`);
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        if (!cancelled) {
-          setTelemetry(json.data);
-          setTError('');
-        }
-      } catch (err: any) {
-        if (!cancelled) setTError(err.message || 'Failed to load telemetry');
-      } finally {
-        if (!cancelled) setTLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const fetchTelemetry = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ limit: '2000' });
+      if (range.since) params.set('since', range.since);
+      if (range.until) params.set('until', range.until);
+      const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/telemetry?${params}`);
+      if (!res.ok) throw new Error(`Failed to load telemetry (${res.status})`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setTelemetry(json.data);
+      setTError('');
+    } catch (err: any) {
+      setTError(err.message || 'Failed to load telemetry');
+    }
   }, [shipmentId, range.since, range.until]);
 
-  const periodFilter = (
-    <TelemetryPeriodFilter
-      period={period}
-      onPeriodChange={setPeriod}
-      customFrom={customFrom}
-      customTo={customTo}
-      onCustomFromChange={setCustomFrom}
-      onCustomToChange={setCustomTo}
-    />
+  useEffect(() => {
+    let cancelled = false;
+    setTLoading(true);
+    fetchTelemetry().finally(() => { if (!cancelled) setTLoading(false); });
+    return () => { cancelled = true; };
+  }, [fetchTelemetry]);
+
+  // Live refresh: opt-in, ≥30s, skipped while the tab is hidden — see
+  // .claude/rules/realtime.md. This codebase has no WebSocket/SSE transport yet.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchTelemetry();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchTelemetry]);
+
+  const controlsRow = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <TelemetryPeriodFilter
+        period={period}
+        onPeriodChange={setPeriod}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+      />
+      <Button
+        variant={autoRefresh ? 'default' : 'outline'}
+        size="sm"
+        onClick={() => setAutoRefresh(prev => !prev)}
+        title={autoRefresh ? 'Stop auto-refresh (30s)' : 'Start auto-refresh (30s)'}
+      >
+        {autoRefresh ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {autoRefresh ? 'Live' : 'Auto'}
+      </Button>
+    </div>
   );
 
   if (tError) {
     return (
       <div className="space-y-4">
-        {periodFilter}
+        {controlsRow}
         <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <XCircle className="h-5 w-5" />
           {tError}
@@ -352,7 +374,7 @@ function TelemetryTab({ shipmentId, deviceAssignments }: { shipmentId: string; d
   if (tLoading || !telemetry) {
     return (
       <div className="space-y-4">
-        {periodFilter}
+        {controlsRow}
         <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <h3 className="text-base font-medium">Loading telemetry...</h3>
@@ -395,7 +417,7 @@ function TelemetryTab({ shipmentId, deviceAssignments }: { shipmentId: string; d
 
   return (
     <div className="space-y-6">
-      {periodFilter}
+      {controlsRow}
 
       {trackerDevices.length > 0 && (
         <Card>
@@ -1566,6 +1588,8 @@ function eventTone(eventType: string): string {
     case 'delivered':
     case 'enters_destination':
       return 'border-success/30 bg-success/10 text-success';
+    case 'journey_checkpoint':
+      return 'border-info/30 bg-info/10 text-info';
     case 'exception':
       return 'border-destructive/30 bg-destructive/10 text-destructive';
     case 'leaves_origin':
@@ -1587,22 +1611,36 @@ function EventsTab({ shipmentId }: { shipmentId: string }) {
   const [eventType, setEventType] = useState('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  const fetchEvents = useCallback(() => {
     const params = new URLSearchParams();
     if (eventType !== 'all') params.set('eventType', eventType);
     if (fromDate) params.set('fromDate', fromDate);
     if (toDate) params.set('toDate', `${toDate}T23:59:59Z`);
     const qs = params.toString();
-    fetch(`${API_URL}/api/v1/shipments/${shipmentId}/events${qs ? `?${qs}` : ''}`)
+    return fetch(`${API_URL}/api/v1/shipments/${shipmentId}/events${qs ? `?${qs}` : ''}`)
       .then(r => r.json())
-      .then(j => { if (!cancelled && !j.error) setEvents(j.data || []); })
-      .catch(() => { })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then(j => { if (!j.error) setEvents(j.data || []); })
+      .catch(() => { });
   }, [shipmentId, eventType, fromDate, toDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchEvents().finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [fetchEvents]);
+
+  // Live refresh: opt-in, ≥30s, skipped while the tab is hidden — see
+  // .claude/rules/realtime.md. This codebase has no WebSocket/SSE transport yet.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchEvents();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchEvents]);
 
   const hasFilters = eventType !== 'all' || !!fromDate || !!toDate;
   const clearFilters = () => { setEventType('all'); setFromDate(''); setToDate(''); };
@@ -1610,7 +1648,18 @@ function EventsTab({ shipmentId }: { shipmentId: string }) {
   return (
     <Card>
       <CardHeader className="space-y-3">
-        <CardTitle className="text-base">Event Timeline</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Event Timeline</CardTitle>
+          <Button
+            variant={autoRefresh ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAutoRefresh(prev => !prev)}
+            title={autoRefresh ? 'Stop auto-refresh (30s)' : 'Start auto-refresh (30s)'}
+          >
+            {autoRefresh ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {autoRefresh ? 'Live' : 'Auto'}
+          </Button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={eventType} onValueChange={setEventType}>
             <SelectTrigger className="w-[200px]">

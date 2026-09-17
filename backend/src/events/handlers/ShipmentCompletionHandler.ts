@@ -100,15 +100,21 @@ export class ShipmentCompletionHandler implements IEventHandler {
 
     // If the final stop is arrived or completed, mark shipment as delivered
     if (['arrived', 'in_progress', 'completed'].includes(finalStop.status)) {
-      // Transition shipment to delivered
+      // Transition shipment to delivered. Conditioned on still being
+      // in_progress: this handler is subscribed to both
+      // shipment.stop_arrived and tracking.geofence_entered, and a single
+      // destination arrival now emits both (#283) — an unconditional update
+      // here would let two concurrent deliveries both "win" the transition
+      // and double-publish SHIPMENT_DELIVERED/STATUS_CHANGED.
       const previousStatus = shipment.status;
-      await this.prisma.shipment.update({
-        where: { id: shipmentId },
+      const { count } = await this.prisma.shipment.updateMany({
+        where: { id: shipmentId, status: 'in_progress' },
         data: {
           status: 'complete',
           deliveryDate: new Date(),
         },
       });
+      if (count === 0) return;
 
       // Publish shipment.delivered event
       const deliveredEvent = createEvent({

@@ -1,33 +1,61 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { randomUUID } from 'crypto';
 import { ICargoTrackingRepository } from '../repositories/CargoTrackingRepository.js';
-import { ICargoReconciliationService } from '../services/CargoReconciliationService.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CommandResult } from '../commands/types.js';
+import {
+  RECORD_CARGO_SCAN,
+  RECONCILE_STOP_CARGO,
+  CHECK_LEFT_ON_VEHICLE,
+  UPDATE_CARGO_DISCREPANCY,
+} from '../commands/cargoTracking/index.js';
 import { container, TOKENS } from '../di/index.js';
-import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
+import { registerOrgScope, requireOrgScope } from '../auth/orgScopeMiddleware.js';
+
+const uuidParam = (name: string) => ({
+  type: 'object',
+  required: [name],
+  properties: { [name]: { type: 'string', format: 'uuid' } },
+});
 
 export async function cargoTrackingRoutes(server: FastifyInstance) {
+  // Without these, req.orgId is undefined and Prisma reads `orgId: undefined` as no filter at all.
+  await registerOrgScope(server);
+  server.addHook('preHandler', requireOrgScope);
+
   const cargoRepo = container.resolve<ICargoTrackingRepository>(TOKENS.ICargoTrackingRepository);
-  const reconciliationService = container.resolve<ICargoReconciliationService>(TOKENS.ICargoReconciliationService);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  const dispatch = <T>(req: FastifyRequest, type: string, payload: unknown) =>
+    commandBus.dispatch<unknown, T>({
+      type,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+  const sendResult = <T>(reply: FastifyReply, result: CommandResult<T>, successCode = 200) => {
+    if (!result.success) return reply.code(422).send({ data: null, error: result.error });
+    return reply.code(successCode).send({ data: result.data, error: null });
+  };
+
+  const notFound = (reply: FastifyReply, what: string) =>
+    reply.code(404).send({ data: null, error: `${what} not found` });
 
   // ─── Cargo Manifest ────────────────────────────────────────────────────────
 
   server.get('/api/v1/shipments/:shipmentId/cargo-manifest', {
     schema: {
       tags: ['Cargo Tracking'],
-      description: 'Get cargo manifest for a shipment — expected vs actual cargo at each stop',
-      params: {
-        type: 'object',
-        properties: { shipmentId: { type: 'string', format: 'uuid' } },
-      },
+      description: 'Get cargo manifest for a shipment: expected vs actual cargo at each stop',
+      params: uuidParam('shipmentId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    try {
-      const manifest = await cargoRepo.getCargoManifest(shipmentId);
-      return { data: manifest, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    const manifest = await cargoRepo.getCargoManifest(req.orgId!, shipmentId);
+    if (!manifest) return notFound(reply, 'Shipment');
+    return { data: manifest, error: null };
   });
 
   // ─── Cargo Scans ───────────────────────────────────────────────────────────
@@ -39,69 +67,49 @@ export async function cargoTrackingRoutes(server: FastifyInstance) {
       body: {
         type: 'object',
         required: ['trackableUnitId', 'shipmentStopId', 'shipmentId', 'scanType', 'scanMethod'],
+        additionalProperties: false,
         properties: {
           trackableUnitId: { type: 'string', format: 'uuid' },
           shipmentStopId: { type: 'string', format: 'uuid' },
           shipmentId: { type: 'string', format: 'uuid' },
           scanType: { type: 'string', enum: ['load', 'unload', 'checkpoint'] },
           scanMethod: { type: 'string', enum: ['barcode', 'rfid', 'manual', 'geofence', 'iot'] },
-          scannedBy: { type: 'string' },
-          lat: { type: 'number' },
-          lng: { type: 'number' },
-          notes: { type: 'string' },
+          scannedBy: { type: 'string', maxLength: 255 },
+          lat: { type: 'number', minimum: -90, maximum: 90 },
+          lng: { type: 'number', minimum: -180, maximum: 180 },
+          notes: { type: 'string', maxLength: 2000 },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const body = req.body as any;
-    try {
-      const result = await reconciliationService.recordCargoScan(body);
-      reply.code(201);
-      return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    const body = req.body as { shipmentId: string; shipmentStopId: string };
+    const stop = await cargoRepo.findStopInOrg(req.orgId!, body.shipmentStopId);
+    if (!stop || stop.shipmentId !== body.shipmentId) return notFound(reply, 'Shipment stop');
+    return sendResult(reply, await dispatch(req, RECORD_CARGO_SCAN, body), 201);
   });
 
   server.get('/api/v1/shipments/:shipmentId/cargo-scans', {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Get all cargo scans for a shipment',
-      params: {
-        type: 'object',
-        properties: { shipmentId: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('shipmentId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    try {
-      const scans = await cargoRepo.findScansByShipment(shipmentId);
-      return { data: scans, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findShipmentInOrg(req.orgId!, shipmentId))) return notFound(reply, 'Shipment');
+    return { data: await cargoRepo.findScansByShipment(req.orgId!, shipmentId), error: null };
   });
 
   server.get('/api/v1/shipment-stops/:stopId/cargo-scans', {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Get all cargo scans for a specific stop',
-      params: {
-        type: 'object',
-        properties: { stopId: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('stopId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { stopId } = req.params as { stopId: string };
-    try {
-      const scans = await cargoRepo.findScansByStop(stopId);
-      return { data: scans, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findStopInOrg(req.orgId!, stopId))) return notFound(reply, 'Shipment stop');
+    return { data: await cargoRepo.findScansByStop(req.orgId!, stopId), error: null };
   });
 
   // ─── Cargo Discrepancies ───────────────────────────────────────────────────
@@ -110,124 +118,59 @@ export async function cargoTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Get all cargo discrepancies for a shipment',
-      params: {
-        type: 'object',
-        properties: { shipmentId: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('shipmentId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    try {
-      const discrepancies = await cargoRepo.findDiscrepanciesByShipment(shipmentId);
-      return { data: discrepancies, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findShipmentInOrg(req.orgId!, shipmentId))) return notFound(reply, 'Shipment');
+    return { data: await cargoRepo.findDiscrepanciesByShipment(req.orgId!, shipmentId), error: null };
   });
 
   server.get('/api/v1/cargo-discrepancies', {
     schema: {
       tags: ['Cargo Tracking'],
-      description: 'Get all open cargo discrepancies across all shipments',
+      description: "Get the organization's open cargo discrepancies across all shipments",
     },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const discrepancies = await cargoRepo.findOpenDiscrepancies();
-      return { data: discrepancies, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+  }, async (req: FastifyRequest) => {
+    return { data: await cargoRepo.findOpenDiscrepancies(req.orgId!), error: null };
   });
 
   server.get('/api/v1/cargo-discrepancies/:id', {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Get a specific cargo discrepancy by ID',
-      params: {
-        type: 'object',
-        properties: { id: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('id'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    try {
-      const discrepancy = await cargoRepo.findDiscrepancyById(id);
-      if (!discrepancy) {
-        reply.code(404);
-        return { data: null, error: 'Discrepancy not found' };
-      }
-      return { data: discrepancy, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    const discrepancy = await cargoRepo.findDiscrepancyById(req.orgId!, id);
+    if (!discrepancy) return notFound(reply, 'Discrepancy');
+    return { data: discrepancy, error: null };
   });
 
   server.patch('/api/v1/cargo-discrepancies/:id', {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Update a cargo discrepancy (status, resolution, notes)',
-      params: {
-        type: 'object',
-        properties: { id: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('id'),
       body: {
         type: 'object',
+        additionalProperties: false,
+        minProperties: 1,
         properties: {
           status: { type: 'string', enum: ['open', 'investigating', 'resolved', 'dismissed'] },
-          resolvedBy: { type: 'string' },
-          resolution: { type: 'string' },
-          notes: { type: 'string' },
+          resolvedBy: { type: 'string', maxLength: 255 },
+          resolution: { type: 'string', maxLength: 2000 },
+          notes: { type: 'string', maxLength: 2000 },
           severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as any;
-    try {
-      const existing = await cargoRepo.findDiscrepancyById(id);
-      if (!existing) {
-        reply.code(404);
-        return { data: null, error: 'Discrepancy not found' };
-      }
-
-      const updated = await cargoRepo.updateDiscrepancy(id, body);
-
-      // If resolved, publish event
-      if (body.status === 'resolved') {
-        const unit = (updated as any).trackableUnit;
-        try {
-          const eventBus = container.resolve<any>(TOKENS.IEventBus);
-          const { randomUUID } = await import('crypto');
-          await eventBus.publish({
-            id: randomUUID(),
-            type: EVENT_TYPES.CARGO_DISCREPANCY_RESOLVED,
-            timestamp: new Date().toISOString(),
-            orgId: 'default',
-            actorId: body.resolvedBy || null,
-            entityType: 'cargo_discrepancy',
-            entityId: id,
-            payload: {
-              shipmentId: (updated as any).shipmentId,
-              trackableUnitId: (updated as any).trackableUnitId,
-              unitIdentifier: unit?.identifier,
-              unitType: unit?.unitType,
-              discrepancyType: (updated as any).discrepancyType,
-              resolution: body.resolution,
-            },
-            metadata: { correlationId: randomUUID(), source: 'api', schemaVersion: 1 },
-          });
-        } catch { /* best-effort */ }
-      }
-
-      return { data: updated, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findDiscrepancyById(req.orgId!, id))) return notFound(reply, 'Discrepancy');
+    const body = req.body as Record<string, unknown>;
+    return sendResult(reply, await dispatch(req, UPDATE_CARGO_DISCREPANCY, { ...body, id }));
   });
 
   // ─── Reconciliation Triggers ───────────────────────────────────────────────
@@ -236,39 +179,23 @@ export async function cargoTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Trigger cargo reconciliation for a specific stop (compares expected vs scanned)',
-      params: {
-        type: 'object',
-        properties: { stopId: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('stopId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { stopId } = req.params as { stopId: string };
-    try {
-      const result = await reconciliationService.reconcileStopCompletion(stopId);
-      return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findStopInOrg(req.orgId!, stopId))) return notFound(reply, 'Shipment stop');
+    return sendResult(reply, await dispatch(req, RECONCILE_STOP_CARGO, { shipmentStopId: stopId }));
   });
 
   server.post('/api/v1/shipments/:shipmentId/check-left-on-vehicle', {
     schema: {
       tags: ['Cargo Tracking'],
       description: 'Check for cargo left on vehicle after all stops are completed',
-      params: {
-        type: 'object',
-        properties: { shipmentId: { type: 'string', format: 'uuid' } },
-      },
+      params: uuidParam('shipmentId'),
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    try {
-      const result = await reconciliationService.checkLeftOnVehicle(shipmentId);
-      return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    if (!(await cargoRepo.findShipmentInOrg(req.orgId!, shipmentId))) return notFound(reply, 'Shipment');
+    return sendResult(reply, await dispatch(req, CHECK_LEFT_ON_VEHICLE, { shipmentId }));
   });
 }

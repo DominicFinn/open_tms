@@ -226,14 +226,10 @@ export class ShipmentShareViewRepository {
    * Documents attach to a shipment by a plain id rather than a relation, so they are read
    * separately. Binary content is deliberately not selected: a share view lists what exists and
    * links to the permission-checked download route, it does not hand out file bytes inline.
-   *
-   * GeneratedDocument carries no orgId of its own, so tenancy is enforced one step earlier: the
-   * caller must have already resolved the shipment through `findShipment`, which is org-scoped.
-   * Never call this with a shipment id that has not been through that check.
    */
-  async findDocuments(shipmentId: string) {
+  async findDocuments(orgId: string, shipmentId: string) {
     return this.prisma.generatedDocument.findMany({
-      where: { shipmentId, documentType: { in: SHAREABLE_DOCUMENT_TYPES } },
+      where: { orgId, shipmentId, documentType: { in: SHAREABLE_DOCUMENT_TYPES } },
       select: {
         id: true,
         documentType: true,

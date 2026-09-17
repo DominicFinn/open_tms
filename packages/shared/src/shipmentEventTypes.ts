@@ -21,6 +21,7 @@ export const SHIPMENT_EVENT_TYPES: ShipmentEventTypeDef[] = [
   { type: 'entered_waypoint', label: 'Entered waypoint' },
   { type: 'exited_waypoint', label: 'Exited waypoint' },
   { type: 'enters_destination', label: 'Enters destination' },
+  { type: 'journey_checkpoint', label: 'Journey checkpoint' },
   { type: 'delivered', label: 'Delivered' },
   { type: 'exception', label: 'Exception' },
   { type: 'archived', label: 'Archived' },

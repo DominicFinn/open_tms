@@ -237,7 +237,8 @@ export class OrderDeliveryService implements IOrderDeliveryService {
             ],
           }
         },
-        location: true
+        location: true,
+        shipment: { select: { orgId: true } },
       }
     });
 
@@ -341,8 +342,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     // Cargo reconciliation runs outside the transaction (non-blocking side effect)
     if (status === 'completed' && this.cargoReconciliation) {
       try {
-        await this.cargoReconciliation.autoReconcileStop(shipmentStopId, method);
-        await this.cargoReconciliation.reconcileStopCompletion(shipmentStopId);
+        await this.cargoReconciliation.reconcileCompletedStop(stop.shipment.orgId, shipmentStopId, method);
 
         // If this was the last stop, check for cargo left on vehicle
         const allStops = await this.prisma.shipmentStop.findMany({
@@ -352,7 +352,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
           (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
         );
         if (allCompleted) {
-          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipmentId);
+          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipment.orgId, stop.shipmentId);
         }
       } catch (err) {
         console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);
@@ -412,19 +412,21 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         stop.location.lng
       );
 
-      // If within geofence radius
-      if (distance <= stop.geofenceRadius) {
-        // Mark stop as arrived if it was pending
-        if (stop.status === 'pending') {
-          await this.prisma.shipmentStop.update({
-            where: { id: stop.id },
-            data: {
-              status: 'arrived',
-              actualArrival: new Date(),
-              updatedAt: new Date()
-            }
-          });
-        }
+      // If within geofence radius and this stop hasn't already been processed —
+      // updateOrdersForStop unconditionally overwrites ShipmentStop.status and
+      // actualArrival on every call, so without this guard a repeat ping that
+      // still matches the geofence re-stamps an already-arrived (or, via the
+      // event-driven path added in #283, already-completed) stop back to
+      // 'arrived' with a fresh timestamp on every subsequent ping.
+      if (distance <= stop.geofenceRadius && stop.status === 'pending') {
+        await this.prisma.shipmentStop.update({
+          where: { id: stop.id },
+          data: {
+            status: 'arrived',
+            actualArrival: new Date(),
+            updatedAt: new Date()
+          }
+        });
 
         // Update orders for this stop
         const ordersUpdated = await this.updateOrdersForStop(

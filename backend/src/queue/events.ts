@@ -15,7 +15,8 @@ export interface DocumentGenerationJob {
   /** Set by the route. Used by clients to query GeneratedDocument afterward. */
   correlationId: string;
   requestedBy?: string | null;
-  orgId?: string | null;
+  /** The requesting user's org. The worker scopes every lookup to it. */
+  orgId: string;
 }
 
 export interface WebhookEvent {
