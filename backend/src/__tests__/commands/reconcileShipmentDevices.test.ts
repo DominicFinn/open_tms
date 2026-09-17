@@ -1,16 +1,25 @@
-import { reconcileShipmentDevices } from '../../commands/shipments/reconcileShipmentDevices';
+import { DEVICE_UNAVAILABLE, reconcileShipmentDevices } from '../../commands/shipments/reconcileShipmentDevices';
 
-function makeTx(current: Array<{ id: string; deviceId: string; externalId: string }>) {
+function makeTx(
+  current: Array<{ id: string; deviceId: string; externalId: string }>,
+  owners: Record<string, string> = {},
+  activeElsewhere: Record<string, string[]> = {},
+) {
   return {
     deviceAssignment: {
-      findMany: jest.fn().mockResolvedValue(
-        current.map(a => ({ id: a.id, deviceId: a.deviceId, device: { id: a.deviceId, externalId: a.externalId } }))
-      ),
+      // The shipment's current assignments, or a device's active assignments when releasing it.
+      findMany: jest.fn().mockImplementation(({ where }: any) => Promise.resolve(
+        where.shipmentId
+          ? current.map(a => ({ id: a.id, deviceId: a.deviceId, device: { id: a.deviceId, externalId: a.externalId } }))
+          : (activeElsewhere[where.deviceId] ?? []).map(id => ({ id }))
+      )),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({}),
       create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: `asn-${data.deviceId}` })),
     },
     device: {
+      findUnique: jest.fn().mockImplementation(({ where }: any) =>
+        Promise.resolve(owners[where.externalId] ? { orgId: owners[where.externalId] } : null)),
       upsert: jest.fn().mockImplementation(({ where }: any) => Promise.resolve({ id: `dev-${where.externalId}` })),
     },
   } as any;
@@ -100,5 +109,30 @@ describe('reconcileShipmentDevices', () => {
       where: { id: 'a1' }, data: expect.objectContaining({ active: false }),
     }));
     expect(s.unassigned).toEqual(['dev-EXT-A']);
+  });
+
+  it('releases a device from its assignment elsewhere and emits unassigned for it', async () => {
+    const tx = makeTx([], { 'EXT-A': 'org-1' }, { 'dev-EXT-A': ['old-asn'] });
+    const s = spies();
+    await reconcileShipmentDevices(tx, {
+      orgId: 'org-1', shipmentId: 'ship-1', devices: [{ name: 'A', externalId: 'EXT-A' }],
+      emitAssigned: s.emitAssigned, emitUnassigned: s.emitUnassigned,
+    });
+    expect(tx.deviceAssignment.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: ['old-asn'] } }, data: expect.objectContaining({ active: false }),
+    }));
+    expect(s.unassigned).toEqual(['dev-EXT-A']);
+    expect(s.assigned).toEqual(['dev-EXT-A']);
+  });
+
+  it("refuses a device registered to another org and leaves it untouched", async () => {
+    const tx = makeTx([], { 'EXT-A': 'org-2' });
+    const s = spies();
+    await expect(reconcileShipmentDevices(tx, {
+      orgId: 'org-1', shipmentId: 'ship-1', devices: [{ name: 'A', externalId: 'EXT-A' }],
+      emitAssigned: s.emitAssigned, emitUnassigned: s.emitUnassigned,
+    })).rejects.toThrow(DEVICE_UNAVAILABLE);
+    expect(tx.device.upsert).not.toHaveBeenCalled();
+    expect(tx.deviceAssignment.create).not.toHaveBeenCalled();
   });
 });

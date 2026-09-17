@@ -686,6 +686,8 @@ Items from the unified trading partner model that are not yet complete:
 - **Error Tracking** - DLQ dashboard enhancements, Sentry/Rollbar integration 🔲
 - **Deployment** - Blue/green guide, migration safety, worker drain, rollback playbook 🔲
 - **Capacity Planning** - Sizing guide, resource recommendations, load testing scripts 🔲
+- **Separate ingest process** (#301) - IoT, carrier tracking webhooks and EDI inbound move out of the main API into their own container: verify, enqueue, return 202 🔲
+- **Queue off Postgres** (long term) - IoT device volume could be very large, and pg-boss shares the database the site reads from. Move the queue to Redis, NATS or similar behind `IQueueAdapter`, and add read replicas for reporting, once volume justifies it 🔲
 
 ### **Intelligence & AI** (Continue)
 - Visual node builder for skill chains (drag-and-drop flowchart UI) 🔲
@@ -705,6 +707,8 @@ Items from the unified trading partner model that are not yet complete:
 - Device-shipment linking (associate IoT devices with shipments) ✅
 - Real-time data ingestion from System Loco IoT platform (temperature, pressure, shock, light, GPS) ✅ hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
 - Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
+- **IoT tidy-up** (#291) ✅ telemetry reads scoped to the caller's org, device and vendor settings on commands and repositories, shipment form can no longer take over another org's device, legacy GCP `webhook-service/` removed
+- **Inbound webhook and worker org resolution** 🔲 moving to the separate ingest process (#301)
 - IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
 - _Future:_ **Device Reports V2 feed**: continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲
 - _Future:_ **System Loco Shipments feed**: consume their shipment lifecycle / `leavesOrigin` / `entersDestination` / `leavesRoute` events and map onto our lifecycle + timeline 🔲

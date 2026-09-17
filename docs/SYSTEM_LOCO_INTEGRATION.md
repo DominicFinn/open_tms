@@ -42,8 +42,11 @@ Two paths (checked in this order):
 ## Vendor toggle
 
 `IotVendor` is a per-org registry of IoT vendors (System Loco is vendor #1, enabled by
-default). When a vendor is **disabled** at Settings → IoT Vendors, its webhooks are logged
-as `disabled` and skipped, and the shipment form hides the IoT devices section.
+default). A vendor with no row for the org counts as enabled. When a vendor is **disabled** at
+Settings → IoT Vendors, its webhooks are logged as `disabled` and skipped, and the shipment form
+hides the IoT devices section.
+
+The webhook endpoint and worker are moving to a separate ingest process (#301).
 
 ## Device → shipment resolution
 
@@ -90,6 +93,7 @@ configured secret if present, otherwise uses a throwaway API key.
 - `backend/src/routes/webhook.ts` — endpoint, signature verification, raw-body capture
 - `backend/src/workers/inboundWebhookWorker.ts` — queue worker, vendor gate, dedup, location publish
 - `backend/src/integrations/SystemLocoAdapter.ts` — payload parsing, resolution, telemetry
-- `backend/src/routes/iotVendors.ts` + `frontend/src/vnext-design/VNextIotVendors.tsx` — vendor toggle + secret
+- `backend/src/routes/iotVendors.ts`, `backend/src/commands/iotVendors/UpdateIotVendorSettingsCommand.ts` and `frontend/src/vnext-design/VNextIotVendors.tsx` for the vendor toggle and secret
+- `backend/src/routes/telemetry.ts`, `backend/src/services/iot/TelemetryService.ts` and `backend/src/repositories/SensorReadingRepository.ts` for org-scoped telemetry reads
 - `backend/src/commands/shipments/reconcileShipmentDevices.ts` — device assignment from the shipment form
 - `backend/src/scripts/replay-webhook.ts` — local replay harness

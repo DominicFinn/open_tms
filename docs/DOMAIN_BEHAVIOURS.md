@@ -350,11 +350,13 @@ the access ledger.
 ### IoT Devices & Vendors
 
 **Admin vendor toggle.** `IotVendor` is a per-org registry (`@@unique([orgId, vendorKey])`) of IoT tracking vendors. System Loco is vendor #1, enabled by default. Managed at `/settings/iot-vendors`:
-- `GET /api/v1/settings/iot-vendors` (any authed user; auto-seeds known vendors) — the shipment form uses it to decide whether to show the IoT section.
-- `PUT /api/v1/settings/iot-vendors/:vendorKey` (`settings:write`) toggles `enabled`.
+- `GET /api/v1/settings/iot-vendors` (any authed user) lists the known vendors. It never writes: a vendor the org hasn't configured is shown as enabled with no secret, which is also how the webhook worker treats a missing row. The shipment form uses it to decide whether to show the IoT section.
+- `PUT /api/v1/settings/iot-vendors/:vendorKey` (`settings:write`) dispatches `UpdateIotVendorSettingsCommand`, which toggles `enabled` and sets or clears the webhook secret. Emits `iot_vendor.settings_updated`; the event says whether the secret changed but never carries it.
 - When a vendor is **disabled**, the inbound webhook worker logs its webhooks as `disabled` and skips processing.
 
-**Device assignment on shipments.** The shipment create/edit form (when any vendor is enabled) accepts `devices: [{ name, externalId }]`. `reconcileShipmentDevices` (called inside `CreateShipmentCommand` / `UpdateShipmentCommand`) upserts a `Device` per `externalId` and maintains active `DeviceAssignment` rows: adds new ones (releasing the device's prior assignment), and on edit deactivates assignments dropped from the list. Emits `device.assigned` / `device.unassigned`. Idempotent. Shipment-level only for now.
+**Device assignment on shipments.** The shipment create/edit form (when any vendor is enabled) accepts `devices: [{ name, externalId }]`. `reconcileShipmentDevices` (called inside `CreateShipmentCommand` / `UpdateShipmentCommand`) upserts a `Device` per `externalId` and maintains active `DeviceAssignment` rows: adds new ones (releasing the device's prior assignment, with a `device.unassigned` for each), and on edit deactivates assignments dropped from the list. Emits `device.assigned` / `device.unassigned`. Idempotent. Shipment-level only for now. `externalId` is unique across the platform, so an id already registered to another org fails the command with `DEVICE_UNAVAILABLE` instead of being taken over.
+
+**Telemetry reads.** `GET /api/v1/shipments/:id/telemetry` and `GET /api/v1/orders/:id/telemetry` go through `TelemetryService` and `SensorReadingRepository`. `SensorReading` has no `orgId`, so the repository confirms the shipment or order belongs to the caller's org (404 otherwise) and also filters readings by `device.orgId`. The shipment response adds a summary (temperature min/max/avg/latest, alert count, latest battery and pressure, device count).
 
 **Webhook resolution.** `SystemLocoAdapter.resolveAssignment` resolves a device to a shipment by: (1) active `DeviceAssignment` for the device id, then (2) device name → `Shipment.reference`, then (3) device name → `Order.orderNumber`. Creating devices on the shipment form populates path (1). Lookups use existing indexes: `Device.name`, `Device.externalId` (`@unique`), `DeviceAssignment[deviceId, active]`, `Shipment.reference`, `Order.orderNumber` (`@unique`).
 
@@ -985,14 +987,24 @@ All EDI operations log to `EdiTransactionLog` with: transaction type, direction,
 |---------|---------|----------------|
 | `CreateDeviceCommand` | `POST /api/v1/devices` | `device.created` |
 | `UpdateDeviceCommand` | `PUT /api/v1/devices/:id` | `device.updated` |
-| `AssignDeviceCommand` | `POST /api/v1/devices/:id/assign` | `device.assigned` |
+| `AssignDeviceCommand` | `POST /api/v1/devices/:id/assign` | `device.unassigned` (per released assignment), `device.assigned` |
+| `UnassignDeviceCommand` | `DELETE /api/v1/devices/:id/assign` | `device.unassigned` (per released assignment) |
+| `UpdateIotVendorSettingsCommand` | `PUT /api/v1/settings/iot-vendors/:vendorKey` | `iot_vendor.settings_updated` |
+
+Every device command checks the device belongs to the command's org; a device from another org
+fails with `DEVICE_NOT_FOUND` (404). `AssignDeviceCommand` needs at least one target (shipment,
+order or trackable unit) and checks each is in the org. Trackable units have no `orgId`, so they
+are scoped through their order. `CreateDeviceCommand` refuses an `externalId` that is already
+registered (409). Reads (`GET /devices`, `/devices/:id`, `/devices/:id/readings`) go through
+`DeviceRepository` and `SensorReadingRepository`.
 
 ### Side Effects
 
 | Event | What Happens |
 |-------|-------------|
-| `device.assigned` | Previous assignment deactivated, new assignment created |
+| `device.assigned` | Previous assignments released, new assignment created |
 | `device.unassigned` | Assignment deactivated |
+| `iot_vendor.settings_updated` | None yet. The webhook worker reads the vendor row directly |
 
 ---
 

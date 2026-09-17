@@ -1,179 +1,195 @@
-import { FastifyInstance } from 'fastify';
-import { z } from 'zod';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { randomUUID } from 'crypto';
+import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import {
+  ASSIGN_DEVICE,
+  CREATE_DEVICE,
+  UNASSIGN_DEVICE,
+  UPDATE_DEVICE,
+  statusForDeviceError,
+} from '../commands/devices/index.js';
+import { IDeviceRepository } from '../repositories/DeviceRepository.js';
+import { ISensorReadingRepository } from '../repositories/SensorReadingRepository.js';
+
+const TAGS = ['Devices'];
+const DEFAULT_PAGE_SIZE = 500;
+const MAX_PAGE_SIZE = 1000;
+const DEFAULT_READINGS = 200;
+const MAX_READINGS = 1000;
+
+const idParams = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string', format: 'uuid' } },
+} as const;
 
 export default async function deviceRoutes(server: FastifyInstance) {
-  const prisma = server.prisma;
   await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('devices'));
 
-  // GET /api/v1/devices — List devices for the requesting tenant.
-  // `limit` and `offset` query params drive pagination; X-Total-Count surfaces
-  // the unpaged total without breaking the existing response shape.
-  server.get('/api/v1/devices', async (req, reply) => {
-    const q = req.query as { limit?: string; offset?: string };
-    const limit = Math.min(Math.max(Number(q.limit) || 500, 1), 1000);
-    const offset = Math.max(Number(q.offset) || 0, 0);
-    const orgId = req.orgId!;
-    const where = { orgId };
-    const [devices, total] = await Promise.all([
-      prisma.device.findMany({
-        where,
-        orderBy: { lastSeenAt: 'desc' },
-        include: {
-          assignments: {
-            where: { active: true },
-            include: {
-              shipment: { select: { id: true, reference: true, status: true } },
-              order: { select: { id: true, orderNumber: true, status: true } },
-            },
-          },
-          _count: { select: { sensorReadings: true, deviceEvents: true } },
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const devices = container.resolve<IDeviceRepository>(TOKENS.IDeviceRepository);
+  const readings = container.resolve<ISensorReadingRepository>(TOKENS.ISensorReadingRepository);
+
+  const dispatch = <T>(req: FastifyRequest, type: string, payload: T) => commandBus.dispatch({
+    type,
+    orgId: req.orgId!,
+    actorId: req.user?.sub ?? null,
+    payload,
+    metadata: { correlationId: randomUUID(), source: 'api' },
+  });
+
+  // X-Total-Count is kept alongside meta for existing clients.
+  server.get('/api/v1/devices', {
+    schema: {
+      tags: TAGS,
+      summary: 'List IoT devices',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE },
+          offset: { type: 'integer', minimum: 0, default: 0 },
         },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.device.count({ where }),
-    ]);
-    reply.header('X-Total-Count', String(total));
-    return reply.send({ data: devices });
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { limit, offset } = req.query as { limit: number; offset: number };
+    const page = await devices.list(req.orgId!, { limit, offset });
+    reply.header('X-Total-Count', String(page.total));
+    return { data: page.devices, meta: { total: page.total, limit, offset }, error: null };
   });
 
-  // GET /api/v1/devices/:id — Device detail, scoped to tenant
-  server.get('/api/v1/devices/:id', async (req, reply) => {
+  server.get('/api/v1/devices/:id', {
+    schema: { tags: TAGS, summary: 'Get an IoT device with its assignments and recent activity', params: idParams },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = req.orgId!;
-    const device = await prisma.device.findFirst({
-      where: { id, orgId },
-      include: {
-        assignments: {
-          orderBy: { assignedAt: 'desc' },
-          include: {
-            shipment: { select: { id: true, reference: true, status: true } },
-            order: { select: { id: true, orderNumber: true, status: true } },
-          },
+    const device = await devices.findDetail(req.orgId!, id);
+    if (!device) {
+      reply.code(404);
+      return { data: null, error: 'Device not found' };
+    }
+    return { data: device, error: null };
+  });
+
+  server.post('/api/v1/devices', {
+    schema: {
+      tags: TAGS,
+      summary: 'Register an IoT device',
+      body: {
+        type: 'object',
+        required: ['externalId', 'name'],
+        additionalProperties: false,
+        properties: {
+          externalId: { type: 'string', minLength: 1, maxLength: 200 },
+          name: { type: 'string', minLength: 1, maxLength: 200 },
+          displayId: { type: 'string', maxLength: 200 },
+          provider: { type: 'string', minLength: 1, maxLength: 100 },
+          model: { type: 'string', maxLength: 200 },
         },
-        sensorReadings: { orderBy: { eventTime: 'desc' }, take: 50 },
-        deviceEvents: { orderBy: { startTime: 'desc' }, take: 50 },
       },
-    });
-    if (!device) return reply.status(404).send({ data: null, error: 'Device not found' });
-    return reply.send({ data: device });
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const result = await dispatch(req, CREATE_DEVICE, req.body);
+    if (!result.success) {
+      reply.code(statusForDeviceError(result.error));
+      return { data: null, error: result.error };
+    }
+    reply.code(201);
+    return { data: result.data, error: null };
   });
 
-  // POST /api/v1/devices — Register a device manually
-  server.post('/api/v1/devices', async (req, reply) => {
-    const body = z.object({
-      externalId: z.string().min(1),
-      displayId: z.string().optional(),
-      name: z.string().min(1),
-      provider: z.string().default('system_loco'),
-      model: z.string().optional(),
-    }).parse(req.body);
-
-    const orgId = req.orgId!;
-    const device = await prisma.device.create({
-      data: {
-        orgId,
-        externalId: body.externalId,
-        displayId: body.displayId || null,
-        name: body.name,
-        provider: body.provider,
-        model: body.model || null,
-        status: 'active',
+  server.put('/api/v1/devices/:id', {
+    schema: {
+      tags: TAGS,
+      summary: 'Update an IoT device',
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', minLength: 1, maxLength: 200 },
+          status: { type: 'string', enum: ['active', 'inactive', 'maintenance'] },
+          displayId: { type: 'string', maxLength: 200 },
+          model: { type: 'string', maxLength: 200 },
+        },
       },
-    });
-    return reply.status(201).send({ data: device });
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const result = await dispatch(req, UPDATE_DEVICE, { id, changes: req.body });
+    if (!result.success) {
+      reply.code(statusForDeviceError(result.error));
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
-  // PUT /api/v1/devices/:id — Update device. Cross-tenant guard before write.
-  server.put('/api/v1/devices/:id', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = z.object({
-      name: z.string().min(1).optional(),
-      status: z.enum(['active', 'inactive', 'maintenance']).optional(),
-      displayId: z.string().optional(),
-      model: z.string().optional(),
-    }).parse(req.body);
-
-    const orgId = req.orgId!;
-    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
-    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
-
-    const device = await prisma.device.update({
-      where: { id },
-      data: body,
-    });
-    return reply.send({ data: device });
-  });
-
-  // POST /api/v1/devices/:id/assign — Assign device to shipment or order
-  server.post('/api/v1/devices/:id/assign', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const body = z.object({
-      shipmentId: z.string().uuid().optional(),
-      orderId: z.string().uuid().optional(),
-      trackableUnitId: z.string().uuid().optional(),
-      purpose: z.enum(['cargo_condition', 'security', 'location', 'general']).optional(),
-    }).parse(req.body);
-
-    const orgId = req.orgId!;
-    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
-    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
-
-    // Deactivate any existing active assignment for this device
-    await prisma.deviceAssignment.updateMany({
-      where: { deviceId: id, active: true },
-      data: { active: false, unassignedAt: new Date() },
-    });
-
-    const assignment = await prisma.deviceAssignment.create({
-      data: {
-        deviceId: id,
-        shipmentId: body.shipmentId || null,
-        orderId: body.orderId || null,
-        trackableUnitId: body.trackableUnitId || null,
-        purpose: body.purpose || null,
+  server.post('/api/v1/devices/:id/assign', {
+    schema: {
+      tags: TAGS,
+      summary: 'Assign a device to a shipment, order or trackable unit',
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid' },
+          orderId: { type: 'string', format: 'uuid' },
+          trackableUnitId: { type: 'string', format: 'uuid' },
+          purpose: { type: 'string', enum: ['cargo_condition', 'security', 'location', 'general'] },
+        },
       },
-    });
-    return reply.status(201).send({ data: assignment });
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const result = await dispatch(req, ASSIGN_DEVICE, { ...(req.body as object), deviceId: id });
+    if (!result.success) {
+      reply.code(statusForDeviceError(result.error));
+      return { data: null, error: result.error };
+    }
+    reply.code(201);
+    return { data: result.data, error: null };
   });
 
-  // DELETE /api/v1/devices/:id/assign — Unassign device
-  server.delete('/api/v1/devices/:id/assign', async (req, reply) => {
+  server.delete('/api/v1/devices/:id/assign', {
+    schema: { tags: TAGS, summary: 'Release a device from its current assignment', params: idParams },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = req.orgId!;
-    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
-    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
-
-    await prisma.deviceAssignment.updateMany({
-      where: { deviceId: id, active: true },
-      data: { active: false, unassignedAt: new Date() },
-    });
-    return reply.send({ data: { unassigned: true } });
+    const result = await dispatch(req, UNASSIGN_DEVICE, { deviceId: id });
+    if (!result.success) {
+      reply.code(statusForDeviceError(result.error));
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
-  // GET /api/v1/devices/:id/readings — Sensor readings for a device.
-  // Tenant-guard the device existence first so a malicious caller can't
-  // probe sensor readings across orgs by guessing UUIDs.
-  server.get('/api/v1/devices/:id/readings', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const orgId = req.orgId!;
-    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
-    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
-
-    const query = req.query as { limit?: string; since?: string };
-    const limit = Math.min(parseInt(query.limit || '200'), 1000);
-
-    const readings = await prisma.sensorReading.findMany({
-      where: {
-        deviceId: id,
-        ...(query.since ? { eventTime: { gte: new Date(query.since) } } : {}),
+  server.get('/api/v1/devices/:id/readings', {
+    schema: {
+      tags: TAGS,
+      summary: 'List sensor readings for a device, newest first',
+      params: idParams,
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: MAX_READINGS, default: DEFAULT_READINGS },
+          since: { type: 'string', format: 'date-time' },
+        },
       },
-      orderBy: { eventTime: 'desc' },
-      take: limit,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const { limit, since } = req.query as { limit: number; since?: string };
+    const rows = await readings.listForDevice(req.orgId!, id, {
+      limit,
+      since: since ? new Date(since) : undefined,
     });
-    return reply.send({ data: readings });
+    if (!rows) {
+      reply.code(404);
+      return { data: null, error: 'Device not found' };
+    }
+    return { data: rows, error: null };
   });
 }
