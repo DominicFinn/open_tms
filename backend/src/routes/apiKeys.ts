@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { createHash, randomBytes } from 'crypto';
 import { container, TOKENS } from '../di/index.js';
+import { ICustomersRepository } from '../repositories/CustomersRepository.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_API_KEY, UPDATE_API_KEY, DELETE_API_KEY, CreateApiKeyResult } from '../commands/apiKeys/index.js';
 
@@ -21,10 +22,12 @@ function generateApiKey(): { key: string; keyHash: string; keyPrefix: string } {
 
 export async function apiKeyRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const customersRepo = container.resolve<ICustomersRepository>(TOKENS.ICustomersRepository);
 
   // Get all API keys
-  server.get('/api/v1/api-keys', async (_req: FastifyRequest, _reply: FastifyReply) => {
+  server.get('/api/v1/api-keys', async (req: FastifyRequest, _reply: FastifyReply) => {
     const apiKeys = await server.prisma.apiKey.findMany({
+      where: { orgId: req.orgId! },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -56,8 +59,18 @@ export async function apiKeyRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     const { key, keyHash, keyPrefix } = generateApiKey();
-    const orgId = req.user?.organizationId ?? 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
+
+    // The key is scoped to this customer, so the customer must belong to the caller's org.
+    // Another org's customer is indistinguishable from a missing one.
+    const customer = body.customerId
+      ? await customersRepo.findById(body.customerId, orgId)
+      : null;
+    if (body.customerId && !customer) {
+      reply.code(404);
+      return { data: null, error: 'Customer not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: CREATE_API_KEY,
@@ -77,21 +90,14 @@ export async function apiKeyRoutes(server: FastifyInstance) {
       return { data: null, error: result.error ?? 'Failed to create API key' };
     }
 
-    // Hydrate customer relation for the response — the command returns a
-    // lean DTO, but the existing API contract included customer.
+    // The command returns a lean DTO, but the existing API contract included customer.
     const created = result.data as CreateApiKeyResult;
-    const customer = created.customerId
-      ? await server.prisma.customer.findUnique({
-          where: { id: created.customerId },
-          select: { id: true, name: true },
-        })
-      : null;
 
     reply.code(201);
     return {
       data: {
         ...created,
-        customer,
+        customer: customer ? { id: customer.id, name: customer.name } : null,
         // Full key is returned ONCE on creation — never logged or persisted.
         key,
       },
@@ -107,7 +113,7 @@ export async function apiKeyRoutes(server: FastifyInstance) {
       active: z.boolean().optional()
     }).parse((req as any).body);
 
-    const orgId = req.user?.organizationId ?? 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -136,7 +142,7 @@ export async function apiKeyRoutes(server: FastifyInstance) {
   server.delete('/api/v1/api-keys/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const orgId = req.user?.organizationId ?? 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -172,10 +178,12 @@ export async function apiKeyRoutes(server: FastifyInstance) {
     }
 
     const keyHash = hashApiKey(apiKeyHeader);
+    // tenancy-exempt: the API key hash is the credential; the key row it finds carries the org.
     const apiKey = await server.prisma.apiKey.findUnique({
       where: { keyHash },
       select: {
         id: true,
+        orgId: true,
         name: true,
         active: true
       }
@@ -187,10 +195,10 @@ export async function apiKeyRoutes(server: FastifyInstance) {
     }
 
     await server.prisma.apiKey.update({
-      where: { id: apiKey.id },
+      where: { id: apiKey.id, orgId: apiKey.orgId },
       data: { lastUsedAt: new Date() }
     });
 
-    return { data: { valid: true, apiKey }, error: null };
+    return { data: { valid: true, apiKey: { id: apiKey.id, name: apiKey.name, active: apiKey.active } }, error: null };
   });
 }

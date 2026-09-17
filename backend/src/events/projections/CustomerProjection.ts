@@ -45,7 +45,7 @@ export class CustomerProjection implements IEventHandler {
 
   private async onCustomerCreated(event: DomainEvent): Promise<void> {
     const customer = await this.prisma.customer.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         orders: { where: { archived: false }, select: { id: true, status: true } },
       },
@@ -59,7 +59,7 @@ export class CustomerProjection implements IEventHandler {
     const activeOrders = customer.orders.filter((o) => !['archived', 'cancelled'].includes(o.status)).length;
 
     await this.prisma.customerReadModel.upsert({
-      where: { id: customer.id },
+      where: { id: customer.id, orgId: event.orgId },
       create: {
         id: customer.id,
         orgId: event.orgId,
@@ -80,13 +80,13 @@ export class CustomerProjection implements IEventHandler {
 
   private async onCustomerUpdated(event: DomainEvent): Promise<void> {
     const customer = await this.prisma.customer.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     });
 
     if (!customer) return;
 
     await this.prisma.customerReadModel.update({
-      where: { id: customer.id },
+      where: { id: customer.id, orgId: event.orgId },
       data: {
         name: customer.name,
         contactEmail: customer.contactEmail,
@@ -99,7 +99,7 @@ export class CustomerProjection implements IEventHandler {
 
   private async onCustomerArchived(event: DomainEvent): Promise<void> {
     await this.prisma.customerReadModel.delete({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     }).catch((err: Error) => {
       console.error(`[CustomerProjection] Failed to delete read model for ${event.entityId}: ${err.message}`);
     });
@@ -111,7 +111,7 @@ export class CustomerProjection implements IEventHandler {
 
     // Increment order counts
     await this.prisma.customerReadModel.update({
-      where: { id: payload.customerId },
+      where: { id: payload.customerId, orgId: event.orgId },
       data: {
         activeOrderCount: { increment: 1 },
         totalOrderCount: { increment: 1 },
@@ -125,11 +125,11 @@ export class CustomerProjection implements IEventHandler {
   private async onOrderNoLongerActive(event: DomainEvent): Promise<void> {
     // Decrement activeOrderCount when an order is delivered or archived
     const payload = event.payload as { customerId?: string };
-    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId);
+    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId, event.orgId);
     if (!customerId) return;
 
     await this.prisma.customerReadModel.update({
-      where: { id: customerId },
+      where: { id: customerId, orgId: event.orgId },
       data: {
         activeOrderCount: { decrement: 1 },
         updatedAt: new Date(),
@@ -147,11 +147,11 @@ export class CustomerProjection implements IEventHandler {
 
     if (wasActive === isActive) return; // No change in active-ness
 
-    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId);
+    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId, event.orgId);
     if (!customerId) return;
 
     await this.prisma.customerReadModel.update({
-      where: { id: customerId },
+      where: { id: customerId, orgId: event.orgId },
       data: {
         activeOrderCount: isActive ? { increment: 1 } : { decrement: 1 },
         updatedAt: new Date(),
@@ -161,9 +161,9 @@ export class CustomerProjection implements IEventHandler {
     });
   }
 
-  private async getCustomerIdForOrder(orderId: string): Promise<string | null> {
+  private async getCustomerIdForOrder(orderId: string, orgId: string): Promise<string | null> {
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       select: { customerId: true },
     });
     return order?.customerId ?? null;

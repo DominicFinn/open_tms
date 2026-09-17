@@ -31,10 +31,13 @@ export interface ISlaEvaluationService {
   createEvaluationsForStop(stopId: string, shipmentId: string, orgId: string, customerId?: string): Promise<number>;
 
   /** Mark SLA evaluations as met for an entity event (e.g., issue resolved, shipment delivered) */
-  markEvaluationsMet(entityType: string, entityId: string, ruleTypes?: string[]): Promise<number>;
+  markEvaluationsMet(entityType: string, entityId: string, orgId: string, ruleTypes?: string[]): Promise<number>;
 
-  /** Run the periodic breach detection sweep (called by cron worker) */
+  /** Run the periodic breach detection sweep across every org (called by cron worker) */
   runBreachSweep(): Promise<BreachSweepResult>;
+
+  /** Run the breach detection sweep for one org (manual trigger from the API) */
+  runBreachSweepForOrg(orgId: string): Promise<BreachSweepResult>;
 }
 
 export interface BreachSweepResult {
@@ -85,7 +88,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     if (!policy) return 0;
 
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       select: { id: true, reference: true, pickupDate: true, customerId: true },
     });
     if (!shipment) return 0;
@@ -169,7 +172,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     if (!policy) return 0;
 
     const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: issueId, orgId },
       select: { id: true, title: true, createdAt: true },
     });
     if (!issue) return 0;
@@ -244,7 +247,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
     // Get the stop with its location to determine facility type
     const stop = await this.prisma.shipmentStop.findUnique({
-      where: { id: stopId },
+      where: { id: stopId, shipment: { orgId } },
       select: {
         id: true,
         shipmentId: true,
@@ -329,9 +332,10 @@ export class SlaEvaluationService implements ISlaEvaluationService {
   async markEvaluationsMet(
     entityType: string,
     entityId: string,
+    orgId: string,
     ruleTypes?: string[],
   ): Promise<number> {
-    const evaluations = await this.slaRepo.findEvaluationsByEntity(entityType, entityId);
+    const evaluations = await this.slaRepo.findEvaluationsByEntity(entityType, entityId, orgId);
     const now = new Date();
     let marked = 0;
 
@@ -341,6 +345,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         evaluation.status,
         { status: 'met', metAt: now, updatedAt: now },
       );
@@ -363,6 +368,23 @@ export class SlaEvaluationService implements ISlaEvaluationService {
   }
 
   async runBreachSweep(): Promise<BreachSweepResult> {
+    return this.sweep(
+      (now) => this.slaRepo.findActiveEvaluationsWarningBefore(now),
+      (now) => this.slaRepo.findActiveEvaluationsDueBefore(now),
+    );
+  }
+
+  async runBreachSweepForOrg(orgId: string): Promise<BreachSweepResult> {
+    return this.sweep(
+      (now) => this.slaRepo.findActiveEvaluationsWarningBeforeInOrg(now, orgId),
+      (now) => this.slaRepo.findActiveEvaluationsDueBeforeInOrg(now, orgId),
+    );
+  }
+
+  private async sweep(
+    loadWarningCandidates: (now: Date) => Promise<any[]>,
+    loadBreachCandidates: (now: Date) => Promise<any[]>,
+  ): Promise<BreachSweepResult> {
     const runId = randomUUID();
     const startedAt = new Date();
     let evaluationsChecked = 0;
@@ -373,11 +395,12 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     const now = new Date();
 
     // 1. Find evaluations that should transition to 'warning'
-    const warningCandidates = await this.slaRepo.findActiveEvaluationsWarningBefore(now);
+    const warningCandidates = await loadWarningCandidates(now);
     for (const evaluation of warningCandidates) {
       evaluationsChecked++;
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         'active',
         {
           status: 'warning',
@@ -404,7 +427,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     }
 
     // 2. Find evaluations that should transition to 'breached'
-    const breachCandidates = await this.slaRepo.findActiveEvaluationsDueBefore(now);
+    const breachCandidates = await loadBreachCandidates(now);
     for (const evaluation of breachCandidates) {
       evaluationsChecked++;
       const breachDuration = evaluation.slaDueAt
@@ -413,6 +436,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         evaluation.status, // could be 'active' or 'warning'
         {
           status: 'breached',
@@ -427,7 +451,9 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
         // Auto-create triage issue if configured
         let issueId: string | undefined;
-        const rule = await this.prisma.slaRule.findUnique({ where: { id: evaluation.ruleId } });
+        const rule = await this.prisma.slaRule.findUnique({
+          where: { id: evaluation.ruleId, policy: { orgId: evaluation.orgId } },
+        });
 
         if (rule?.autoCreateIssue) {
           const issue = await this.createBreachIssue(evaluation, rule);
@@ -437,7 +463,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
             // Link issue back to the evaluation
             await this.prisma.slaEvaluation.update({
-              where: { id: evaluation.id },
+              where: { id: evaluation.id, orgId: evaluation.orgId },
               data: { issueId: issue.id },
             });
           }
@@ -476,6 +502,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     // Check if an open issue already exists for this entity + SLA
     const existing = await this.prisma.issue.findFirst({
       where: {
+        orgId: evaluation.orgId,
         sourceEntityType: evaluation.entityType,
         sourceEntityId: evaluation.entityId,
         category: 'compliance',

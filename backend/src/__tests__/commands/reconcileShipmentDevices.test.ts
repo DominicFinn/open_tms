@@ -91,7 +91,7 @@ describe('reconcileShipmentDevices', () => {
     });
     // B dropped → deactivated
     expect(tx.deviceAssignment.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'a2' }, data: expect.objectContaining({ active: false }),
+      where: { id: 'a2', device: { orgId: 'org-1' } }, data: expect.objectContaining({ active: false }),
     }));
     expect(s.unassigned).toEqual(['dev-EXT-B']);
     // C added
@@ -106,7 +106,7 @@ describe('reconcileShipmentDevices', () => {
       emitAssigned: s.emitAssigned, emitUnassigned: s.emitUnassigned,
     });
     expect(tx.deviceAssignment.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'a1' }, data: expect.objectContaining({ active: false }),
+      where: { id: 'a1', device: { orgId: 'org-1' } }, data: expect.objectContaining({ active: false }),
     }));
     expect(s.unassigned).toEqual(['dev-EXT-A']);
   });

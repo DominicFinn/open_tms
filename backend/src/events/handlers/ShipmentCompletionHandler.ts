@@ -67,7 +67,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
   private async checkAndCompleteShipment(shipmentId: string, orgId: string): Promise<void> {
     // Load the shipment with its stops
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       select: {
         id: true,
         reference: true,

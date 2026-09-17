@@ -954,6 +954,12 @@ All inbound EDI is processed through the **universal inbound endpoint** (`POST /
 
 **Flow:** SFTP poll (edi-collector) or API POST → `/api/v1/edi/inbound` → `EdiRouterService` detects type → route to handler → log result → send 997 ack if configured
 
+**Authentication and tenancy (#314):** every EDI endpoint needs either an internal user JWT (the
+admin UI) or an `x-api-key` (the edi-collector). The org comes from that credential. A `partnerId`
+in the body or path only selects a partner inside the caller's org; a partner from another org is a
+404, and a request with no credential is a 401. Before #314 an unauthenticated request naming a
+partner was given that partner's org.
+
 ### Inbound Transaction Types
 
 | Type | Parser | Route | Handler Action |
@@ -2957,3 +2963,26 @@ Capped at 5 total attempts. Retries reuse the original payload, generate a fresh
 - `frontend/src/customer-portal-layout.tsx` - Multi-app layout with sidebar + topbar + app switcher (Portal, Developer)
 - `frontend/src/pages/customer-portal/developer/` - Five pages: Dashboard, ApiKeys, Webhooks, EdiSetup, IntegrationLogs
 - `backend/src/__tests__/services/CustomerWebhookDeliveryService.test.ts` - 14 tests (signing, verification with tamper/skew/wrong-secret/malformed-header negatives, pattern matching, delivery success/failure/timeout)
+
+## Tenancy Enforcement (#314)
+
+`npm run lint:tenancy` fails on any query against tenant data that does not name the org: lookups by
+id, lists, counts, aggregates and bulk writes. Its baseline is empty. The few queries that must not
+name the org (cron sweeps across every org, lookups by a credential or token hash, the signed-in
+principal from its own token, platform-wide unique ids) carry a `// tenancy-exempt:` marker with the
+reason. See `.claude/rules/multi-tenancy.md`.
+
+Behaviour that changed with it:
+
+- **Reference numbers are unique per org.** Invoice, credit note, query, quote and order numbers, and
+  the shipment and order read-model references, used to be unique across every org, so a second
+  org's first quote collided with the first org's. Tender references stay platform-wide, because a
+  tender takes its org from its shipment.
+- **Notifications** list, count and mark read only the signed-in user's notifications. A `userId` in
+  the request is ignored, and another user's notification is a 404.
+- **Organisation settings** are the caller's own org. They used to read and write the first
+  organisation for everyone.
+- **Manual monitor triggers** (ETA check, SLA sweep, cutoff check) cover only the caller's org. The
+  cron workers still sweep every org.
+- **Portal users:** registering, updating or deactivating a carrier or customer portal user under
+  another org's carrier or customer is a 404.

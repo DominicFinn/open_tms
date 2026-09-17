@@ -37,10 +37,10 @@ export class RecordDecisionOutcomeCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string }> {
     const { id, outcomeStatus, outcomeNotes } = command.payload;
 
-    await tx.agentDecision.findUniqueOrThrow({ where: { id } });
+    await tx.agentDecision.findUniqueOrThrow({ where: { id, orgId: command.orgId } });
 
     const updated = await tx.agentDecision.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         outcomeStatus,
         outcomeNotes: outcomeNotes ?? undefined,

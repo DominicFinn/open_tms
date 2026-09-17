@@ -45,13 +45,14 @@ export class TransitionShipmentStatusCommandHandler extends BaseCommandHandler<
     emit: EmitFn
   ): Promise<{ id: string; status: string }> {
     const { id, toStatus } = command.payload;
+    const { orgId } = command;
 
     if (!SHIPMENT_LIFECYCLE.includes(toStatus as any)) {
       throw new Error(`Invalid target status "${toStatus}"`);
     }
 
     const shipment = await tx.shipment.findFirstOrThrow({
-      where: { id, archived: false },
+      where: { id, orgId, archived: false },
       include: { shipmentType: { select: { requiredFields: true } } },
     });
 
@@ -78,7 +79,7 @@ export class TransitionShipmentStatusCommandHandler extends BaseCommandHandler<
       }
     }
 
-    await tx.shipment.update({ where: { id }, data: { status: toStatus } });
+    await tx.shipment.update({ where: { id, orgId }, data: { status: toStatus } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.SHIPMENT_STATUS_CHANGED,

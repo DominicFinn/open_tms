@@ -30,7 +30,7 @@ export class CancelOrderCommandHandler extends BaseCommandHandler<CancelOrderPay
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
-    const existing = await tx.order.findFirstOrThrow({ where: { id } });
+    const existing = await tx.order.findFirstOrThrow({ where: { id, orgId: command.orgId } });
 
     if (!CANCELLABLE_STATUSES.includes(existing.status)) {
       throw new Error(
@@ -40,7 +40,7 @@ export class CancelOrderCommandHandler extends BaseCommandHandler<CancelOrderPay
     }
 
     const order = await tx.order.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { status: 'cancelled' },
     });
 

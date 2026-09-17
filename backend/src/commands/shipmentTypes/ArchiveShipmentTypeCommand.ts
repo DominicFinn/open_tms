@@ -27,7 +27,7 @@ export class ArchiveShipmentTypeCommandHandler extends BaseCommandHandler<{ id: 
       throw new Error('Built-in shipment types cannot be archived');
     }
     const archived = await tx.shipmentType.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date() },
     });
 

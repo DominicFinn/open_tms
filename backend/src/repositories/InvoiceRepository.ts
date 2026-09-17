@@ -66,16 +66,16 @@ export interface IInvoiceRepository {
   create(data: CreateInvoiceDTO): Promise<Invoice>;
   findById(id: string, orgId: string): Promise<InvoiceWithLineItems | null>;
   findAll(filters: InvoiceFilters): Promise<InvoiceWithLineItems[]>;
-  update(id: string, data: Partial<Invoice>): Promise<Invoice>;
+  update(id: string, orgId: string, data: Partial<Invoice>): Promise<Invoice>;
   addLineItem(data: CreateInvoiceLineItemDTO): Promise<InvoiceLineItem>;
   addLineItems(data: CreateInvoiceLineItemDTO[]): Promise<number>;
   getNextInvoiceNumber(orgId: string): Promise<string>;
-  findOverdue(): Promise<Invoice[]>;
+  findOverdue(orgId: string): Promise<Invoice[]>;
 }
 
 export interface IPaymentRepository {
   create(data: CreatePaymentDTO): Promise<Payment>;
-  findByInvoiceId(invoiceId: string): Promise<Payment[]>;
+  findByInvoiceId(invoiceId: string, orgId: string): Promise<Payment[]>;
 }
 
 // ─── Implementation ─────────────────────────────────────────────────────────
@@ -134,8 +134,8 @@ export class InvoiceRepository implements IInvoiceRepository {
     }) as Promise<InvoiceWithLineItems[]>;
   }
 
-  async update(id: string, data: Partial<Invoice>): Promise<Invoice> {
-    return this.prisma.invoice.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<Invoice>): Promise<Invoice> {
+    return this.prisma.invoice.update({ where: { id, orgId }, data });
   }
 
   async addLineItem(data: CreateInvoiceLineItemDTO): Promise<InvoiceLineItem> {
@@ -192,9 +192,10 @@ export class InvoiceRepository implements IInvoiceRepository {
     return `${prefix}${String(seq + 1).padStart(4, '0')}`;
   }
 
-  async findOverdue(): Promise<Invoice[]> {
+  async findOverdue(orgId: string): Promise<Invoice[]> {
     return this.prisma.invoice.findMany({
       where: {
+        orgId,
         status: { in: ['sent', 'partial_paid'] },
         dueDate: { lt: new Date() },
       },
@@ -219,9 +220,9 @@ export class PaymentRepository implements IPaymentRepository {
     }});
   }
 
-  async findByInvoiceId(invoiceId: string): Promise<Payment[]> {
+  async findByInvoiceId(invoiceId: string, orgId: string): Promise<Payment[]> {
     return this.prisma.payment.findMany({
-      where: { invoiceId },
+      where: { invoiceId, orgId },
       orderBy: { receivedDate: 'desc' },
     });
   }

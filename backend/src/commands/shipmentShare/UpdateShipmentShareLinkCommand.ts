@@ -78,7 +78,7 @@ export class UpdateShipmentShareLinkCommandHandler extends BaseCommandHandler<
     if (command.payload.label !== undefined) data.label = command.payload.label;
 
     const link = await tx.shipmentShareLink.update({
-      where: { id: shareLinkId },
+      where: { id: shareLinkId, orgId: command.orgId },
       data,
       select: { id: true, shipmentId: true, sections: true, expiresAt: true, label: true },
     });

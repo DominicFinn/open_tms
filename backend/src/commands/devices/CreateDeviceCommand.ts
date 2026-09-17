@@ -24,6 +24,7 @@ export class CreateDeviceCommandHandler extends BaseCommandHandler<CreateDeviceP
 
     // A provider's device id identifies one physical device, so it can only be registered once
     // across the whole platform.
+    // tenancy-exempt: externalId is unique platform-wide; the caller only learns the id is taken
     const existing = await tx.device.findUnique({ where: { externalId: p.externalId }, select: { id: true } });
     if (existing) throw new Error(DEVICE_EXTERNAL_ID_TAKEN);
 

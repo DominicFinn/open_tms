@@ -35,7 +35,7 @@ export class CarrierArchivalNotificationHandler implements IEventHandler {
     const reason = event.type === EVENT_TYPES.CARRIER_DELETED ? 'deleted' : 'archived';
 
     const carrier = await this.prisma.carrier.findUnique({
-      where: { id: carrierId },
+      where: { id: carrierId, orgId: event.orgId },
       select: { id: true, name: true },
     });
     if (!carrier) return;
@@ -44,7 +44,7 @@ export class CarrierArchivalNotificationHandler implements IEventHandler {
     // should still be told why their access was removed). Anonymised users have
     // no real address to reach and are skipped.
     const users = await this.prisma.carrierUser.findMany({
-      where: { carrierId, anonymizedAt: null },
+      where: { carrierId, carrier: { orgId: event.orgId }, anonymizedAt: null },
       select: { id: true, email: true, name: true },
     });
     if (users.length === 0) return;

@@ -31,13 +31,13 @@ export class SoftDeleteOrderCommandHandler extends BaseCommandHandler<SoftDelete
   ): Promise<{ id: string; alreadyDeleted?: boolean }> {
     const { id } = command.payload;
 
-    const existing = await tx.order.findFirstOrThrow({ where: { id } });
+    const existing = await tx.order.findFirstOrThrow({ where: { id, orgId: command.orgId } });
     if (existing.deletedAt) {
       return { id, alreadyDeleted: true };
     }
 
     const order = await tx.order.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { deletedAt: new Date(), deletedBy: command.actorId ?? null },
     });
 

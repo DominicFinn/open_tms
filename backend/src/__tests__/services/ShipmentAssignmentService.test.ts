@@ -83,7 +83,7 @@ describe('ShipmentAssignmentService', () => {
     const commandBus = makeCommandBus();
     const service = new ShipmentAssignmentService(prisma, orderConversionService, commandBus);
 
-    const result = await service.assignOrderToShipment('order-1');
+    const result = await service.assignOrderToShipment('test-org', 'order-1');
 
     expect(result.success).toBe(true);
     expect(result.pendingLaneRequestId).toBe('plr-1');
@@ -93,7 +93,7 @@ describe('ShipmentAssignmentService', () => {
       })
     );
     expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: 'order-1' },
+      where: { id: 'order-1', orgId: 'test-org' },
       data: { status: 'issue' },
     });
     expect(prisma.issue.create).toHaveBeenCalledWith(
@@ -113,12 +113,29 @@ describe('ShipmentAssignmentService', () => {
     expect(commandBus.dispatch).not.toHaveBeenCalled();
   });
 
+  it('treats an order in another org as not found', async () => {
+    const { prisma } = makePrisma();
+    prisma.order.findUnique.mockResolvedValue(null);
+    const orderConversionService = makeOrderConversionService();
+    const commandBus = makeCommandBus();
+    const service = new ShipmentAssignmentService(prisma, orderConversionService, commandBus);
+
+    const result = await service.assignOrderToShipment('other-org', 'order-1');
+
+    expect(result).toEqual({ success: false, message: 'Order not found' });
+    expect(prisma.order.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'order-1', orgId: 'other-org' } }),
+    );
+    expect(prisma.lane.findMany).not.toHaveBeenCalled();
+    expect(commandBus.dispatch).not.toHaveBeenCalled();
+  });
+
   it('rejects an order that is already assigned', async () => {
     const { prisma } = makePrisma({ status: 'assigned' });
     const orderConversionService = makeOrderConversionService();
     const service = new ShipmentAssignmentService(prisma, orderConversionService, makeCommandBus());
 
-    const result = await service.assignOrderToShipment('order-1');
+    const result = await service.assignOrderToShipment('test-org', 'order-1');
 
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/already assigned/);
@@ -130,7 +147,7 @@ describe('ShipmentAssignmentService', () => {
     const orderConversionService = makeOrderConversionService();
     const service = new ShipmentAssignmentService(prisma, orderConversionService, makeCommandBus());
 
-    const result = await service.assignOrderToShipment('order-1');
+    const result = await service.assignOrderToShipment('test-org', 'order-1');
 
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/valid origin and destination/);
@@ -142,7 +159,7 @@ describe('ShipmentAssignmentService', () => {
     const commandBus = makeCommandBus();
     const service = new ShipmentAssignmentService(prisma, orderConversionService, commandBus);
 
-    const result = await service.assignOrderToShipment('order-1', 'user-1');
+    const result = await service.assignOrderToShipment('test-org', 'order-1', 'user-1');
 
     expect(result.success).toBe(true);
     expect(result.shipmentId).toBe('ship-1');
@@ -164,7 +181,7 @@ describe('ShipmentAssignmentService', () => {
     const commandBus = makeCommandBus();
     const service = new ShipmentAssignmentService(prisma, orderConversionService, commandBus);
 
-    const result = await service.assignOrderToShipment('order-1');
+    const result = await service.assignOrderToShipment('test-org', 'order-1');
 
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/different customer/);
@@ -179,6 +196,6 @@ describe('ShipmentAssignmentService', () => {
     } as any;
     const service = new ShipmentAssignmentService(prisma, orderConversionService, commandBus);
 
-    await expect(service.assignOrderToShipment('order-1')).rejects.toThrow('orgId is required');
+    await expect(service.assignOrderToShipment('test-org', 'order-1')).rejects.toThrow('orgId is required');
   });
 });

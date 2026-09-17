@@ -28,7 +28,7 @@ export async function tenderRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { status, strategy, shipmentId, carrierId } = req.query as any;
-    const tenders = await tenderRepo.findAll({ status, strategy, shipmentId, carrierId });
+    const tenders = await tenderRepo.findAll({ orgId: req.orgId!, status, strategy, shipmentId, carrierId });
     return { data: tenders, error: null };
   });
 
@@ -40,7 +40,7 @@ export async function tenderRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const tender = await tenderRepo.findById(id);
+    const tender = await tenderRepo.findById(id, req.orgId!);
     if (!tender) {
       reply.code(404);
       return { data: null, error: 'Tender not found' };
@@ -86,7 +86,7 @@ export async function tenderRoutes(server: FastifyInstance) {
       const tender = await tenderService.createTender({
         ...body,
         createdBy: (req as any).user?.sub,
-      });
+      }, req.orgId!);
       reply.code(201);
       return { data: tender, error: null };
     } catch (err: any) {
@@ -104,7 +104,7 @@ export async function tenderRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     try {
-      const tender = await tenderService.openTender(id);
+      const tender = await tenderService.openTender(id, req.orgId!);
       return { data: tender, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -129,7 +129,7 @@ export async function tenderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const { bidId } = z.object({ bidId: z.string().min(1) }).parse((req as any).body);
     try {
-      const tender = await tenderService.awardTender(id, bidId);
+      const tender = await tenderService.awardTender(id, bidId, req.orgId!);
       return { data: tender, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -146,7 +146,7 @@ export async function tenderRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     try {
-      const tender = await tenderService.cancelTender(id);
+      const tender = await tenderService.cancelTender(id, req.orgId!);
       return { data: tender, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -162,7 +162,7 @@ export async function tenderRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const bids = await tenderRepo.findBidsByTenderId(id);
+    const bids = await tenderRepo.findBidsByTenderId(id, req.orgId!);
     return { data: bids, error: null };
   });
 }

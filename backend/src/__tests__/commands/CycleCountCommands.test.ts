@@ -196,7 +196,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
     // Inventory adjusted
     expect(tx.inventoryRecord.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'inv-1' },
+        where: { id: 'inv-1', orgId: 'test-org' },
         data: expect.objectContaining({ quantityOnHand: 48 }),
       })
     );

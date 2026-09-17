@@ -52,12 +52,35 @@ describe('CarrierTrackingHandler', () => {
       await handler.handle(event);
 
       expect(prisma.shipment.update).toHaveBeenCalledWith({
-        where: { id: 'ship-1' },
+        where: { id: 'ship-1', orgId: 'test-org' },
         data: {
           status: 'complete',
           deliveryDate: new Date('2026-04-12T15:00:00Z'),
         },
       });
+    });
+
+    it('scopes the shipment lookup to the event org and ignores a shipment from another tenant', async () => {
+      const prisma = buildMockPrisma();
+      prisma.shipment.findUnique.mockResolvedValue(null);
+      const { bus, persisted } = mockEventBus();
+      const handler = new CarrierTrackingHandler(prisma, bus);
+
+      const event = createTestEvent(
+        EVENT_TYPES.CARRIER_TRACKING_DELIVERED,
+        'carrier_tracking_event',
+        'evt-1',
+        { shipmentId: 'ship-other-org', occurredAt: '2026-04-12T15:00:00Z' },
+        { orgId: 'org-a' },
+      );
+
+      await handler.handle(event);
+
+      expect(prisma.shipment.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'ship-other-org', orgId: 'org-a' } }),
+      );
+      expect(prisma.shipment.update).not.toHaveBeenCalled();
+      expect(persisted).toHaveLength(0);
     });
 
     it('emits SHIPMENT_DELIVERED and SHIPMENT_STATUS_CHANGED events', async () => {
@@ -197,7 +220,7 @@ describe('CarrierTrackingHandler', () => {
       await handler.handle(event);
 
       expect(prisma.shipment.update).toHaveBeenCalledWith({
-        where: { id: 'ship-1' },
+        where: { id: 'ship-1', orgId: 'test-org' },
         data: { hasException: true },
       });
     });
@@ -275,7 +298,7 @@ describe('CarrierTrackingHandler', () => {
       await handler.handle(event);
 
       expect(prisma.carrierTrackingIntegration.update).toHaveBeenCalledWith({
-        where: { id: 'int-1' },
+        where: { id: 'int-1', carrier: { orgId: 'test-org' } },
         data: { status: 'error' },
       });
     });
@@ -321,7 +344,7 @@ describe('CarrierTrackingHandler', () => {
       await handler.handle(event);
 
       expect(prisma.shipment.update).toHaveBeenCalledWith({
-        where: { id: 'ship-1' },
+        where: { id: 'ship-1', orgId: 'test-org' },
         data: { status: 'in_progress' },
       });
 

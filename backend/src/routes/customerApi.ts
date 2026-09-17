@@ -263,13 +263,13 @@ export async function customerApiRoutes(server: FastifyInstance) {
     }
 
     // Get organization settings for default units
-    const orgSettings = await orgRepo.getSettings();
+    const orgSettings = await orgRepo.getSettings(orgId);
 
     const applyOrgDefaults = (items: any[]) => {
       return items.map((item: any) => ({
         ...item,
-        weightUnit: item.weightUnit || orgSettings.weightUnit || 'kg',
-        dimUnit: item.dimUnit || orgSettings.dimUnit || 'cm'
+        weightUnit: item.weightUnit || orgSettings?.weightUnit || 'kg',
+        dimUnit: item.dimUnit || orgSettings?.dimUnit || 'cm'
       }));
     };
 
@@ -323,7 +323,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
     let assignmentResult = null;
     if (autoAssign && status === 'verified') {
       try {
-        assignmentResult = await assignmentService.assignOrderToShipment(created.id);
+        assignmentResult = await assignmentService.assignOrderToShipment(orgId, created.id);
       } catch (_err) {
         // Assignment failure is non-fatal — order was still created
         assignmentResult = { success: false, message: 'Auto-assignment failed. Order was created successfully.' };

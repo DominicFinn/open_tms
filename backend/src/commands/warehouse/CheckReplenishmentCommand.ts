@@ -133,7 +133,7 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
         },
       }));
 
-      const bin = await tx.warehouseBin.findUnique({ where: { id: rule.pickFaceBinId }, select: { label: true } });
+      const bin = await tx.warehouseBin.findUnique({ where: { id: rule.pickFaceBinId, orgId: command.orgId }, select: { label: true } });
       details.push({ sku: rule.sku, pickFaceBin: bin?.label ?? rule.pickFaceBinId, quantity: actualQty });
       tasksCreated++;
     }

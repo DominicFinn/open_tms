@@ -95,7 +95,7 @@ describe('CreateAutomationRuleCommandHandler', () => {
     );
 
     expect(tx.agentDecision.update).toHaveBeenCalledWith({
-      where: { id: 'dec-1' },
+      where: { id: 'dec-1', orgId: 'test-org' },
       data: expect.objectContaining({ promotedToAutomation: true }),
     });
   });
@@ -170,6 +170,20 @@ describe('UpdateAutomationRuleCommandHandler', () => {
     expect(result.events[0].type).toBe(EVENT_TYPES.AUTOMATION_RULE_UPDATED);
   });
 
+  it('scopes the lookup to the caller org so another tenant\'s rule reads as not found', async () => {
+    const { prisma, tx } = buildPrisma({ findUnique: null });
+    const { bus } = mockEventBus();
+    const handler = new UpdateAutomationRuleCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(UPDATE_AUTOMATION_RULE, { id: 'rule-other', data: { enabled: false } }, { orgId: 'org-b' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(tx.automationRule.findUnique).toHaveBeenCalledWith({ where: { id: 'rule-other', orgId: 'org-b' } });
+    expect(tx.automationRule.update).not.toHaveBeenCalled();
+  });
+
   it('fails on unknown rule id', async () => {
     const { prisma } = buildPrisma({ findUnique: null });
     const { bus } = mockEventBus();
@@ -197,7 +211,7 @@ describe('DeleteAutomationRuleCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(tx.automationRule.delete).toHaveBeenCalledWith({ where: { id: 'rule-1' } });
+    expect(tx.automationRule.delete).toHaveBeenCalledWith({ where: { id: 'rule-1', orgId: 'test-org' } });
     expect(result.events[0].type).toBe(EVENT_TYPES.AUTOMATION_RULE_DELETED);
     expect(result.data?.deleted).toBe(true);
   });
@@ -260,7 +274,7 @@ describe('PromoteDecisionToRuleCommandHandler', () => {
     );
 
     expect(tx.agentDecision.update).toHaveBeenCalledWith({
-      where: { id: 'dec-1' },
+      where: { id: 'dec-1', orgId: 'test-org' },
       data: expect.objectContaining({ promotedToAutomation: true }),
     });
   });

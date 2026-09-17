@@ -124,7 +124,7 @@ export class InvoicingService implements IInvoicingService {
     await this.invoiceRepo.addLineItems(lineItems);
 
     // Mark charges as invoiced — single bulk update instead of N queries.
-    await this.chargeRepo.updateMany(allCharges.map(c => c.id), { status: 'invoiced' });
+    await this.chargeRepo.updateMany(allCharges.map(c => c.id), input.orgId, { status: 'invoiced' });
 
     // Update shipment financial summaries — single bulk update.
     const uniqueShipmentIds = [...new Set(allCharges.map(c => c.shipmentId).filter(Boolean) as string[])];

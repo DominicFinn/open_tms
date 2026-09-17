@@ -27,11 +27,11 @@ export class RecordGeofenceDepartureCommandHandler extends BaseCommandHandler<Re
   protected async handle(command: Command<RecordGeofenceDeparturePayload>, tx: TransactionClient, emit: EmitFn) {
     const { shipmentId, stopId, locationId, lat, lng, eventTime } = command.payload;
 
-    const stop = await tx.shipmentStop.findUnique({ where: { id: stopId } });
+    const stop = await tx.shipmentStop.findUnique({ where: { id: stopId, shipment: { orgId: command.orgId } } });
     if (!stop || stop.status !== 'arrived') return { departed: false };
 
     await tx.shipmentStop.update({
-      where: { id: stopId },
+      where: { id: stopId, shipment: { orgId: command.orgId } },
       data: { status: 'completed', actualDeparture: new Date(eventTime) },
     });
 

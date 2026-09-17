@@ -200,6 +200,95 @@ describe('tenancy check: source patterns', () => {
   });
 });
 
+describe('tenancy check: id-only lookups', () => {
+  const idOnly = async (source: string, policy: Policy = POLICY): Promise<string[]> => {
+    const { sourceRoot, schemaDir } = await fixture({ 'src/services/lookups.ts': source });
+    const result = await check(sourceRoot, schemaDir, [], policy);
+    return result.findings.filter((finding) => finding.rule === 'id-only-lookup').map((finding) => finding.detail);
+  };
+
+  it('flags reads and writes on tenant models keyed by id alone', async () => {
+    const source = [
+      'await prisma.shipment.findUnique({ where: { id } });',
+      'await tx.shipment.update({',
+      '  where: { id: input.id, archived: false },',
+      '  data: {},',
+      '});',
+      'await prisma.shipmentStop.delete({ where: { id: stopId } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual(['lines 1, 2, 6']);
+  });
+
+  it('accepts a where that names the org, directly or through the parent', async () => {
+    const source = [
+      'await prisma.shipment.findUnique({ where: { id, orgId } });',
+      'await prisma.shipmentStop.findFirst({ where: { id, shipment: { orgId } } });',
+      'await prisma.shipment.findFirst({ where: { orgId, id } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual([]);
+  });
+
+  it('ignores global models, variable wheres and comments', async () => {
+    const source = [
+      'await prisma.organization.findUnique({ where: { id } });',
+      'await prisma.shipment.findUnique({ where });',
+      '// await prisma.shipment.findUnique({ where: { id } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual([]);
+  });
+
+  it('accepts a line marked exempt with a reason, and only that line', async () => {
+    const source = [
+      '// tenancy-exempt: the user id is sub from the caller verified token',
+      'await prisma.shipment.findUnique({ where: { id } });',
+      'await prisma.shipment.findUnique({ where: { id } });',
+      '// tenancy-exempt: no',
+      'await prisma.shipment.findUnique({ where: { id } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual(['lines 3, 5']);
+  });
+});
+
+describe('tenancy check: unscoped queries', () => {
+  const unscoped = async (source: string): Promise<string[]> => {
+    const { sourceRoot, schemaDir } = await fixture({ 'src/services/queries.ts': source });
+    const result = await check(sourceRoot, schemaDir, [], POLICY);
+    return result.findings.filter((finding) => finding.rule === 'unscoped-query').map((finding) => finding.detail);
+  };
+
+  it('flags lists, counts and bulk writes that never name the org', async () => {
+    const source = [
+      'await prisma.shipment.findMany();',
+      'await prisma.shipment.count({ where: { status: "open" } });',
+      'await tx.shipmentStop.deleteMany({ where: { shipmentId } });',
+      'await prisma.shipment.findMany({ orderBy: { createdAt: "desc" } });',
+      'await prisma.shipment.findFirst({',
+      '  where: { reference },',
+      '});',
+    ].join('\n');
+    expect(await unscoped(source)).toEqual(['lines 1, 2, 3, 4, 5']);
+  });
+
+  it('accepts scoped queries, variable wheres, spreads and marked lines', async () => {
+    const source = [
+      'await prisma.shipment.findMany({ where: { orgId, status: "open" }, include: { stops: { where: { seq: 1 } } } });',
+      'await tx.shipmentStop.deleteMany({ where: { shipmentId, shipment: { orgId } } });',
+      'await prisma.shipment.findMany({ where });',
+      'await prisma.shipment.findMany({ where: filters });',
+      'await prisma.shipment.count({ where: { ...scope, status } });',
+      'await prisma.organization.findMany();',
+      '// tenancy-exempt: the nightly sweep covers every org by design',
+      'await prisma.shipment.findMany({ where: { status: "late" } });',
+      'await prisma.shipment.create({ data: { orgId } });',
+    ].join('\n');
+    expect(await unscoped(source)).toEqual([]);
+  });
+
+  it('leaves lookups by the row id to the id-only rule', async () => {
+    expect(await unscoped('await prisma.shipment.findUnique({ where: { id } });')).toEqual([]);
+  });
+});
+
 describe('tenancy check: baseline', () => {
   const baseline: BaselineEntry[] = [
     { rule: 'model-without-org', target: 'Loose', reason: 'To burn down.' },

@@ -29,10 +29,10 @@ export class DeleteApiKeyCommandHandler extends BaseCommandHandler<DeleteApiKeyP
   ): Promise<DeleteApiKeyResult> {
     const { id } = command.payload;
 
-    const existing = await tx.apiKey.findUnique({ where: { id } });
+    const existing = await tx.apiKey.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing) throw new Error('API key not found');
 
-    await tx.apiKey.delete({ where: { id } });
+    await tx.apiKey.delete({ where: { id, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.API_KEY_DELETED,

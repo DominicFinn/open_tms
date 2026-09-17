@@ -39,8 +39,10 @@ export abstract class BaseCommandHandler<TPayload = unknown, TResult = unknown>
     // Idempotency check: if we already processed this correlationId for this
     // command type, return early to prevent duplicate writes
     if (command.metadata.idempotencyKey) {
+      // Idempotency keys are only unique within a tenant, so another org's key never suppresses this command.
       const existing = await this.prisma.domainEventLog.findFirst({
         where: {
+          orgId: command.orgId,
           metadata: {
             path: ['correlationId'],
             equals: command.metadata.idempotencyKey,

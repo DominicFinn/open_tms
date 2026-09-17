@@ -112,10 +112,10 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.archive('o-1');
+      await repo.archive('o-1', 'org-1');
 
       const args = prisma.order.update.mock.calls[0][0];
-      expect(args.where).toEqual({ id: 'o-1' });
+      expect(args.where).toEqual({ id: 'o-1', orgId: 'org-1' });
       expect(args.data.archived).toBe(true);
       expect(args.data.status).toBe('archived');
       expect(args.data.archivedAt).toBeInstanceOf(Date);
@@ -127,10 +127,10 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.validateLocation('o-1', 'origin', 'loc-7');
+      await repo.validateLocation('o-1', 'org-1', 'origin', 'loc-7');
 
       expect(prisma.order.update).toHaveBeenCalledWith({
-        where: { id: 'o-1' },
+        where: { id: 'o-1', orgId: 'org-1' },
         data: { originId: 'loc-7', originValidated: true, originData: null },
       });
     });
@@ -139,7 +139,7 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.validateLocation('o-1', 'destination', 'loc-9');
+      await repo.validateLocation('o-1', 'org-1', 'destination', 'loc-9');
 
       const data = prisma.order.update.mock.calls[0][0].data;
       expect(data).toEqual({
@@ -158,10 +158,11 @@ describe('OrdersRepository', () => {
       prisma.trackableUnit.findMany.mockResolvedValue([]);
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
 
       const data = prisma.trackableUnit.create.mock.calls[0][0].data;
       expect(data.sequenceNumber).toBe(1);
+      expect(prisma.trackableUnit.findMany.mock.calls[0][0].where).toEqual({ orderId: 'o-1', order: { orgId: 'org-1' } });
     });
 
     it('increments past the highest existing sequence', async () => {
@@ -169,7 +170,7 @@ describe('OrdersRepository', () => {
       prisma.trackableUnit.findMany.mockResolvedValue([{ sequenceNumber: 7 }]);
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'carton', identifier: 'CTN-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'carton', identifier: 'CTN-1', lineItems: [] });
 
       const data = prisma.trackableUnit.create.mock.calls[0][0].data;
       expect(data.sequenceNumber).toBe(8);
@@ -179,10 +180,10 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.addTrackableUnit('o-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
+      await repo.addTrackableUnit('o-1', 'org-1', { unitType: 'pallet', identifier: 'PAL-1', lineItems: [] });
 
       const findArgs = prisma.trackableUnit.findMany.mock.calls[0][0];
-      expect(findArgs.where).toEqual({ orderId: 'o-1' });
+      expect(findArgs.where).toEqual({ orderId: 'o-1', order: { orgId: 'org-1' } });
       expect(findArgs.orderBy).toEqual({ sequenceNumber: 'desc' });
       expect(findArgs.take).toBe(1);
     });
@@ -193,10 +194,10 @@ describe('OrdersRepository', () => {
       const prisma = buildPrisma();
       const repo = new OrdersRepository(prisma);
 
-      await repo.moveLineItemToUnit('li-1', 'tu-9');
+      await repo.moveLineItemToUnit('li-1', 'org-1', 'tu-9');
 
       expect(prisma.orderLineItem.update).toHaveBeenCalledWith({
-        where: { id: 'li-1' },
+        where: { id: 'li-1', order: { orgId: 'org-1', trackableUnits: { some: { id: 'tu-9' } } } },
         data: { trackableUnitId: 'tu-9' },
       });
     });
@@ -207,4 +208,33 @@ describe('OrdersRepository', () => {
   // OrderConversionService.convertOrder instead. See
   // OrderConversionService.test.ts for the equivalent coverage (including the
   // orgId-on-shipment regression case these tests used to guard).
+
+  describe('cross-tenant scoping', () => {
+    it('refuses to merge into a target unit from another org without touching the source', async () => {
+      const prisma = buildPrisma();
+      prisma.trackableUnit.findFirst = jest.fn().mockResolvedValue(null);
+      prisma.orderLineItem.updateMany = jest.fn();
+      const repo = new OrdersRepository(prisma);
+
+      await expect(repo.mergeUnits('tu-1', 'tu-other-org', 'org-1')).rejects.toThrow('Trackable unit not found');
+
+      expect(prisma.trackableUnit.findFirst).toHaveBeenCalledWith({
+        where: { id: 'tu-other-org', order: { orgId: 'org-1' } },
+        select: { id: true },
+      });
+      expect(prisma.orderLineItem.updateMany).not.toHaveBeenCalled();
+      expect(prisma.trackableUnit.delete).not.toHaveBeenCalled();
+    });
+
+    it('scopes a trackable unit removal through its order', async () => {
+      const prisma = buildPrisma();
+      const repo = new OrdersRepository(prisma);
+
+      await repo.removeTrackableUnit('tu-1', 'org-1');
+
+      expect(prisma.trackableUnit.delete).toHaveBeenCalledWith({
+        where: { id: 'tu-1', order: { orgId: 'org-1' } },
+      });
+    });
+  });
 });

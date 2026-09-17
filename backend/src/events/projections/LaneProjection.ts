@@ -36,7 +36,7 @@ export class LaneProjection implements IEventHandler {
 
   private async onLaneCreated(event: DomainEvent): Promise<void> {
     const lane = await this.prisma.lane.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         origin: { select: { name: true, city: true } },
         destination: { select: { name: true, city: true } },
@@ -51,7 +51,7 @@ export class LaneProjection implements IEventHandler {
     }
 
     await this.prisma.laneReadModel.upsert({
-      where: { id: lane.id },
+      where: { id: lane.id, orgId: event.orgId },
       create: {
         id: lane.id,
         orgId: event.orgId,
@@ -78,7 +78,7 @@ export class LaneProjection implements IEventHandler {
 
   private async onLaneUpdated(event: DomainEvent): Promise<void> {
     const lane = await this.prisma.lane.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         origin: { select: { name: true, city: true } },
         destination: { select: { name: true, city: true } },
@@ -90,7 +90,7 @@ export class LaneProjection implements IEventHandler {
     if (!lane) return;
 
     await this.prisma.laneReadModel.update({
-      where: { id: lane.id },
+      where: { id: lane.id, orgId: event.orgId },
       data: {
         name: lane.name,
         originName: lane.origin.name,
@@ -111,7 +111,7 @@ export class LaneProjection implements IEventHandler {
 
   private async onLaneArchived(event: DomainEvent): Promise<void> {
     await this.prisma.laneReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[LaneProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);

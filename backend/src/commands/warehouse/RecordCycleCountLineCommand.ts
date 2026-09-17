@@ -30,7 +30,7 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const line = await tx.cycleCountLine.findUnique({
-      where: { id: p.lineId },
+      where: { id: p.lineId, cycleCount: { orgId: command.orgId } },
       include: { cycleCount: true },
     });
     if (!line) throw new Error(`Cycle count line ${p.lineId} not found`);
@@ -44,7 +44,7 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
     // Auto-start count if planned
     if (count.status === 'planned') {
       await tx.cycleCount.update({
-        where: { id: count.id },
+        where: { id: count.id, orgId: command.orgId },
         data: { status: 'in_progress', startedAt: new Date() },
       });
 
@@ -60,7 +60,7 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
     // Update the line
     await tx.cycleCountLine.update({
-      where: { id: line.id },
+      where: { id: line.id, cycleCount: { orgId: command.orgId } },
       data: {
         countedQuantity: p.countedQuantity,
         variance,
@@ -73,14 +73,14 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
     // Update count progress
     const countedBins = await tx.cycleCountLine.count({
-      where: { cycleCountId: count.id, status: { not: 'pending' } },
+      where: { cycleCountId: count.id, status: { not: 'pending' }, cycleCount: { orgId: command.orgId } },
     });
     const varianceCount = await tx.cycleCountLine.count({
-      where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null } },
+      where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null }, cycleCount: { orgId: command.orgId } },
     });
 
     await tx.cycleCount.update({
-      where: { id: count.id },
+      where: { id: count.id, orgId: command.orgId },
       data: { countedBins, varianceCount },
     });
 
@@ -118,22 +118,22 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
     const countComplete = countedBins >= count.totalBins;
     if (countComplete) {
       await tx.cycleCount.update({
-        where: { id: count.id },
+        where: { id: count.id, orgId: command.orgId },
         data: { status: 'completed', completedAt: new Date() },
       });
 
       // Auto-adjust inventory for variances
       const varianceLines = await tx.cycleCountLine.findMany({
-        where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null } },
+        where: { cycleCountId: count.id, variance: { not: 0 }, countedQuantity: { not: null }, cycleCount: { orgId: command.orgId } },
       });
 
       for (const vLine of varianceLines) {
         if (vLine.inventoryRecordId && vLine.countedQuantity !== null) {
-          const invRecord = await tx.inventoryRecord.findUnique({ where: { id: vLine.inventoryRecordId } });
+          const invRecord = await tx.inventoryRecord.findUnique({ where: { id: vLine.inventoryRecordId, orgId: command.orgId } });
           if (invRecord) {
             const prevQty = invRecord.quantityOnHand;
             await tx.inventoryRecord.update({
-              where: { id: invRecord.id },
+              where: { id: invRecord.id, orgId: command.orgId },
               data: {
                 quantityOnHand: vLine.countedQuantity,
                 quantityAvailable: vLine.countedQuantity - invRecord.quantityAllocated - invRecord.quantityOnHold,
@@ -158,7 +158,7 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
           }
 
           await tx.cycleCountLine.update({
-            where: { id: vLine.id },
+            where: { id: vLine.id, cycleCount: { orgId: command.orgId } },
             data: { status: 'adjusted' },
           });
         }
@@ -166,18 +166,18 @@ export class RecordCycleCountLineCommandHandler extends BaseCommandHandler<
 
       // Mark non-variance lines as adjusted too
       await tx.cycleCountLine.updateMany({
-        where: { cycleCountId: count.id, status: 'counted', variance: 0 },
+        where: { cycleCountId: count.id, status: 'counted', variance: 0, cycleCount: { orgId: command.orgId } },
         data: { status: 'adjusted' },
       });
 
       // Update lastCountedAt for all counted records
       const allLines = await tx.cycleCountLine.findMany({
-        where: { cycleCountId: count.id, inventoryRecordId: { not: null } },
+        where: { cycleCountId: count.id, inventoryRecordId: { not: null }, cycleCount: { orgId: command.orgId } },
       });
       const invIds = allLines.map(l => l.inventoryRecordId).filter(Boolean) as string[];
       if (invIds.length > 0) {
         await tx.inventoryRecord.updateMany({
-          where: { id: { in: invIds } },
+          where: { id: { in: invIds }, orgId: command.orgId },
           data: { lastCountedAt: new Date() },
         });
       }

@@ -32,7 +32,7 @@ export class RemoveIssueLabelCommandHandler extends BaseCommandHandler<RemoveIss
     const { issueId, labelId } = command.payload;
 
     const result = await tx.issueLabelAssignment.deleteMany({
-      where: { issueId, labelId },
+      where: { issueId, labelId, issue: { orgId: command.orgId } },
     });
 
     if (result.count > 0) {

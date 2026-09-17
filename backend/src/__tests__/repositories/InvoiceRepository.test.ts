@@ -131,9 +131,10 @@ describe('InvoiceRepository', () => {
       const prisma = buildPrisma();
       const repo = new InvoiceRepository(prisma);
 
-      await repo.findOverdue();
+      await repo.findOverdue('org-1');
 
       const where = prisma.invoice.findMany.mock.calls[0][0].where;
+      expect(where.orgId).toBe('org-1');
       expect(where.status).toEqual({ in: ['sent', 'partial_paid'] });
       expect(where.dueDate.lt).toBeInstanceOf(Date);
     });
@@ -154,5 +155,16 @@ describe('PaymentRepository', () => {
     const call = prisma.payment.create.mock.calls[0][0].data;
     expect(call.currency).toBe('USD');
     expect(call.receivedDate).toBeInstanceOf(Date);
+  });
+});
+
+describe('InvoiceRepository.update', () => {
+  it('only touches an invoice in the caller org', async () => {
+    const prisma = buildPrisma();
+    await new InvoiceRepository(prisma).update('inv-1', 'org-1', { status: 'sent' } as any);
+    expect(prisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: 'inv-1', orgId: 'org-1' },
+      data: { status: 'sent' },
+    });
   });
 });

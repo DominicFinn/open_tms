@@ -163,7 +163,7 @@ export async function locationRoutes(server: FastifyInstance) {
       return { data: null, error: 'Location not found' };
     }
 
-    const updated = await locationsRepo.update(id, body);
+    const updated = await locationsRepo.update(id, orgId, body);
 
     // Ensure arrival criteria exist after edit
     await locationResolutionService.ensureArrivalCriteria(orgId, id);
@@ -209,7 +209,7 @@ export async function locationRoutes(server: FastifyInstance) {
       return { data: null, error: 'Location not found' };
     }
 
-    const archived = await locationsRepo.archive(id);
+    const archived = await locationsRepo.archive(id, orgId);
 
     await publishLocationEvent(EVENT_TYPES.LOCATION_ARCHIVED, id, {
       locationName: location.name,

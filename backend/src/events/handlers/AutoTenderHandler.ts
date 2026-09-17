@@ -51,6 +51,7 @@ export class AutoTenderHandler implements IEventHandler {
       const existingTender = await this.prisma.tender.findFirst({
         where: {
           shipmentId: shipment.id,
+          shipment: { orgId: event.orgId },
           status: { notIn: ['cancelled'] },
         },
       });
@@ -67,9 +68,9 @@ export class AutoTenderHandler implements IEventHandler {
         return;
       }
 
-      // Generate tender reference
-      const count = await this.prisma.tender.count();
-      const tenderRef = `T-${String(count + 1).padStart(5, '0')}`;
+      // Tender references are unique across every org, so they cannot come from a per-org count,
+      // and a table-wide count would reveal other tenants' tender volume.
+      const tenderRef = `T-${Date.now()}`;
 
       // Create tender with broadcast strategy. Mirrors TenderService.openTender:
       // the open time lives on the tender, the expiry on each offer.

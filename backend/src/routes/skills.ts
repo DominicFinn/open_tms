@@ -100,12 +100,12 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
   }>('/api/v1/skill-configs/:id', {
     schema: { tags: ['Skills'], summary: 'Update a skill configuration' },
   }, async (request, reply) => {
-    const existing = await server.prisma.skillConfig.findUnique({ where: { id: request.params.id } });
+    const existing = await server.prisma.skillConfig.findUnique({ where: { id: request.params.id, orgId: request.orgId! } });
     if (!existing) { reply.code(404); return { data: null, error: 'Config not found' }; }
 
     const body = request.body;
     const config = await server.prisma.skillConfig.update({
-      where: { id: request.params.id },
+      where: { id: request.params.id, orgId: request.orgId! },
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.config !== undefined && { config: body.config as Prisma.InputJsonValue }),
@@ -121,7 +121,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
   server.delete<{ Params: { id: string } }>('/api/v1/skill-configs/:id', {
     schema: { tags: ['Skills'], summary: 'Delete a skill configuration' },
   }, async (request) => {
-    await server.prisma.skillConfig.delete({ where: { id: request.params.id } }).catch(() => {});
+    await server.prisma.skillConfig.delete({ where: { id: request.params.id, orgId: request.orgId! } }).catch(() => {});
     return { data: { deleted: true }, error: null };
   });
 
@@ -179,12 +179,12 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
   }>('/api/v1/skill-chains/:id', {
     schema: { tags: ['Skills'], summary: 'Update a skill chain' },
   }, async (request, reply) => {
-    const existing = await server.prisma.skillChain.findUnique({ where: { id: request.params.id } });
+    const existing = await server.prisma.skillChain.findUnique({ where: { id: request.params.id, orgId: request.orgId! } });
     if (!existing) { reply.code(404); return { data: null, error: 'Chain not found' }; }
 
     const body = request.body;
     const chain = await server.prisma.skillChain.update({
-      where: { id: request.params.id },
+      where: { id: request.params.id, orgId: request.orgId! },
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.description !== undefined && { description: body.description }),
@@ -200,7 +200,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
   server.delete<{ Params: { id: string } }>('/api/v1/skill-chains/:id', {
     schema: { tags: ['Skills'], summary: 'Delete a skill chain' },
   }, async (request) => {
-    await server.prisma.skillChain.delete({ where: { id: request.params.id } }).catch(() => {});
+    await server.prisma.skillChain.delete({ where: { id: request.params.id, orgId: request.orgId! } }).catch(() => {});
     return { data: { deleted: true }, error: null };
   });
 };

@@ -10,10 +10,15 @@
  * Pure compute endpoints — no writes, no side effects.
  */
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { authenticateMainOrCustomerJWT } from '../middleware/jwtAuth.js';
+import {
+  attachOrgScopeHook,
+  attachOrgScopeFromCustomerUserHook,
+  requireOrgScope,
+} from '../auth/orgScopeMiddleware.js';
 import { IModeRulesService, Mode, LineField } from '../services/orderLineItem/ModeRulesService.js';
 import { IOrderCartonizationService } from '../services/orderLineItem/OrderCartonizationService.js';
 
@@ -76,9 +81,17 @@ export async function orderLineItemRulesRoutes(server: FastifyInstance) {
 
   // Both the main TMS app and the customer portal drive their create/edit
   // order forms from these endpoints, so they accept either token type.
-  // Safe because they are pure compute: no writes, no tenant data returned,
-  // and nothing here reads req.orgId.
+  // They are pure compute with no tenant data, but still run inside the
+  // caller's tenant. The org comes from whichever principal authenticated:
+  // the customer's own Customer row, or the internal user's token.
   server.addHook('onRequest', authenticateMainOrCustomerJWT);
+  const scopeFromCustomer = attachOrgScopeFromCustomerUserHook(server.prisma);
+  const scopeFromUser = attachOrgScopeHook(server.prisma);
+  server.addHook('preHandler', async function (req: FastifyRequest, reply: FastifyReply) {
+    const attach = req.customerUser ? scopeFromCustomer : scopeFromUser;
+    await attach.call(this, req, reply, () => undefined);
+  });
+  server.addHook('preHandler', requireOrgScope);
 
   server.get('/api/v1/order-line-items/mode-rules', {
     schema: {

@@ -84,7 +84,7 @@ export const SCOPE_HELPERS: readonly string[] = [
   'attachOrgScopeHook',
   'attachOrgScopeFromCustomerUserHook',
   'attachOrgScopeFromCarrierUserHook',
-  'attachOrgScopeFromPartnerHook',
+  'attachEdiOrgScopeHook',
   'attachOrgScopeFromApiKeyHook',
   'attachOrgScopeFromIotWebhookHook',
 ];

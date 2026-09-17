@@ -258,6 +258,7 @@ describe('TriageRepository.context', () => {
 
     expect(res!.signals).toHaveLength(1);
     expect(res!.siblingIssues[0].id).toBe('i2');
+    expect(prisma.issueSignal.findMany.mock.calls[0][0].where).toEqual({ issueId: 'i1', orgId: 'org-1' });
     const siblingWhere = prisma.issueReadModel.findMany.mock.calls[0][0].where;
     expect(siblingWhere.id).toEqual({ not: 'i1' });
     expect(siblingWhere.status).toEqual({ in: ['open', 'in_progress'] });

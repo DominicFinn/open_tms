@@ -80,7 +80,7 @@ describe('ShipmentType command handlers', () => {
       expect(result.events[0].type).toBe(EVENT_TYPES.SHIPMENT_TYPE_UPDATED);
       expect(result.events[0].payload).toEqual(expect.objectContaining({ changes: expect.arrayContaining(['name', 'color']) }));
       expect(mockTx.shipmentType.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'st-1' },
+        where: { id: 'st-1', orgId: 'test-org' },
         data: expect.objectContaining({ name: 'Reefer', color: '#FF0000' }),
       }));
     });

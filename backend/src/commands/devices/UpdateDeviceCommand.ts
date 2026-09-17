@@ -34,7 +34,7 @@ export class UpdateDeviceCommandHandler extends BaseCommandHandler<UpdateDeviceP
     if (changes.displayId !== undefined) data.displayId = changes.displayId;
     if (changes.model !== undefined) data.model = changes.model;
 
-    const device = await tx.device.update({ where: { id }, data });
+    const device = await tx.device.update({ where: { id, orgId: command.orgId }, data });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.DEVICE_UPDATED,

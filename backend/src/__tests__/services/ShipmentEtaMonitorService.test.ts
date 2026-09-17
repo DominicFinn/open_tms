@@ -45,7 +45,7 @@ function createMockPrisma(shipments: any[] = [], readModels: any[] = []) {
     shipment: {
       findMany: jest.fn().mockResolvedValue(shipments),
       findUnique: jest.fn().mockImplementation(({ where }: any) => {
-        const found = shipments.find((s: any) => s.id === where.id);
+        const found = shipments.find((s: any) => s.id === where.id && s.orgId === where.orgId);
         return Promise.resolve(found || null);
       }),
       update: jest.fn().mockResolvedValue({}),
@@ -127,7 +127,7 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('ship-001');
+      const result = await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(result.status).toBe('on_time');
       expect(result.delayMinutes).toBe(0);
@@ -151,7 +151,7 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('ship-001');
+      const result = await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(result.status).toBe('on_time');
       const recovered = (eventBus.publish as jest.Mock).mock.calls.find(
@@ -181,7 +181,7 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('ship-001');
+      const result = await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(result.status).toBe('minor_delay');
       expect(result.delayMinutes).toBe(20);
@@ -210,7 +210,7 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('ship-001');
+      const result = await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(result.status).toBe('critical');
       expect(result.delayMinutes).toBe(90);
@@ -227,10 +227,24 @@ describe('ShipmentEtaMonitorService', () => {
       const prisma = createMockPrisma([], []);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('nonexistent');
+      const result = await service.checkSingleShipment('org-001', 'nonexistent');
 
       expect(result.status).toBe('error');
       expect(result.errorMessage).toBe('Shipment not found');
+    });
+
+    it('treats a shipment in another org as not found', async () => {
+      const provider = createMockRoutingProvider();
+      const eventBus = createMockEventBus();
+      const prisma = createMockPrisma([createTestShipment()], []);
+
+      const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
+      const result = await service.checkSingleShipment('org-other', 'ship-001');
+
+      expect(result.status).toBe('error');
+      expect(result.errorMessage).toBe('Shipment not found');
+      expect(prisma.shipmentReadModel.findFirst).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
     it('returns skipped when shipment has no GPS position', async () => {
@@ -241,7 +255,7 @@ describe('ShipmentEtaMonitorService', () => {
       const prisma = createMockPrisma([shipment], []);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      const result = await service.checkSingleShipment('ship-001');
+      const result = await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(result.status).toBe('skipped');
       expect(provider.computeRoute).not.toHaveBeenCalled();
@@ -260,10 +274,10 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      await service.checkSingleShipment('ship-001');
+      await service.checkSingleShipment('org-001', 'ship-001');
 
       expect(prisma.shipmentStop.update).toHaveBeenCalledWith({
-        where: { id: 'stop-002' },
+        where: { id: 'stop-002', shipment: { orgId: 'org-001' } },
         data: { estimatedArrival: new Date(newEta) },
       });
     });
@@ -295,6 +309,17 @@ describe('ShipmentEtaMonitorService', () => {
       expect(result.runId).toBeDefined();
       expect(result.startedAt).toBeDefined();
       expect(result.completedAt).toBeDefined();
+    });
+
+    it('sweeps every org from the cron, and only the caller org from the manual trigger', async () => {
+      const prisma = createMockPrisma([], []);
+      const service = new ShipmentEtaMonitorService(prisma, createMockRoutingProvider(), createMockEventBus(), config);
+
+      await service.runEtaCheck();
+      expect(prisma.shipment.findMany.mock.calls[0][0].where).not.toHaveProperty('orgId');
+
+      await service.runEtaCheck('org-a');
+      expect(prisma.shipment.findMany.mock.calls[1][0].where).toMatchObject({ orgId: 'org-a' });
     });
 
     it('skips shipments without GPS data', async () => {
@@ -379,7 +404,7 @@ describe('ShipmentEtaMonitorService', () => {
       ]);
 
       const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
-      await service.checkSingleShipment('ship-001');
+      await service.checkSingleShipment('org-001', 'ship-001');
 
       const event = (eventBus.publish as jest.Mock).mock.calls[0][0] as DomainEvent;
       expect(event.metadata.source).toBe('eta-monitor');

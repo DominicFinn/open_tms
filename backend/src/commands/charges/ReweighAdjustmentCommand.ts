@@ -98,7 +98,7 @@ export class ReweighAdjustmentCommandHandler extends BaseCommandHandler<ReweighA
     const approvedCost = charges.filter(c => c.chargeCategory === 'cost' && ['approved', 'invoiced'].includes(c.status)).reduce((s, c) => s + c.amountCents, 0);
 
     await tx.shipmentFinancialSummary.upsert({
-      where: { shipmentId: payload.shipmentId },
+      where: { shipmentId: payload.shipmentId, orgId: command.orgId },
       create: {
         shipmentId: payload.shipmentId, orgId: command.orgId,
         expectedRevenueCents: revenueCents, expectedCostCents: costCents, expectedMarginCents: revenueCents - costCents,

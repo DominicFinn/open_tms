@@ -51,7 +51,7 @@ export class GenerateReturnLabelCommandHandler extends BaseCommandHandler<
     emit: EmitFn,
   ) {
     const p = command.payload;
-    const rma = await tx.rma.findUnique({ where: { id: p.rmaId } });
+    const rma = await tx.rma.findUnique({ where: { id: p.rmaId, orgId: command.orgId } });
     if (!rma) throw new Error(`RMA ${p.rmaId} not found`);
     if (rma.status === 'rejected') throw new Error('Cannot generate return label for a rejected RMA');
     if (rma.status === 'completed') throw new Error('Cannot generate return label for a completed RMA');
@@ -61,13 +61,15 @@ export class GenerateReturnLabelCommandHandler extends BaseCommandHandler<
     let defaultService: string | undefined;
     const carrierId = p.carrierId ?? rma.returnCarrierId ?? null;
 
-    if (!providerName && carrierId) {
-      const carrier = await tx.carrier.findUnique({ where: { id: carrierId } });
-      if (carrier) {
-        providerName = carrier.returnLabelProvider ?? null;
-        carrierAccountNumber = carrier.returnLabelAccountNumber ?? undefined;
-        defaultService = carrier.returnLabelDefaultService ?? undefined;
-      }
+    const carrier = carrierId
+      ? await tx.carrier.findUnique({ where: { id: carrierId, orgId: command.orgId } })
+      : null;
+    if (carrierId && !carrier) throw new Error(`Carrier ${carrierId} not found`);
+
+    if (!providerName && carrier) {
+      providerName = carrier.returnLabelProvider ?? null;
+      carrierAccountNumber = carrier.returnLabelAccountNumber ?? undefined;
+      defaultService = carrier.returnLabelDefaultService ?? undefined;
     }
     if (!providerName) providerName = 'manual';
 
@@ -94,7 +96,7 @@ export class GenerateReturnLabelCommandHandler extends BaseCommandHandler<
     });
 
     await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: {
         returnCarrierId: carrierId,
         returnServiceLevel: serviceLevel,

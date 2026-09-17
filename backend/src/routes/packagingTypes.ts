@@ -96,7 +96,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
     const body = PackagingBody.partial().parse((req as any).body);
     const existing = await prisma.packagingType.findFirst({ where: { id, orgId: req.orgId! } });
     if (!existing) { reply.code(404); return { data: null, error: 'Packaging type not found' }; }
-    const updated = await prisma.packagingType.update({ where: { id }, data: body });
+    const updated = await prisma.packagingType.update({ where: { id, orgId: req.orgId! }, data: body });
     return { data: updated, error: null };
   });
 
@@ -110,10 +110,10 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
     });
     if (!existing) { reply.code(404); return { data: null, error: 'Packaging type not found' }; }
     if (existing._count.trackableUnits > 0) {
-      const updated = await prisma.packagingType.update({ where: { id }, data: { active: false } });
+      const updated = await prisma.packagingType.update({ where: { id, orgId: req.orgId! }, data: { active: false } });
       return { data: { ...updated, softDeleted: true }, error: null };
     }
-    await prisma.packagingType.delete({ where: { id } });
+    await prisma.packagingType.delete({ where: { id, orgId: req.orgId! } });
     return { data: { success: true }, error: null };
   });
 

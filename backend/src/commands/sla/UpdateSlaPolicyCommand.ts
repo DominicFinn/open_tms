@@ -55,13 +55,13 @@ export class UpdateSlaPolicyCommandHandler extends BaseCommandHandler<UpdateSlaP
 
     // Update the policy fields
     await tx.slaPolicy.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: policyData,
     });
 
     // Replace rules if provided
     if (rules) {
-      await tx.slaRule.deleteMany({ where: { policyId: id } });
+      await tx.slaRule.deleteMany({ where: { policyId: id, policy: { orgId: command.orgId } } });
       for (const rule of rules) {
         await tx.slaRule.create({
           data: { ...rule, policyId: id },
@@ -70,7 +70,7 @@ export class UpdateSlaPolicyCommandHandler extends BaseCommandHandler<UpdateSlaP
     }
 
     const updated = await tx.slaPolicy.findUniqueOrThrow({
-      where: { id },
+      where: { id, orgId: command.orgId },
       include: { rules: true },
     });
 

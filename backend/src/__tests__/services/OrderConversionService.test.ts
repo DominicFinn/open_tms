@@ -78,7 +78,7 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus({ success: true, data: { shipmentId: 'ship-1' }, events: [] });
       const service = new OrderConversionService(prisma, commandBus);
 
-      const result = await service.convertOrder('order-1', 'user-1');
+      const result = await service.convertOrder('test-org', 'order-1', 'user-1');
 
       expect(result).toEqual({ shipmentId: 'ship-1' });
       expect(commandBus.dispatch).toHaveBeenCalledWith(
@@ -96,7 +96,19 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus();
       const service = new OrderConversionService(prisma, commandBus);
 
-      await expect(service.convertOrder('order-1')).rejects.toThrow('Order not found');
+      await expect(service.convertOrder('test-org', 'order-1')).rejects.toThrow('Order not found');
+      expect(commandBus.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('reads the order inside the caller org, so another tenant\'s order is not found and nothing is dispatched', async () => {
+      const { prisma } = makePrisma(null);
+      const commandBus = makeCommandBus();
+      const service = new OrderConversionService(prisma, commandBus);
+
+      await expect(service.convertOrder('other-org', 'order-1')).rejects.toThrow('Order not found');
+      expect(prisma.order.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'order-1', orgId: 'other-org' } }),
+      );
       expect(commandBus.dispatch).not.toHaveBeenCalled();
     });
 
@@ -105,7 +117,7 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus({ success: false, error: 'Order already assigned', events: [] });
       const service = new OrderConversionService(prisma, commandBus);
 
-      await expect(service.convertOrder('order-1')).rejects.toThrow('Order already assigned');
+      await expect(service.convertOrder('test-org', 'order-1')).rejects.toThrow('Order already assigned');
     });
   });
 
@@ -122,7 +134,7 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus({ success: true, data: { shipmentId: 'ship-1' }, events: [] });
       const service = new OrderConversionService(prisma, commandBus);
 
-      const result = await service.batchConvert(['order-a', 'order-b'], { mode: 'combine' }, 'user-1');
+      const result = await service.batchConvert('test-org', ['order-a', 'order-b'], { mode: 'combine' }, 'user-1');
 
       expect(result.success).toBe(true);
       expect(result.shipmentIds).toEqual(['ship-1']);
@@ -145,7 +157,7 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus();
       const service = new OrderConversionService(prisma, commandBus);
 
-      const result = await service.batchConvert(['order-a', 'order-b'], { mode: 'combine' });
+      const result = await service.batchConvert('test-org', ['order-a', 'order-b'], { mode: 'combine' });
 
       expect(result.success).toBe(false);
       expect(result.errors[0]).toMatch(/different origins/);
@@ -160,7 +172,7 @@ describe('OrderConversionService', () => {
       const service = new OrderConversionService(prisma, commandBus);
       const groups = [{ trackableUnitIds: ['u1'], legacyItemIds: [] }, { trackableUnitIds: ['u2'], legacyItemIds: [] }];
 
-      const result = await service.splitOrder('order-1', groups, 'user-1');
+      const result = await service.splitOrder('test-org', 'order-1', groups, 'user-1');
 
       expect(result.success).toBe(true);
       expect(result.shipmentIds).toEqual(['ship-1', 'ship-2']);
@@ -179,11 +191,22 @@ describe('OrderConversionService', () => {
       const commandBus = makeCommandBus();
       const service = new OrderConversionService(prisma, commandBus);
 
-      const result = await service.splitOrder('order-1', [{ trackableUnitIds: ['u1'], legacyItemIds: [] }, { trackableUnitIds: ['u2'], legacyItemIds: [] }]);
+      const result = await service.splitOrder('test-org', 'order-1', [{ trackableUnitIds: ['u1'], legacyItemIds: [] }, { trackableUnitIds: ['u2'], legacyItemIds: [] }]);
 
       expect(result.success).toBe(false);
       expect(result.message).toBe('Order not found');
       expect(commandBus.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('reads the order inside the caller org', async () => {
+      const { prisma } = makePrisma(null);
+      const service = new OrderConversionService(prisma, makeCommandBus());
+
+      await service.splitOrder('other-org', 'order-1', []);
+
+      expect(prisma.order.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'order-1', orgId: 'other-org' } }),
+      );
     });
   });
 
@@ -306,8 +329,11 @@ describe('OrderConversionService', () => {
       } as any;
       const service = new OrderConversionService(prisma, makeCommandBus());
 
-      const check = await service.checkCompatibility(['order-a', 'order-b']);
+      const check = await service.checkCompatibility('test-org', ['order-a', 'order-b']);
 
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org' }) }),
+      );
       expect(check.compatible).toBe(false);
       expect(check.errors[0]).toMatch(/different origins/);
       expect(check.warnings.some((w) => w.includes('different customers'))).toBe(true);

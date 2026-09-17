@@ -12,7 +12,7 @@ export class CancelTenderCommandHandler extends BaseCommandHandler<{ id: string 
 
   protected async handle(command: Command<{ id: string }>, tx: TransactionClient, emit: EmitFn) {
     const tender = await tx.tender.update({
-      where: { id: command.payload.id },
+      where: { id: command.payload.id, shipment: { orgId: command.orgId } },
       data: { status: 'cancelled', closedAt: new Date() },
     });
 

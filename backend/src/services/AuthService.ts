@@ -50,7 +50,7 @@ export interface IAuthService {
   login(email: string, password: string): Promise<LoginResult>;
   getUserWithAuthContext(userId: string): Promise<LoginResult['user'] | null>;
   changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>;
-  adminResetPassword(targetUserId: string, newPassword: string): Promise<void>;
+  adminResetPassword(orgId: string, targetUserId: string, newPassword: string): Promise<void>;
   validatePasswordStrength(password: string): PasswordValidation;
 }
 
@@ -70,6 +70,7 @@ export class AuthService implements IAuthService {
   async login(email: string, password: string): Promise<LoginResult> {
     const normalizedEmail = email.trim().toLowerCase();
 
+    // tenancy-exempt: login by email is how the tenant is established; the org comes from the user row found here.
     const user = await this.prisma.user.findFirst({
       where: { email: normalizedEmail },
       include: { roles: { include: { role: true } } },
@@ -90,7 +91,7 @@ export class AuthService implements IAuthService {
     if (!valid) {
       const next = nextFailedAttemptState(user);
       await this.prisma.user.update({
-        where: { id: user.id },
+        where: { id: user.id, organizationId: user.organizationId },
         data: { failedLoginAttempts: next.failedLoginAttempts, lockedUntil: next.lockedUntil },
       });
       if (next.triggeredLock) {
@@ -104,7 +105,7 @@ export class AuthService implements IAuthService {
     }
 
     await this.prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.id, organizationId: user.organizationId },
       data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
     });
 
@@ -135,6 +136,7 @@ export class AuthService implements IAuthService {
   }
 
   async getUserWithAuthContext(userId: string): Promise<LoginResult['user'] | null> {
+    // tenancy-exempt: userId is `sub` from the caller's own verified JWT
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { roles: { include: { role: true } } },
@@ -154,6 +156,7 @@ export class AuthService implements IAuthService {
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    // tenancy-exempt: userId is `sub` from the caller's own verified JWT
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.passwordHash) throw new Error('User not found');
 
@@ -165,13 +168,13 @@ export class AuthService implements IAuthService {
 
     const newHash = this.hashPassword(newPassword);
     await this.prisma.user.update({
-      where: { id: userId },
+      where: { id: userId, organizationId: user.organizationId },
       data: { passwordHash: newHash, passwordChangedAt: new Date() },
     });
   }
 
-  async adminResetPassword(targetUserId: string, newPassword: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+  async adminResetPassword(orgId: string, targetUserId: string, newPassword: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: targetUserId, organizationId: orgId } });
     if (!user) throw new Error('User not found');
 
     const validation = this.validatePasswordStrength(newPassword);
@@ -179,7 +182,7 @@ export class AuthService implements IAuthService {
 
     const newHash = this.hashPassword(newPassword);
     await this.prisma.user.update({
-      where: { id: targetUserId },
+      where: { id: targetUserId, organizationId: orgId },
       data: {
         passwordHash: newHash,
         passwordChangedAt: new Date(),

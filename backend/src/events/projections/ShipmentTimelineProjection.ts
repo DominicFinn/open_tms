@@ -29,17 +29,18 @@ export interface TimelineRowInput {
 /** Classify a stop as the route's origin, destination, or an intermediate waypoint. */
 async function classifyStop(
   prisma: TxOrPrisma,
+  orgId: string,
   shipmentId: string,
   stopId: string | undefined
 ): Promise<'origin' | 'destination' | 'waypoint' | null> {
   if (!stopId) return null;
   const stop = await prisma.shipmentStop.findUnique({
-    where: { id: stopId },
+    where: { id: stopId, shipment: { orgId } },
     select: { sequenceNumber: true, shipmentId: true },
   });
   if (!stop || stop.shipmentId !== shipmentId) return null;
   const agg = await prisma.shipmentStop.aggregate({
-    where: { shipmentId },
+    where: { shipmentId, shipment: { orgId } },
     _min: { sequenceNumber: true },
     _max: { sequenceNumber: true },
   });
@@ -95,13 +96,13 @@ export async function buildTimelineRow(
     case 'shipment.deleted':
       return { ...base, eventType: 'deleted', description: 'Shipment deleted' };
     case 'shipment.stop_arrived': {
-      const kind = await classifyStop(prisma, event.entityId, payload.stopId);
+      const kind = await classifyStop(prisma, event.orgId, event.entityId, payload.stopId);
       if (kind === 'destination') return { ...base, eventType: 'enters_destination', description: 'Arrived at destination' };
       if (kind === 'waypoint') return { ...base, eventType: 'entered_waypoint', description: `Entered waypoint${base.address ? ` (${base.address})` : ''}` };
       return null; // arrival at origin is not part of the curated timeline
     }
     case 'shipment.stop_completed': {
-      const kind = await classifyStop(prisma, event.entityId, payload.stopId);
+      const kind = await classifyStop(prisma, event.orgId, event.entityId, payload.stopId);
       if (kind === 'origin') return { ...base, eventType: 'leaves_origin', description: 'Departed origin' };
       if (kind === 'waypoint') return { ...base, eventType: 'exited_waypoint', description: `Exited waypoint${base.address ? ` (${base.address})` : ''}` };
       return null; // departure from destination is not meaningful
@@ -137,7 +138,7 @@ export class ShipmentTimelineProjection implements IEventHandler {
 
     // Idempotency: pg-boss can redeliver — never write the same source event twice.
     const existing = await this.prisma.shipmentEvent.findFirst({
-      where: { sourceEventId: row.sourceEventId },
+      where: { sourceEventId: row.sourceEventId, shipment: { orgId: event.orgId } },
       select: { id: true },
     });
     if (existing) return;

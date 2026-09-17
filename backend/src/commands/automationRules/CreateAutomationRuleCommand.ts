@@ -66,7 +66,7 @@ export class CreateAutomationRuleCommandHandler extends BaseCommandHandler<Creat
     // can reflect provenance and avoid double-promoting.
     if (p.sourceDecisionId) {
       await tx.agentDecision.update({
-        where: { id: p.sourceDecisionId },
+        where: { id: p.sourceDecisionId, orgId: command.orgId },
         data: { promotedToAutomation: true, promotedAt: new Date() },
       }).catch(() => {});
     }

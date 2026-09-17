@@ -25,14 +25,16 @@ export class AuthorizeRmaCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; rmaNumber: string; status: string }> {
-    const rma = await tx.rma.findUnique({ where: { id: command.payload.rmaId } });
+    const rma = await tx.rma.findUnique({
+      where: { id: command.payload.rmaId, orgId: command.orgId },
+    });
     if (!rma) throw new Error(`RMA ${command.payload.rmaId} not found`);
     if (rma.status !== 'requested') {
       throw new Error(`Cannot authorize RMA in status ${rma.status}`);
     }
 
     const updated = await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: { status: 'authorized', authorizedAt: new Date() },
     });
 

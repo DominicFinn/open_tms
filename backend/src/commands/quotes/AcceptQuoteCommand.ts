@@ -160,7 +160,7 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
 
     // Update quote status
     await tx.quote.update({
-      where: { id: quote.id },
+      where: { id: quote.id, orgId: command.orgId },
       data: { status: 'accepted', orderId: order.id },
     });
 

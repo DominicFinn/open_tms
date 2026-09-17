@@ -26,14 +26,14 @@ export class AssignPutawayTaskCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; status: string; assignedToUserId: string }> {
-    const task = await tx.putawayTask.findUnique({ where: { id: command.payload.taskId } });
+    const task = await tx.putawayTask.findUnique({ where: { id: command.payload.taskId, orgId: command.orgId } });
     if (!task) throw new Error(`Putaway task ${command.payload.taskId} not found`);
     if (task.status === 'completed' || task.status === 'cancelled') {
       throw new Error(`Task is ${task.status}, cannot assign`);
     }
 
     const updated = await tx.putawayTask.update({
-      where: { id: task.id },
+      where: { id: task.id, orgId: command.orgId },
       data: {
         assignedToUserId: command.payload.assignedToUserId,
         status: 'assigned',

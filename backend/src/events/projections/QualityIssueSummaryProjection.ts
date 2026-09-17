@@ -75,7 +75,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     }>();
 
     for (const issue of issues) {
-      const dimensions = await this.resolveDimensions(issue.sourceEntityType, issue.sourceEntityId);
+      const dimensions = await this.resolveDimensions(orgId, issue.sourceEntityType, issue.sourceEntityId);
       for (const dim of dimensions) {
         const key = `${dim.type}:${dim.id}`;
         if (!dimensionMap.has(key)) {
@@ -109,7 +109,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
 
   private async rebuildForIssue(issueId: string, orgId: string): Promise<void> {
     const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: issueId, orgId },
       select: {
         sourceEntityType: true,
         sourceEntityId: true,
@@ -117,7 +117,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     });
     if (!issue) return;
 
-    const dimensions = await this.resolveDimensions(issue.sourceEntityType, issue.sourceEntityId);
+    const dimensions = await this.resolveDimensions(orgId, issue.sourceEntityType, issue.sourceEntityId);
 
     for (const dim of dimensions) {
       await this.rebuildDimension(orgId, dim.type, dim.id, dim.name);
@@ -180,7 +180,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
   ): Promise<string[]> {
     if (dimensionType === 'carrier') {
       const shipments = await this.prisma.shipment.findMany({
-        where: { carrierId: dimensionId },
+        where: { carrierId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -195,7 +195,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     if (dimensionType === 'customer') {
       // Shipments are linked to customers directly
       const shipments = await this.prisma.shipment.findMany({
-        where: { customerId: dimensionId },
+        where: { customerId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -209,7 +209,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
 
     if (dimensionType === 'lane') {
       const shipments = await this.prisma.shipment.findMany({
-        where: { laneId: dimensionId },
+        where: { laneId: dimensionId, orgId },
         select: { id: true },
       });
       const shipmentIds = shipments.map(s => s.id);
@@ -224,6 +224,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
     if (dimensionType === 'location') {
       const shipments = await this.prisma.shipment.findMany({
         where: {
+          orgId,
           OR: [
             { originId: dimensionId },
             { destinationId: dimensionId },
@@ -244,6 +245,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
   }
 
   private async resolveDimensions(
+    orgId: string,
     sourceEntityType: string | null,
     sourceEntityId: string | null,
   ): Promise<{ type: string; id: string; name: string }[]> {
@@ -253,7 +255,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
 
     if (sourceEntityType === 'shipment') {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: sourceEntityId },
+        where: { id: sourceEntityId, orgId },
         select: {
           customerId: true,
           carrierId: true,
@@ -267,7 +269,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
       // Carrier dimension
       if (shipment.carrierId) {
         const carrier = await this.prisma.carrier.findUnique({
-          where: { id: shipment.carrierId },
+          where: { id: shipment.carrierId, orgId },
           select: { name: true },
         });
         if (carrier) {
@@ -278,7 +280,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
       // Lane dimension
       if (shipment.laneId) {
         const lane = await this.prisma.lane.findUnique({
-          where: { id: shipment.laneId },
+          where: { id: shipment.laneId, orgId },
           select: { name: true },
         });
         if (lane) {
@@ -289,7 +291,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
       // Origin location dimension
       if (shipment.originId) {
         const origin = await this.prisma.location.findUnique({
-          where: { id: shipment.originId },
+          where: { id: shipment.originId, orgId },
           select: { name: true },
         });
         if (origin) {
@@ -300,7 +302,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
       // Destination location dimension
       if (shipment.destinationId) {
         const dest = await this.prisma.location.findUnique({
-          where: { id: shipment.destinationId },
+          where: { id: shipment.destinationId, orgId },
           select: { name: true },
         });
         if (dest) {
@@ -311,7 +313,7 @@ export class QualityIssueSummaryProjection implements IEventHandler {
       // Customer dimension (directly from shipment)
       if (shipment.customerId) {
         const customer = await this.prisma.customer.findUnique({
-          where: { id: shipment.customerId },
+          where: { id: shipment.customerId, orgId },
           select: { name: true },
         });
         if (customer) {

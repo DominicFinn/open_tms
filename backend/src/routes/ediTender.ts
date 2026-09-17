@@ -42,13 +42,13 @@ export async function ediTenderRoutes(server: FastifyInstance) {
       receiverId: z.string().optional(),
     }).parse((req as any).body);
 
-    const offer = await tenderRepo.findOfferById(tenderOfferId);
+    const offer = await tenderRepo.findOfferById(tenderOfferId, req.orgId!);
     if (!offer) {
       reply.code(404);
       return { data: null, error: 'Tender offer not found' };
     }
 
-    const tender = await tenderRepo.findById((offer as any).tenderId);
+    const tender = await tenderRepo.findById((offer as any).tenderId, req.orgId!);
     if (!tender) {
       reply.code(404);
       return { data: null, error: 'Tender not found' };
@@ -56,7 +56,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
 
     // Build shipment data for EDI 204
     const shipment: any = await prisma.shipment.findUnique({
-      where: { id: tender.shipmentId },
+      where: { id: tender.shipmentId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,
@@ -169,7 +169,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
     const result = edi990Parser.parseEDI990(content);
 
     if (!result.success) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: result.errors.join('; '),
         processedAt: new Date(),
@@ -179,7 +179,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
     }
 
     // Find matching tender offer by shipment reference and carrier SCAC
-    const tenders = await tenderRepo.findAll({ status: 'open' });
+    const tenders = await tenderRepo.findAll({ orgId: req.orgId!, status: 'open' });
     let matchedOffer: any = null;
     let matchedTender: any = null;
 
@@ -198,7 +198,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
     }
 
     if (!matchedOffer || !matchedTender) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: `No matching open tender offer found for shipment ${result.shipmentReference} / carrier ${result.carrierScac}`,
         shipmentReference: result.shipmentReference,
@@ -220,8 +220,8 @@ export async function ediTenderRoutes(server: FastifyInstance) {
         rate: matchedTender.targetRate || 0,
         sourceType: 'edi_990',
         edi990Content: content,
-      });
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      }, req.orgId!);
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'success',
         tenderId: matchedTender.id,
         shipmentReference: result.shipmentReference,
@@ -241,8 +241,8 @@ export async function ediTenderRoutes(server: FastifyInstance) {
       };
     } else if (result.responseCode === 'D') {
       // Decline - mark offer as expired and progress waterfall
-      await tenderService.declineTenderOffer(matchedOffer.id, matchedOffer.carrierId);
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tenderService.declineTenderOffer(matchedOffer.id, matchedOffer.carrierId, req.orgId!);
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'success',
         tenderId: matchedTender.id,
         shipmentReference: result.shipmentReference,
@@ -258,7 +258,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
         error: null,
       };
     } else {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: `Unknown response code: ${result.responseCode}`,
         processedAt: new Date(),

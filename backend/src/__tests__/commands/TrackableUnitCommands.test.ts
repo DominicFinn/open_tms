@@ -201,7 +201,7 @@ describe('MoveLineItemBetweenUnitsCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(tx.orderLineItem.update).toHaveBeenCalledWith({
-      where: { id: 'li-1' },
+      where: { id: 'li-1', order: { orgId: 'test-org' } },
       data: { trackableUnitId: 'tu-target' },
     });
     expect(result.events[0].type).toBe(EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_MOVED);
@@ -243,7 +243,7 @@ describe('MoveLineItemBetweenUnitsCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(tx.orderLineItem.update).toHaveBeenCalledWith({
-      where: { id: 'li-1' },
+      where: { id: 'li-1', order: { orgId: 'test-org' } },
       data: { trackableUnitId: null },
     });
     expect(result.events[0].payload).toEqual(expect.objectContaining({ toUnitId: null }));
@@ -268,10 +268,11 @@ describe('MergeTrackableUnitsCommandHandler', () => {
     expect(result.success).toBe(true);
     expect(result.data?.movedLineItems).toBe(3);
     expect(tx.orderLineItem.updateMany).toHaveBeenCalledWith({
-      where: { trackableUnitId: 'tu-src' },
+      where: { trackableUnitId: 'tu-src', order: { orgId: 'test-org' } },
       data: { trackableUnitId: 'tu-tgt' },
     });
-    expect(tx.trackableUnit.delete).toHaveBeenCalledWith({ where: { id: 'tu-src' } });
+    expect(tx.trackableUnit.delete).toHaveBeenCalledWith({ where: { id: 'tu-src', order: { orgId: 'test-org' } } });
+    expect(tx.trackableUnit.findUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 'tu-tgt', order: { orgId: 'test-org' } } });
     expect(result.events[0].type).toBe(EVENT_TYPES.TRACKABLE_UNITS_MERGED);
   });
 

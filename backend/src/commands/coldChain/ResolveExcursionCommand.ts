@@ -34,7 +34,7 @@ export class ResolveExcursionCommandHandler extends BaseCommandHandler<ResolveEx
     const { id, dispositionDecision, notes } = command.payload;
 
     const excursion = await tx.coldChainExcursion.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         status: 'resolved',
         resolvedBy: command.actorId,

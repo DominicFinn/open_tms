@@ -64,7 +64,7 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     await handler.handle(makeEvent());
 
     expect(prisma.customerWebhook.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { customerId: 'cust-1', enabled: true } }),
+      expect.objectContaining({ where: { customerId: 'cust-1', orgId: 'org1', enabled: true } }),
     );
     mockFetch.mockRestore();
   });
@@ -91,14 +91,24 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     }));
 
     expect(prisma.packTask.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'pt-1' }, select: { orderId: true } }),
+      expect.objectContaining({ where: { id: 'pt-1', orgId: 'org1' }, select: { orderId: true } }),
     );
     expect(prisma.order.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'order-42' }, select: { customerId: true } }),
+      expect.objectContaining({ where: { id: 'order-42', orgId: 'org1' }, select: { customerId: true } }),
     );
     expect(prisma.customerWebhook.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { customerId: 'cust-42', enabled: true } }),
+      expect.objectContaining({ where: { customerId: 'cust-42', orgId: 'org1', enabled: true } }),
     );
+  });
+
+  it('only looks up webhooks in the event org, so another tenant cannot receive the payload', async () => {
+    const prisma = makePrisma();
+    const handler = new CustomerWebhookHandler(prisma);
+    await handler.handle(makeEvent({ orgId: 'org2' }));
+    expect(prisma.customerWebhook.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { customerId: 'cust-1', orgId: 'org2', enabled: true } }),
+    );
+    expect(prisma.customerWebhookDelivery.create).not.toHaveBeenCalled();
   });
 
   it('skips delivery when pack task has no order', async () => {

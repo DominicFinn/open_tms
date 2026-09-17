@@ -43,7 +43,7 @@ export class CreateWarehouseBinCommandHandler extends BaseCommandHandler<
 
     // WarehouseAisle has no orgId of its own; it is tenant-safe only if it sits in the zone just checked.
     if (command.payload.aisleId) {
-      const aisle = await tx.warehouseAisle.findFirst({ where: { id: command.payload.aisleId, zoneId: zone.id } });
+      const aisle = await tx.warehouseAisle.findFirst({ where: { id: command.payload.aisleId, zone: { orgId: command.orgId }, zoneId: zone.id } });
       if (!aisle) throw new Error(`Aisle ${command.payload.aisleId} not found`);
     }
 

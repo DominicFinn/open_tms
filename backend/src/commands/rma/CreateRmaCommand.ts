@@ -45,7 +45,7 @@ export class CreateRmaCommandHandler extends BaseCommandHandler<
 
     // Verify order belongs to this customer
     const order = await tx.order.findUnique({
-      where: { id: p.orderId },
+      where: { id: p.orderId, orgId: command.orgId },
       include: { lineItems: true },
     });
     if (!order) throw new Error(`Order ${p.orderId} not found`);

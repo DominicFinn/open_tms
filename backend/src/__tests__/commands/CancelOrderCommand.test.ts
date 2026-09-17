@@ -39,7 +39,7 @@ describe('CancelOrderCommandHandler', () => {
 
       expect(result.success).toBe(true);
       expect(update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { id: 'order-1', orgId: 'test-org' },
         data: { status: 'cancelled' },
       });
       expect(result.events).toHaveLength(1);
@@ -53,6 +53,27 @@ describe('CancelOrderCommandHandler', () => {
       );
     }
   );
+
+  it('looks the order up under the caller org, so another org\'s order is not found', async () => {
+    const update = jest.fn();
+    const findFirstOrThrow = jest.fn().mockRejectedValue(new Error('No Order found'));
+    const mockPrisma = {
+      $transaction: jest.fn((fn: Function) =>
+        fn({ order: { findFirstOrThrow, update }, domainEventLog: { create: jest.fn() } })
+      ),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new CancelOrderCommandHandler(mockPrisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(CANCEL_ORDER, { id: 'order-1' }, { orgId: 'other-org' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(findFirstOrThrow).toHaveBeenCalledWith({ where: { id: 'order-1', orgId: 'other-org' } });
+    expect(update).not.toHaveBeenCalled();
+  });
 
   it('rejects cancelling an order that is already assigned to a shipment', async () => {
     const { mockPrisma, update } = makePrisma({

@@ -128,6 +128,7 @@ describe('IssueRepository.findByOrg', () => {
 
     const assignmentCall = prisma.issueLabelAssignment.findMany.mock.calls[0][0];
     expect(assignmentCall.where.labelId).toEqual({ in: ['lbl-cold', 'lbl-rush'] });
+    expect(assignmentCall.where.issue).toEqual({ orgId: 'org-1' });
 
     const where = prisma.issueReadModel.findMany.mock.calls[0][0].where;
     expect(where.id).toEqual({ in: ['i-1', 'i-2'] });
@@ -256,5 +257,35 @@ describe('IssueRepository.updateLabelsCache', () => {
       where: { id: 'i-1', orgId: 'org-1' },
       data: { labels: ['cold-chain', 'rush'] },
     });
+  });
+});
+
+describe('IssueRepository.updateKanbanView', () => {
+  function kanbanPrisma(existing: unknown) {
+    const tx = {
+      kanbanView: {
+        findFirst: jest.fn().mockResolvedValue(existing),
+        updateMany: jest.fn(),
+        update: jest.fn().mockResolvedValue({ id: 'kv-1' }),
+      },
+    };
+    return { tx, prisma: { $transaction: jest.fn((fn: any) => fn(tx)) } as any };
+  }
+
+  it('writes with the caller org in the where', async () => {
+    const { tx, prisma } = kanbanPrisma({ id: 'kv-1', orgId: 'org-1' });
+    await new IssueRepository(prisma).updateKanbanView('kv-1', 'org-1', { name: 'Mine' });
+    expect(tx.kanbanView.update).toHaveBeenCalledWith({
+      where: { id: 'kv-1', orgId: 'org-1' },
+      data: { name: 'Mine' },
+    });
+  });
+
+  it('returns null for a view in another org without writing', async () => {
+    const { tx, prisma } = kanbanPrisma(null);
+    const result = await new IssueRepository(prisma).updateKanbanView('kv-1', 'org-2', { name: 'Mine' });
+    expect(result).toBeNull();
+    expect(tx.kanbanView.findFirst).toHaveBeenCalledWith({ where: { id: 'kv-1', orgId: 'org-2' } });
+    expect(tx.kanbanView.update).not.toHaveBeenCalled();
   });
 });

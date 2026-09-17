@@ -239,12 +239,26 @@ describe('Comment command handlers', () => {
 
       expect(result.success).toBe(true);
       expect(tx.comment.update).toHaveBeenCalledWith({
-        where: { id: 'cmt-1' },
+        where: { id: 'cmt-1', orgId: 'test-org' },
         data: { body: 'Updated body' },
       });
       expect(result.events[0].type).toBe(EVENT_TYPES.COMMENT_UPDATED);
       expect(result.events[0].entityType).toBe('issue');
       expect(result.events[0].entityId).toBe('issue-1');
+    });
+
+    it('scopes the lookup to the caller org so another tenant\'s comment reads as not found', async () => {
+      const { prisma, tx } = buildPrisma({ findUnique: null });
+      const { bus } = mockEventBus();
+      const handler = new UpdateCommentCommandHandler(prisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_COMMENT, { id: 'cmt-other', body: 'x' }, { orgId: 'org-b' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(tx.comment.findUnique).toHaveBeenCalledWith({ where: { id: 'cmt-other', orgId: 'org-b' } });
+      expect(tx.comment.update).not.toHaveBeenCalled();
     });
 
     it('fails when comment is missing', async () => {
@@ -289,7 +303,7 @@ describe('Comment command handlers', () => {
       expect(result.success).toBe(true);
       expect(tx.comment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'cmt-1' },
+          where: { id: 'cmt-1', orgId: 'test-org' },
           data: expect.objectContaining({ deletedBy: 'user-9' }),
         })
       );

@@ -30,11 +30,11 @@ export class DeleteLineItemCommandHandler extends BaseCommandHandler<DeleteLineI
     const { id } = command.payload;
 
     const existing = await tx.orderLineItem.findUniqueOrThrow({
-      where: { id },
+      where: { id, order: { orgId: command.orgId } },
       select: { id: true, orderId: true, sku: true, trackableUnitId: true },
     });
 
-    await tx.orderLineItem.delete({ where: { id } });
+    await tx.orderLineItem.delete({ where: { id, order: { orgId: command.orgId } } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.ORDER_LINE_ITEM_DELETED,

@@ -36,14 +36,14 @@ export class UpdateCustomerWebhookCommandHandler extends BaseCommandHandler<Upda
   ): Promise<UpdateCustomerWebhookResult> {
     const { id, customerId, data } = command.payload;
 
-    const existing = await tx.customerWebhook.findUnique({ where: { id } });
+    const existing = await tx.customerWebhook.findUnique({ where: { id, orgId: command.orgId } });
     // Cross-tenant guard inside the handler — the route already checks but
     // belt-and-braces matters for a customer-portal-facing surface.
     if (!existing || existing.customerId !== customerId) {
       throw new Error('Webhook not found');
     }
 
-    await tx.customerWebhook.update({ where: { id }, data });
+    await tx.customerWebhook.update({ where: { id, orgId: command.orgId }, data });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CUSTOMER_WEBHOOK_UPDATED,

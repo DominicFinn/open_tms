@@ -19,7 +19,7 @@ export class UpdateLocationCommandHandler extends BaseCommandHandler<{ id: strin
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
-    const updated = await tx.location.update({ where: { id }, data: data as any });
+    const updated = await tx.location.update({ where: { id, orgId: command.orgId }, data: data as any });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.LOCATION_UPDATED,

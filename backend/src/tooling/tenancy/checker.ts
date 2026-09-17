@@ -10,6 +10,8 @@ export type Rule =
   | 'route-not-registered'
   | 'org-fallback'
   | 'unscoped-org-lookup'
+  | 'id-only-lookup'
+  | 'unscoped-query'
   | 'policy-invalid';
 
 export interface Finding {
@@ -144,11 +146,16 @@ const FALLBACK_PATTERNS: readonly RegExp[] = [
   /orgId\s*:\s*['"]default['"]/,
 ];
 
-function fallbackLines(source: string): number[] {
+// Reading the org straight off the token skips the scope hook, including its sole-org rule. Only the
+// scope hooks in auth/ may do it.
+const TOKEN_ORG_READ = /\b(req|request)\.user!?\??\.organizationId\b/;
+
+function fallbackLines(file: string, source: string): number[] {
+  const patterns = file.startsWith('auth/') ? FALLBACK_PATTERNS : [...FALLBACK_PATTERNS, TOKEN_ORG_READ];
   return source
     .split('\n')
     .flatMap((line, index) =>
-      !isComment(line) && FALLBACK_PATTERNS.some((pattern) => pattern.test(line)) ? [index + 1] : [],
+      !isComment(line) && patterns.some((pattern) => pattern.test(line)) ? [index + 1] : [],
     );
 }
 
@@ -160,6 +167,105 @@ function unscopedOrgLookupLines(source: string): number[] {
     const window = lines.slice(index, index + 4).join('\n');
     return window.includes('where:') && /orgId/.test(window) ? [] : [index + 1];
   });
+}
+
+const ID_LOOKUP_CALL =
+  /\.(\w+)\.(findUnique|findUniqueOrThrow|findFirst|findFirstOrThrow|update|delete|upsert)\(\s*\{\s*where\s*:\s*\{/g;
+
+/** The text of the object literal whose opening brace is at `open`, or null if it never closes. */
+function objectLiteralAt(source: string, open: number): string | null {
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}' && --depth === 0) return source.slice(open, index + 1);
+  }
+  return null;
+}
+
+/**
+ * A lookup keyed by id alone is allowed only where the id itself proves tenancy, such as the
+ * principal named in its own verified token. The line says so with a reason, directly above it:
+ *
+ *   // tenancy-exempt: the user id is `sub` from the caller's own verified JWT
+ */
+const EXEMPT_MARKER = /\/\/\s*tenancy-exempt:\s*\S.{10,}/;
+
+/**
+ * A lookup or write on tenant data keyed by the row's id alone (#314). The multi-tenancy rule bans
+ * these: an id guessed from another tenant finds the row. Tenant models must name their org in the
+ * `where`; inherited models must reach it through their parent, so either way the `where` mentions
+ * the org column.
+ */
+function idOnlyLookupLines(source: string, tenantModels: ReadonlySet<string>): number[] {
+  const lines: number[] = [];
+  for (const match of source.matchAll(ID_LOOKUP_CALL)) {
+    const model = match[1][0].toUpperCase() + match[1].slice(1);
+    if (!tenantModels.has(model)) continue;
+    const where = objectLiteralAt(source, match.index! + match[0].length - 1);
+    if (!where || !/^\{\s*id\b/.test(where) || /\b(orgId|organizationId)\b/.test(where)) continue;
+    const all = source.split('\n');
+    const line = source.slice(0, match.index).split('\n').length;
+    if (isComment(all[line - 1]) || EXEMPT_MARKER.test(all[line - 2] ?? '')) continue;
+    lines.push(line);
+  }
+  return lines;
+}
+
+const QUERY_CALL =
+  /\.(\w+)\.(findMany|findFirst|findFirstOrThrow|findUnique|findUniqueOrThrow|count|aggregate|groupBy|updateMany|deleteMany|update|delete|upsert)\(\s*/g;
+
+/** Operations that read or write every row when they are given no where at all. */
+const SWEEPING_OPS = new Set(['findMany', 'findFirst', 'findFirstOrThrow', 'count', 'aggregate', 'groupBy', 'updateMany', 'deleteMany']);
+
+/** The value text of the top-level `where` key in an object literal, `''` for shorthand, or null when absent. */
+function topLevelWhere(args: string): string | null {
+  let depth = 0;
+  for (let index = 0; index < args.length; index += 1) {
+    const char = args[index];
+    if ('{[('.includes(char)) depth += 1;
+    else if ('}])'.includes(char)) depth -= 1;
+    else if (depth === 1 && /\bwhere\b/y.test(args.slice(index, index + 5)) && !/\w/.test(args[index - 1] ?? '')) {
+      const rest = args.slice(index + 5).trimStart();
+      if (!rest.startsWith(':')) return '';
+      const value = rest.slice(1).trimStart();
+      return value.startsWith('{') ? (objectLiteralAt(value, 0) ?? '') : '';
+    }
+  }
+  return null;
+}
+
+/**
+ * A query on tenant data that never names the org (#314): a list, count or bulk write with no
+ * where, or with a where that filters on something other than the org, such as a parent id or a
+ * reference. Lookups by the row's own id are reported by `idOnlyLookupLines` instead. A where held
+ * in a variable, or built with a spread, cannot be read here and is not reported.
+ */
+function unscopedQueryLines(source: string, tenantModels: ReadonlySet<string>): number[] {
+  const all = source.split('\n');
+  const lines: number[] = [];
+  for (const match of source.matchAll(QUERY_CALL)) {
+    const model = match[1][0].toUpperCase() + match[1].slice(1);
+    if (!tenantModels.has(model)) continue;
+    const after = match.index! + match[0].length;
+    const op = match[2];
+    let unscoped: boolean;
+    if (source[after] === ')') {
+      unscoped = SWEEPING_OPS.has(op);
+    } else if (source[after] === '{') {
+      const args = objectLiteralAt(source, after) ?? '';
+      const where = topLevelWhere(args);
+      if (where === null) unscoped = SWEEPING_OPS.has(op);
+      else if (where === '' || /^\{\s*id\b/.test(where) || where.includes('...')) unscoped = false;
+      else unscoped = !/\b(orgId|organizationId)\b/.test(where);
+    } else {
+      unscoped = false;
+    }
+    if (!unscoped) continue;
+    const line = source.slice(0, match.index).split('\n').length;
+    if (isComment(all[line - 1]) || EXEMPT_MARKER.test(all[line - 2] ?? '')) continue;
+    lines.push(line);
+  }
+  return lines;
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -226,6 +332,9 @@ export async function check(
   const files = (await listSourceFiles(sourceRoot)).filter(
     (file) => !policy.exemptPaths.some((pattern) => pattern.test(file)),
   );
+  const tenantModels = new Set(
+    models.filter((model) => resolvesToOrg(model, byName, policy)).map((model) => model.name),
+  );
   const moduleFiles = files.filter((file) => file.startsWith('routes/modules/'));
   const registration = await readRouteRegistration(sourceRoot, moduleFiles);
 
@@ -238,9 +347,19 @@ export async function check(
       all.push(...checkRoute(file, source, registration, policy));
     }
 
-    const fallbacks = fallbackLines(source);
+    const fallbacks = fallbackLines(file, source);
     if (fallbacks.length > 0) {
       all.push({ rule: 'org-fallback', target: file, detail: `lines ${fallbacks.join(', ')}` });
+    }
+
+    const idOnly = idOnlyLookupLines(source, tenantModels);
+    if (idOnly.length > 0) {
+      all.push({ rule: 'id-only-lookup', target: file, detail: `lines ${idOnly.join(', ')}` });
+    }
+
+    const unscoped = unscopedQueryLines(source, tenantModels);
+    if (unscoped.length > 0) {
+      all.push({ rule: 'unscoped-query', target: file, detail: `lines ${unscoped.join(', ')}` });
     }
 
     const lookups = unscopedOrgLookupLines(source);

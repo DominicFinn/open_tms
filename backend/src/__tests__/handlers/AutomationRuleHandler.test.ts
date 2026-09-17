@@ -353,7 +353,7 @@ describe('AutomationRuleHandler', () => {
       await handler.tryHandle(event);
 
       expect(mockPrisma.automationRule.update).toHaveBeenCalledWith({
-        where: { id: 'rule-1' },
+        where: { id: 'rule-1', orgId: 'test-org' },
         data: { executionCount: { increment: 1 }, lastExecutedAt: expect.any(Date) },
       });
     });
@@ -456,7 +456,7 @@ describe('AutomationRuleHandler', () => {
 
       await handler.tryHandle(event);
 
-      expect(mockPrisma.skillChain.findUnique).toHaveBeenCalledWith({ where: { id: 'chain-1' } });
+      expect(mockPrisma.skillChain.findUnique).toHaveBeenCalledWith({ where: { id: 'chain-1', orgId: 'test-org' } });
       expect(createIssueSkill.execute).toHaveBeenCalledTimes(1);
     });
 

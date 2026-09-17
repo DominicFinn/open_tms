@@ -29,7 +29,7 @@ export class DeclineQuoteCommandHandler extends BaseCommandHandler<DeclineQuoteP
     }
 
     await tx.quote.update({
-      where: { id: quote.id },
+      where: { id: quote.id, orgId: command.orgId },
       data: { status: 'declined' },
     });
 

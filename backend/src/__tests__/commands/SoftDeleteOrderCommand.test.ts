@@ -37,7 +37,7 @@ describe('SoftDeleteOrderCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'order-1' },
+      where: { id: 'order-1', orgId: 'test-org' },
       data: expect.objectContaining({ deletedBy: 'admin-7' }),
     }));
     expect(update.mock.calls[0][0].data.deletedAt).toBeInstanceOf(Date);

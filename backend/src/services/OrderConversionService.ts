@@ -68,11 +68,11 @@ export interface CompatibilityCheck {
 }
 
 export interface IOrderConversionService {
-  checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck>;
-  batchConvert(orderIds: string[], options: BatchConvertOptions, userId?: string): Promise<BatchConvertResult>;
+  checkCompatibility(orgId: string, orderIds: string[]): Promise<CompatibilityCheck>;
+  batchConvert(orgId: string, orderIds: string[], options: BatchConvertOptions, userId?: string): Promise<BatchConvertResult>;
   /** Manually convert a single order into a brand-new shipment. */
-  convertOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }>;
-  splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
+  convertOrder(orgId: string, orderId: string, userId?: string): Promise<{ shipmentId: string }>;
+  splitOrder(orgId: string, orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
   /**
    * Manually add order(s) to an existing shipment, rather than creating a
    * new one. Requires matching origin + customer with the target shipment,
@@ -94,9 +94,9 @@ export interface IOrderConversionService {
 export class OrderConversionService implements IOrderConversionService {
   constructor(private prisma: PrismaClient, private commandBus: ICommandBus) {}
 
-  async checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck> {
+  async checkCompatibility(orgId: string, orderIds: string[]): Promise<CompatibilityCheck> {
     const orders = await this.prisma.order.findMany({
-      where: { id: { in: orderIds }, archived: false },
+      where: { id: { in: orderIds }, orgId, archived: false },
       include: {
         customer: { select: { id: true, name: true } },
         origin: { select: { id: true, name: true, city: true, state: true } },
@@ -198,6 +198,7 @@ export class OrderConversionService implements IOrderConversionService {
   }
 
   async batchConvert(
+    orgId: string,
     orderIds: string[],
     options: BatchConvertOptions,
     userId?: string
@@ -207,19 +208,19 @@ export class OrderConversionService implements IOrderConversionService {
     }
 
     if (options.mode === 'individual') {
-      return this.convertIndividually(orderIds, userId);
+      return this.convertIndividually(orgId, orderIds, userId);
     }
 
-    return this.combineIntoShipment(orderIds, userId);
+    return this.combineIntoShipment(orgId, orderIds, userId);
   }
 
-  private async convertIndividually(orderIds: string[], userId?: string): Promise<BatchConvertResult> {
+  private async convertIndividually(orgId: string, orderIds: string[], userId?: string): Promise<BatchConvertResult> {
     const shipmentIds: string[] = [];
     const errors: string[] = [];
 
     for (const orderId of orderIds) {
       try {
-        const result = await this.convertOrder(orderId, userId);
+        const result = await this.convertOrder(orgId, orderId, userId);
         shipmentIds.push(result.shipmentId);
       } catch (err: any) {
         errors.push(`Order ${orderId}: ${err.message}`);
@@ -238,18 +239,18 @@ export class OrderConversionService implements IOrderConversionService {
   }
 
   /** Manually convert a single order into a brand-new shipment. */
-  async convertOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }> {
+  async convertOrder(orgId: string, orderId: string, userId?: string): Promise<{ shipmentId: string }> {
     // Only need orgId to populate the command envelope — CONVERT_ORDER_TO_SHIPMENT
     // re-reads the order (with all the includes it needs) inside its own transaction.
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       select: { orgId: true },
     });
     if (!order) throw new Error('Order not found');
 
     const result = await this.commandBus.dispatch<ConvertOrderToShipmentPayload, ConvertOrderToShipmentResult>({
       type: CONVERT_ORDER_TO_SHIPMENT,
-      orgId: order.orgId,
+      orgId,
       actorId: userId ?? null,
       payload: { orderId },
       metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
@@ -262,12 +263,12 @@ export class OrderConversionService implements IOrderConversionService {
     return { shipmentId: result.data.shipmentId };
   }
 
-  private async combineIntoShipment(orderIds: string[], userId?: string): Promise<BatchConvertResult> {
+  private async combineIntoShipment(orgId: string, orderIds: string[], userId?: string): Promise<BatchConvertResult> {
     // Validate compatibility first. This was already a soft pre-check run
     // outside any transaction before the write moved onto the command bus,
     // so this doesn't weaken anything — COMBINE_ORDERS_INTO_SHIPMENT re-reads
     // the orders fresh inside its own transaction.
-    const check = await this.checkCompatibility(orderIds);
+    const check = await this.checkCompatibility(orgId, orderIds);
     if (!check.compatible) {
       return {
         success: false,
@@ -278,7 +279,7 @@ export class OrderConversionService implements IOrderConversionService {
     }
 
     const orgLookup = await this.prisma.order.findFirst({
-      where: { id: { in: orderIds }, archived: false },
+      where: { id: { in: orderIds }, orgId, archived: false },
       select: { orgId: true },
     });
     if (!orgLookup) {
@@ -287,7 +288,7 @@ export class OrderConversionService implements IOrderConversionService {
 
     const result = await this.commandBus.dispatch<CombineOrdersIntoShipmentPayload, CombineOrdersIntoShipmentResult>({
       type: COMBINE_ORDERS_INTO_SHIPMENT,
-      orgId: orgLookup.orgId,
+      orgId,
       actorId: userId ?? null,
       payload: { orderIds },
       metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
@@ -310,12 +311,12 @@ export class OrderConversionService implements IOrderConversionService {
     };
   }
 
-  async splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult> {
+  async splitOrder(orgId: string, orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult> {
     // Only need orgId to populate the command envelope — SPLIT_ORDER validates
     // everything else (group count, unit/item coverage, order status/locations)
     // against a fresh read inside its own transaction.
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       select: { orgId: true },
     });
     if (!order) {
@@ -324,7 +325,7 @@ export class OrderConversionService implements IOrderConversionService {
 
     const result = await this.commandBus.dispatch<SplitOrderPayload, SplitOrderCommandResult>({
       type: SPLIT_ORDER,
-      orgId: order.orgId,
+      orgId,
       actorId: userId ?? null,
       payload: { orderId, groups },
       metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
@@ -469,33 +470,33 @@ export class OrderConversionService implements IOrderConversionService {
       };
     }
 
-    const link = await this.prisma.orderShipment.findFirst({ where: { shipmentId, orderId } });
+    const link = await this.prisma.orderShipment.findFirst({ where: { shipmentId, orderId, order: { orgId } } });
     if (!link) return { success: false, error: 'Order is not linked to this shipment' };
 
     const order = await this.prisma.order.findFirst({ where: { id: orderId, orgId } });
     if (!order) return { success: false, error: 'Order not found' };
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.orderShipment.delete({ where: { id: link.id } });
+      await tx.orderShipment.delete({ where: { id: link.id, order: { orgId } } });
 
       await tx.order.update({
-        where: { id: orderId },
+        where: { id: orderId, orgId },
         data: { status: 'verified', deliveryStopId: null },
       });
 
       const items = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
       await tx.shipment.update({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId },
         data: { items: items.filter((it: any) => it.orderId !== orderId) },
       });
 
       // Best-effort: drop the delivery stop if this was its only order.
       if (order.deliveryStopId) {
         const stillUsed = await tx.order.count({
-          where: { deliveryStopId: order.deliveryStopId, id: { not: orderId } },
+          where: { orgId, deliveryStopId: order.deliveryStopId, id: { not: orderId } },
         });
         if (stillUsed === 0) {
-          await tx.shipmentStop.delete({ where: { id: order.deliveryStopId } }).catch(() => {});
+          await tx.shipmentStop.delete({ where: { id: order.deliveryStopId, shipment: { orgId } } }).catch(() => {});
         }
       }
 

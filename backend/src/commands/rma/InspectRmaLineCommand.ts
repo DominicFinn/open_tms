@@ -44,7 +44,7 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
     }
 
     const line = await tx.rmaLine.findUnique({
-      where: { id: p.rmaLineId },
+      where: { id: p.rmaLineId, rma: { orgId: command.orgId } },
       include: { rma: true },
     });
     if (!line) throw new Error(`RMA line ${p.rmaLineId} not found`);
@@ -57,9 +57,17 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
 
     const rma = line.rma;
 
+    const bin = p.routeToBinId
+      ? await tx.warehouseBin.findUnique({
+          where: { id: p.routeToBinId, orgId: command.orgId },
+          select: { zoneId: true },
+        })
+      : null;
+    if (p.routeToBinId && !bin) throw new Error(`Bin ${p.routeToBinId} not found`);
+
     // Update the line with disposition
     await tx.rmaLine.update({
-      where: { id: line.id },
+      where: { id: line.id, rma: { orgId: command.orgId } },
       data: {
         inspectionStatus: p.inspectionStatus,
         disposition: p.disposition,
@@ -73,11 +81,6 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
 
     // Move trackable unit if routing
     if (line.trackableUnitId && p.routeToBinId) {
-      const bin = await tx.warehouseBin.findUnique({
-        where: { id: p.routeToBinId },
-        select: { zoneId: true },
-      });
-
       // For restock, mark unit as available again. For other dispositions, keep quarantine or relevant status.
       const qualityStatus = p.disposition === 'restock' ? 'available'
         : p.disposition === 'refurb' ? 'hold'
@@ -85,7 +88,7 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
         : 'quarantine';
 
       await tx.trackableUnit.update({
-        where: { id: line.trackableUnitId },
+        where: { id: line.trackableUnitId, order: { orgId: command.orgId } },
         data: {
           currentBinId: p.routeToBinId,
           currentZoneId: bin?.zoneId ?? null,
@@ -108,12 +111,12 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
     }));
 
     // Update RMA status if all lines dispositioned
-    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id } });
+    const lines = await tx.rmaLine.findMany({ where: { rmaId: rma.id, rma: { orgId: command.orgId } } });
     const allDispositioned = lines.every(l => l.disposition !== 'pending' || l.id === line.id);
 
     if (allDispositioned && rma.status !== 'dispositioning') {
       await tx.rma.update({
-        where: { id: rma.id },
+        where: { id: rma.id, orgId: command.orgId },
         data: { status: 'dispositioning' },
       });
 
@@ -131,7 +134,7 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
       }));
     } else if (rma.status === 'received') {
       await tx.rma.update({
-        where: { id: rma.id },
+        where: { id: rma.id, orgId: command.orgId },
         data: { status: 'inspecting' },
       });
     }

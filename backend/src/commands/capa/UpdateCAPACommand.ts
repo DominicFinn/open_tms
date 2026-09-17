@@ -61,7 +61,7 @@ export class UpdateCAPACommandHandler extends BaseCommandHandler<UpdateCAPAPaylo
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
-    const previous = await tx.cAPAReport.findUniqueOrThrow({ where: { id } });
+    const previous = await tx.cAPAReport.findUniqueOrThrow({ where: { id, orgId: command.orgId } });
 
     // Convert ISO date strings to Date objects for Prisma
     const updateData: Record<string, unknown> = { ...data, updatedBy: command.actorId };
@@ -72,7 +72,7 @@ export class UpdateCAPACommandHandler extends BaseCommandHandler<UpdateCAPAPaylo
     if (data.approvedAt) updateData.approvedAt = new Date(data.approvedAt);
     if (data.verifiedAt) updateData.verifiedAt = new Date(data.verifiedAt);
 
-    const updated = await tx.cAPAReport.update({ where: { id }, data: updateData });
+    const updated = await tx.cAPAReport.update({ where: { id, orgId: command.orgId }, data: updateData });
 
     // Emit status change event if status was modified
     if (data.status && data.status !== previous.status) {

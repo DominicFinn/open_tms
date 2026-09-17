@@ -30,12 +30,12 @@ export class DeleteCustomerWebhookCommandHandler extends BaseCommandHandler<Dele
   ): Promise<DeleteCustomerWebhookResult> {
     const { id, customerId } = command.payload;
 
-    const existing = await tx.customerWebhook.findUnique({ where: { id } });
+    const existing = await tx.customerWebhook.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing || existing.customerId !== customerId) {
       throw new Error('Webhook not found');
     }
 
-    await tx.customerWebhook.delete({ where: { id } });
+    await tx.customerWebhook.delete({ where: { id, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CUSTOMER_WEBHOOK_DELETED,

@@ -33,7 +33,7 @@ export class DeactivateSlaPolicyCommandHandler extends BaseCommandHandler<Deacti
     const { id } = command.payload;
 
     const policy = await tx.slaPolicy.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { active: false },
     });
 

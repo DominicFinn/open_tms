@@ -36,7 +36,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const rma = await tx.rma.findUnique({
-      where: { id: p.rmaId },
+      where: { id: p.rmaId, orgId: command.orgId },
       include: { lines: true },
     });
     if (!rma) throw new Error(`RMA ${p.rmaId} not found`);
@@ -58,6 +58,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
         // Create an inventory record / transaction for the restocked items
         const existingRecord = await tx.inventoryRecord.findFirst({
           where: {
+            orgId: command.orgId,
             binId: line.currentBinId,
             sku: line.sku,
             uomCode: 'EA',
@@ -67,13 +68,13 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
         });
 
         const bin = await tx.warehouseBin.findUnique({
-          where: { id: line.currentBinId },
+          where: { id: line.currentBinId, orgId: command.orgId },
           select: { locationId: true },
         });
 
         if (bin && existingRecord) {
           await tx.inventoryRecord.update({
-            where: { id: existingRecord.id },
+            where: { id: existingRecord.id, orgId: command.orgId },
             data: {
               quantityOnHand: { increment: line.receivedQuantity },
               quantityAvailable: { increment: line.receivedQuantity },
@@ -134,7 +135,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
     // Complete the RMA
     const refundAdjusted = p.actualRefundCents !== undefined && p.actualRefundCents !== rma.suggestedRefundCents;
     await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: {
         status: 'completed',
         completedAt: new Date(),

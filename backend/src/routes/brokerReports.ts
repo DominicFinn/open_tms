@@ -25,7 +25,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as { dateFrom?: string; dateTo?: string };
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.dateFrom || query.dateTo) {
       where.createdAt = {};
       if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
@@ -102,7 +102,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as { dateFrom?: string; dateTo?: string };
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.dateFrom || query.dateTo) {
       where.createdAt = {};
       if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
@@ -173,7 +173,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as { dateFrom?: string; dateTo?: string };
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.dateFrom || query.dateTo) {
       where.createdAt = {};
       if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
@@ -252,6 +252,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
 
     const summaries = await prisma.shipmentFinancialSummary.findMany({
       where: {
+        orgId: req.orgId!,
         createdAt: { gte: dateFrom, lte: dateTo },
       },
       select: {

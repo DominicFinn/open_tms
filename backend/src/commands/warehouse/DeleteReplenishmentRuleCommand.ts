@@ -33,7 +33,7 @@ export class DeleteReplenishmentRuleCommandHandler extends BaseCommandHandler<
     });
     if (!existing) throw new Error(`Replenishment rule ${ruleId} not found`);
 
-    await tx.replenishmentRule.delete({ where: { id: ruleId } });
+    await tx.replenishmentRule.delete({ where: { id: ruleId, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.REPLENISHMENT_RULE_DELETED,

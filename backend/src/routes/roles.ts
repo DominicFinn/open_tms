@@ -13,10 +13,11 @@ export async function roleRoutes(server: FastifyInstance) {
       summary: 'List all roles with their permissions',
     },
     preHandler: requirePermission('roles:read'),
-  }, async () => {
+  }, async (req: FastifyRequest) => {
+    // Roles are shared by every tenant, so only this tenant's assignments are counted.
     const roles = await server.prisma.role.findMany({
       include: {
-        _count: { select: { users: true } },
+        _count: { select: { users: { where: { user: { organizationId: req.orgId! } } } } },
       },
       orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
     });
@@ -47,6 +48,7 @@ export async function roleRoutes(server: FastifyInstance) {
       where: { id },
       include: {
         users: {
+          where: { user: { organizationId: req.orgId! } },
           include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
         },
       },
@@ -156,14 +158,14 @@ export async function roleRoutes(server: FastifyInstance) {
 
     const [role, user] = await Promise.all([
       server.prisma.role.findUnique({ where: { id: roleId } }),
-      server.prisma.user.findUnique({ where: { id: userId } }),
+      server.prisma.user.findUnique({ where: { id: userId, organizationId: req.orgId! } }),
     ]);
 
     if (!role) { reply.code(404); return { data: null, error: 'Role not found' }; }
     if (!user) { reply.code(404); return { data: null, error: 'User not found' }; }
 
     const existing = await server.prisma.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId } },
+      where: { userId_roleId: { userId, roleId }, user: { organizationId: req.orgId! } },
     });
     if (existing) return { data: existing, error: null };
 
@@ -182,12 +184,13 @@ export async function roleRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { roleId, userId } = req.params as { roleId: string; userId: string };
 
+    const organizationId = req.orgId!;
     const existing = await server.prisma.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId } },
+      where: { userId_roleId: { userId, roleId }, user: { organizationId } },
     });
     if (!existing) { reply.code(404); return { data: null, error: 'User does not have this role' }; }
 
-    await server.prisma.userRole.delete({ where: { id: existing.id } });
+    await server.prisma.userRole.delete({ where: { id: existing.id, user: { organizationId } } });
     return { data: { deleted: true }, error: null };
   });
 

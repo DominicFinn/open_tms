@@ -93,7 +93,7 @@ export async function productUomRoutes(server: FastifyInstance) {
 
     let record;
     if (existing) {
-      record = await prisma.productUom.update({ where: { id: existing.id }, data: body });
+      record = await prisma.productUom.update({ where: { id: existing.id, orgId }, data: body });
     } else {
       record = await prisma.productUom.create({ data: { ...body, orgId } });
     }
@@ -124,7 +124,7 @@ export async function productUomRoutes(server: FastifyInstance) {
     const record = await prisma.productUom.findFirst({ where: { id, orgId: req.orgId! } });
     if (!record) { reply.code(404); return { data: null, error: 'Not found' }; }
 
-    const updated = await prisma.productUom.update({ where: { id: record.id }, data: body });
+    const updated = await prisma.productUom.update({ where: { id: record.id, orgId: req.orgId! }, data: body });
     return { data: updated, error: null };
   });
 
@@ -135,7 +135,7 @@ export async function productUomRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const record = await prisma.productUom.findFirst({ where: { id, orgId: req.orgId! } });
     if (!record) { reply.code(404); return { data: null, error: 'Not found' }; }
-    await prisma.productUom.delete({ where: { id: record.id } });
+    await prisma.productUom.delete({ where: { id: record.id, orgId: req.orgId! } });
     return { data: { deleted: true }, error: null };
   });
 

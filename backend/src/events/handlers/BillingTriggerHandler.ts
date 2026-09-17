@@ -31,6 +31,7 @@ export class BillingTriggerHandler implements IEventHandler {
       const revenueCharges = await this.prisma.charge.findMany({
         where: {
           shipmentId,
+          orgId: event.orgId,
           chargeCategory: 'revenue',
           status: { in: ['pending', 'approved'] },
         },
@@ -43,7 +44,7 @@ export class BillingTriggerHandler implements IEventHandler {
 
       // Check current billing status to avoid re-triggering
       const existing = await this.prisma.shipmentFinancialSummary.findUnique({
-        where: { shipmentId },
+        where: { shipmentId, orgId: event.orgId },
       });
 
       if (existing && existing.billingStatus !== 'not_ready') {
@@ -53,7 +54,7 @@ export class BillingTriggerHandler implements IEventHandler {
 
       // Mark as ready to invoice
       await this.prisma.shipmentFinancialSummary.upsert({
-        where: { shipmentId },
+        where: { shipmentId, orgId: event.orgId },
         create: {
           shipmentId,
           orgId: event.orgId,
@@ -72,7 +73,7 @@ export class BillingTriggerHandler implements IEventHandler {
 
       // Check if the customer has auto-invoice enabled and per_shipment consolidation
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId: event.orgId },
         select: {
           id: true,
           reference: true,
@@ -151,12 +152,12 @@ export class BillingTriggerHandler implements IEventHandler {
 
         // Mark charges as invoiced
         await this.prisma.charge.updateMany({
-          where: { id: { in: approvedCharges.map(c => c.id) } },
+          where: { id: { in: approvedCharges.map(c => c.id) }, orgId: event.orgId },
           data: { status: 'invoiced' },
         });
 
         await this.prisma.shipmentFinancialSummary.update({
-          where: { shipmentId },
+          where: { shipmentId, orgId: event.orgId },
           data: { billingStatus: 'invoiced' },
         });
 

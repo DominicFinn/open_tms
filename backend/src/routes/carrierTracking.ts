@@ -348,7 +348,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     if (!integration) return { data: null, error: NOT_FOUND };
 
     try {
-      const result = await trackingService.testConnection(integration.id);
+      const result = await trackingService.testConnection(req.orgId!, integration.id);
       return { data: result, error: null };
     } catch (err) {
       reply.code(502);
@@ -433,7 +433,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     }
 
     try {
-      const result = await trackingService.pollForUpdates(integration.id);
+      const result = await trackingService.pollForUpdates(req.orgId!, integration.id);
       return { data: result, error: null };
     } catch (err) {
       reply.code(502);
@@ -505,7 +505,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     }
 
     try {
-      const result = await trackingService.pollForUpdates(integration.id);
+      const result = await trackingService.pollForUpdates(req.orgId!, integration.id);
       return { data: result, error: null };
     } catch (err) {
       reply.code(502);

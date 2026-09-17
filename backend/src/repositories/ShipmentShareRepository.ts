@@ -101,6 +101,7 @@ export class ShipmentShareRepository implements IShipmentShareRepository {
   }
 
   async findByTokenHash(tokenHash: string): Promise<ShipmentShareLinkSecretDto | null> {
+    // tenancy-exempt: the share link token is the credential; the link row it finds carries the org used for every follow-up read.
     return this.prisma.shipmentShareLink.findUnique({
       where: { tokenHash },
       select: { ...PUBLIC_LINK_FIELDS, accessCodeHash: true, failedAttempts: true },

@@ -75,7 +75,7 @@ export async function ediInboundRoutes(server: FastifyInstance) {
     // 3. If partnerId provided, validate partner supports this type
     let partner: any = null;
     if (body.partnerId) {
-      partner = await partnerRepo.findById(body.partnerId);
+      partner = await partnerRepo.findById(body.partnerId, req.orgId!);
       if (!partner) {
         reply.code(404);
         return { data: null, error: `Trading partner ${body.partnerId} not found` };
@@ -149,7 +149,7 @@ export async function ediInboundRoutes(server: FastifyInstance) {
       const result = JSON.parse(response.body);
 
       if (response.statusCode >= 400) {
-        await partnerRepo.updateLog(logEntry.id, {
+        await partnerRepo.updateLog(logEntry.id, req.orgId!, {
           status: 'error',
           errorMessage: result.error || `Handler returned ${response.statusCode}`,
           processedAt: new Date(),
@@ -162,7 +162,7 @@ export async function ediInboundRoutes(server: FastifyInstance) {
       }
 
       // Update log with success
-      await partnerRepo.updateLog(logEntry.id, {
+      await partnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'success',
         processedAt: new Date(),
         shipmentReference: result.data?.parsed?.shipmentReference || result.data?.shipmentReference || null,
@@ -193,13 +193,14 @@ export async function ediInboundRoutes(server: FastifyInstance) {
 
             // Deliver 997 to partner
             await outboundDelivery.deliver({
+              orgId: req.orgId!,
               partnerId: partner.id,
               transactionType: '997',
               ediContent: edi997,
               referenceId: `997_ACK_${logEntry.id}`,
             });
 
-            await partnerRepo.updateLog(logEntry.id, { ack997Sent: true });
+            await partnerRepo.updateLog(logEntry.id, req.orgId!, { ack997Sent: true });
             ack997Sent = true;
           } catch (ackErr: any) {
             // 997 failure should not fail the main transaction
@@ -220,7 +221,7 @@ export async function ediInboundRoutes(server: FastifyInstance) {
         error: null,
       };
     } catch (err: any) {
-      await partnerRepo.updateLog(logEntry.id, {
+      await partnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: err.message,
         processedAt: new Date(),

@@ -37,38 +37,38 @@ export interface UpdateArrivalCriteriaDTO {
 }
 
 export interface IArrivalCriteriaRepository {
-  findByLocationId(locationId: string): Promise<ArrivalCriteria[]>;
-  findById(id: string): Promise<ArrivalCriteria | null>;
+  findByLocationId(locationId: string, orgId: string): Promise<ArrivalCriteria[]>;
+  findById(id: string, orgId: string): Promise<ArrivalCriteria | null>;
   create(data: CreateArrivalCriteriaDTO): Promise<ArrivalCriteria>;
-  update(id: string, data: UpdateArrivalCriteriaDTO): Promise<ArrivalCriteria>;
-  delete(id: string): Promise<void>;
+  update(id: string, orgId: string, data: UpdateArrivalCriteriaDTO): Promise<ArrivalCriteria>;
+  delete(id: string, orgId: string): Promise<void>;
   createDefaultGeofence(locationId: string, radiusMeters: number, lat?: number, lng?: number): Promise<ArrivalCriteria>;
 }
 
 export class ArrivalCriteriaRepository implements IArrivalCriteriaRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByLocationId(locationId: string): Promise<ArrivalCriteria[]> {
+  async findByLocationId(locationId: string, orgId: string): Promise<ArrivalCriteria[]> {
     return this.prisma.arrivalCriteria.findMany({
-      where: { locationId, active: true },
+      where: { locationId, location: { orgId }, active: true },
       orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
   }
 
-  async findById(id: string): Promise<ArrivalCriteria | null> {
-    return this.prisma.arrivalCriteria.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<ArrivalCriteria | null> {
+    return this.prisma.arrivalCriteria.findUnique({ where: { id, location: { orgId } } });
   }
 
   async create(data: CreateArrivalCriteriaDTO): Promise<ArrivalCriteria> {
     return this.prisma.arrivalCriteria.create({ data });
   }
 
-  async update(id: string, data: UpdateArrivalCriteriaDTO): Promise<ArrivalCriteria> {
-    return this.prisma.arrivalCriteria.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: UpdateArrivalCriteriaDTO): Promise<ArrivalCriteria> {
+    return this.prisma.arrivalCriteria.update({ where: { id, location: { orgId } }, data });
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.arrivalCriteria.delete({ where: { id } });
+  async delete(id: string, orgId: string): Promise<void> {
+    await this.prisma.arrivalCriteria.delete({ where: { id, location: { orgId } } });
   }
 
   async createDefaultGeofence(locationId: string, radiusMeters: number, lat?: number, lng?: number): Promise<ArrivalCriteria> {

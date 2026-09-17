@@ -52,6 +52,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     // Fetch all unpaid invoices from read model (no joins needed)
     const invoices = await prisma.invoiceReadModel.findMany({
       where: {
+        orgId: req.orgId!,
         status: { in: ['sent', 'partial_paid', 'overdue'] },
         balanceCents: { gt: 0 },
         ...(query.customerId && { customerId: query.customerId }),
@@ -132,6 +133,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
 
     const invoices = await prisma.invoiceReadModel.findMany({
       where: {
+        orgId: req.orgId!,
         status: { in: ['sent', 'partial_paid', 'overdue'] },
         balanceCents: { gt: 0 },
         ...(query.customerId && { customerId: query.customerId }),
@@ -194,6 +196,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
 
     const carrierInvoices = await prisma.carrierInvoice.findMany({
       where: {
+        orgId: req.orgId!,
         receivedDate: { gte: from, lte: to },
       },
       select: {
@@ -267,7 +270,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
 
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.customerId) where.customerId = query.customerId;
 
     // Use read model - financial fields are already denormalized
@@ -344,7 +347,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (q.from) where.issueDate = { ...(where.issueDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
     if (q.to) where.issueDate = { ...(where.issueDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
     if (q.status) where.status = q.status;
@@ -403,7 +406,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (q.from) where.receivedDate = { ...(where.receivedDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
     if (q.to) where.receivedDate = { ...(where.receivedDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
     if (q.status) where.status = q.status;
@@ -463,7 +466,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (q.from) where.receivedDate = { ...(where.receivedDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
     if (q.to) where.receivedDate = { ...(where.receivedDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
 
@@ -513,7 +516,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (q.from) where.createdAt = { ...(where.createdAt || {}), gte: new Date(q.from + 'T00:00:00Z') };
     if (q.to) where.createdAt = { ...(where.createdAt || {}), lte: new Date(q.to + 'T23:59:59Z') };
     if (q.chargeCategory) where.chargeCategory = q.chargeCategory;

@@ -50,7 +50,7 @@ export class RecordCargoScanCommandHandler extends BaseCommandHandler<RecordCarg
 
     const isExpected = stop.orders.some((o) => o.trackableUnits.some((tu) => tu.id === unit.id));
 
-    await tx.trackableUnit.update({ where: { id: unit.id }, data: { lastScannedAt: new Date() } });
+    await tx.trackableUnit.update({ where: { id: unit.id, order: { orgId } }, data: { lastScannedAt: new Date() } });
     const scan = await tx.cargoScan.create({ data: { ...payload, orgId, expected: isExpected } });
 
     emit(this.createEvent(command, {
@@ -68,7 +68,7 @@ export class RecordCargoScanCommandHandler extends BaseCommandHandler<RecordCarg
     let discrepancy: CargoDiscrepancy | null = null;
     if (payload.scanType === 'unload') {
       if (!isExpected) discrepancy = await this.recordMisdrop(command, tx, emit, stop, unit);
-      await setUnitLocation(tx, unit.id, stop.id);
+      await setUnitLocation(tx, orgId, unit.id, stop.id);
     }
 
     return { scan, isExpected, discrepancy };

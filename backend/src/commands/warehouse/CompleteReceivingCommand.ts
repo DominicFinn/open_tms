@@ -42,14 +42,14 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
 
     // Mark task as completed
     await tx.receivingTask.update({
-      where: { id: task.id },
+      where: { id: task.id, orgId: command.orgId },
       data: { status: 'completed' },
     });
 
     // Mark appointment as completed if linked
     if (task.appointmentId) {
       await tx.receivingAppointment.update({
-        where: { id: task.appointmentId },
+        where: { id: task.appointmentId, orgId: command.orgId },
         data: { status: 'completed' },
       });
     }
@@ -86,7 +86,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
           // Look up the order to find destination for sorting
           const orderLineItem = (line as any).orderLineItemId
             ? await tx.orderLineItem.findUnique({
-                where: { id: (line as any).orderLineItemId },
+                where: { id: (line as any).orderLineItemId, order: { orgId: command.orgId } },
                 select: { orderId: true },
               })
             : null;
@@ -105,7 +105,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
 
           // Move unit directly to staging
           await tx.trackableUnit.update({
-            where: { id: (line as any).trackableUnitId },
+            where: { id: (line as any).trackableUnitId, order: { orgId: command.orgId } },
             data: { currentBinId: stagingBin.id, currentZoneId: stagingBin.zoneId },
           });
 
@@ -152,7 +152,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
 
         for (const rule of rules) {
           if (this.matchesRule(rule, line)) {
-            const bin = await this.resolveRuleTarget(tx, rule);
+            const bin = await this.resolveRuleTarget(tx, rule, command.orgId);
             if (bin) {
               targetBinId = bin.id;
               break;
@@ -230,13 +230,13 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
     return true;
   }
 
-  private async resolveRuleTarget(tx: TransactionClient, rule: any) {
+  private async resolveRuleTarget(tx: TransactionClient, rule: any, orgId: string) {
     if (rule.targetType === 'specific_bin' && rule.targetBinId) {
-      return tx.warehouseBin.findFirst({ where: { id: rule.targetBinId, active: true } });
+      return tx.warehouseBin.findFirst({ where: { id: rule.targetBinId, orgId, active: true } });
     }
     if (rule.targetZoneId) {
       return tx.warehouseBin.findFirst({
-        where: { zoneId: rule.targetZoneId, active: true },
+        where: { zoneId: rule.targetZoneId, orgId, active: true },
         orderBy: { walkSequence: 'asc' },
       });
     }

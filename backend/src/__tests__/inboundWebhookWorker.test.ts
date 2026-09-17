@@ -152,11 +152,35 @@ describe('createInboundWebhookWorker — tenancy', () => {
       WebhookTenantUnresolvedError,
     );
 
+    // Without an org the log row cannot be read or written in scope, so it is left for the dead letter.
+    expect(prisma.webhookLog.findUnique).not.toHaveBeenCalled();
+    expect(prisma.webhookLog.update).not.toHaveBeenCalled();
     expect(prisma.shipment.findFirst).not.toHaveBeenCalled();
     expect(prisma.shipmentEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('reads and writes the webhook log only inside the message org', async () => {
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ orgId: 'org-b' }));
+
+    expect(prisma.webhookLog.findUnique).toHaveBeenCalledWith({ where: { id: 'log-1', orgId: 'org-b' } });
     expect(prisma.webhookLog.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'error' }) }),
+      expect.objectContaining({ where: { id: 'log-1', orgId: 'org-b' } }),
     );
+  });
+
+  it('skips a log row that belongs to another org as if it were missing', async () => {
+    const prisma = buildPrisma({
+      webhookLog: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+    });
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ orgId: 'org-b' }));
+
+    expect(prisma.shipment.findFirst).not.toHaveBeenCalled();
+    expect(prisma.webhookLog.update).not.toHaveBeenCalled();
   });
 
   it('checks the System Loco vendor switch for the message org', async () => {

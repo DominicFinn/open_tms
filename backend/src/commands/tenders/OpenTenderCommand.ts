@@ -12,12 +12,12 @@ export class OpenTenderCommandHandler extends BaseCommandHandler<{ id: string },
 
   protected async handle(command: Command<{ id: string }>, tx: TransactionClient, emit: EmitFn) {
     const tender = await tx.tender.update({
-      where: { id: command.payload.id },
+      where: { id: command.payload.id, shipment: { orgId: command.orgId } },
       data: { status: 'open', openedAt: new Date() },
     });
 
     await tx.tenderOffer.updateMany({
-      where: { tenderId: tender.id, status: 'pending' },
+      where: { tenderId: tender.id, status: 'pending', tender: { shipment: { orgId: command.orgId } } },
       data: { status: 'sent', sentAt: new Date() },
     });
 

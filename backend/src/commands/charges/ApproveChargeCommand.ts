@@ -31,7 +31,7 @@ export class ApproveChargeCommandHandler extends BaseCommandHandler<ApproveCharg
     }
 
     const updated = await tx.charge.update({
-      where: { id: charge.id },
+      where: { id: charge.id, orgId: command.orgId },
       data: {
         status: 'approved',
         approvedBy: command.actorId,
@@ -83,7 +83,7 @@ export class ApproveChargeCommandHandler extends BaseCommandHandler<ApproveCharg
     const currency = charges.length > 0 ? charges[0].currency : 'USD';
 
     await tx.shipmentFinancialSummary.upsert({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       create: {
         shipmentId,
         orgId,

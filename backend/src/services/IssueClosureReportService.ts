@@ -102,13 +102,13 @@ export class IssueClosureReportService {
 
     // Comments on this issue
     const comments = await this.prisma.comment.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'asc' },
     });
 
     // Domain events for this issue
     const events = await this.prisma.domainEventLog.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -116,13 +116,13 @@ export class IssueClosureReportService {
     let triggerEvent = null;
     if (issue.sourceEventId) {
       triggerEvent = await this.prisma.domainEventLog.findUnique({
-        where: { id: issue.sourceEventId },
+        where: { id: issue.sourceEventId, orgId },
       });
     }
 
     // SLA evaluations
     const slaEvaluations = await this.prisma.slaEvaluation.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -147,7 +147,7 @@ export class IssueClosureReportService {
       // Temperature data if cold chain shipment
       if (shipment) {
         const tempAgg = await this.prisma.immutableTemperatureLog.aggregate({
-          where: { shipmentId: shipment.id },
+          where: { shipmentId: shipment.id, orgId },
           _count: { id: true },
           _min: { temperature: true },
           _max: { temperature: true },
@@ -155,7 +155,7 @@ export class IssueClosureReportService {
         });
         if (tempAgg._count.id > 0) {
           const excursionCount = await this.prisma.immutableTemperatureLog.count({
-            where: { shipmentId: shipment.id, isExcursion: true },
+            where: { shipmentId: shipment.id, orgId, isExcursion: true },
           });
           temperatureSummary = {
             totalReadings: tempAgg._count.id,
@@ -167,7 +167,7 @@ export class IssueClosureReportService {
         }
 
         excursions = await this.prisma.coldChainExcursion.findMany({
-          where: { shipmentId: shipment.id },
+          where: { shipmentId: shipment.id, orgId },
           orderBy: { startedAt: 'asc' },
         });
       }

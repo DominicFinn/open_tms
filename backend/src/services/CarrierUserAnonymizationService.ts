@@ -25,6 +25,7 @@ export class CarrierUserAnonymizationService {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
 
     // Users of carriers deleted or archived before the cutoff, not yet scrubbed.
+    // tenancy-exempt: retention cron sweeps every org on purpose; each update is scoped to the org of the row it found.
     const candidates = await this.prisma.carrierUser.findMany({
       where: {
         anonymizedAt: null,
@@ -35,7 +36,7 @@ export class CarrierUserAnonymizationService {
           ],
         },
       },
-      select: { id: true },
+      select: { id: true, carrier: { select: { orgId: true } } },
       take: 500,
     });
 
@@ -45,7 +46,7 @@ export class CarrierUserAnonymizationService {
     for (const user of candidates) {
       try {
         await this.prisma.carrierUser.update({
-          where: { id: user.id },
+          where: { id: user.id, carrier: { orgId: user.carrier.orgId } },
           data: {
             // email is @unique — keep it unique but non-identifying.
             email: `anonymized-${user.id}@removed.invalid`,

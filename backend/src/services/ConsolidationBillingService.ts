@@ -26,16 +26,16 @@ export interface ConsolidationResult {
 }
 
 export interface IConsolidationBillingService {
-  proRateCostsByWeight(shipmentId: string, markupPercent?: number): Promise<ConsolidationResult>;
+  proRateCostsByWeight(orgId: string, shipmentId: string, markupPercent?: number): Promise<ConsolidationResult>;
 }
 
 export class ConsolidationBillingService implements IConsolidationBillingService {
   constructor(private prisma: PrismaClient) {}
 
-  async proRateCostsByWeight(shipmentId: string, markupPercent: number = 15): Promise<ConsolidationResult> {
+  async proRateCostsByWeight(orgId: string, shipmentId: string, markupPercent: number = 15): Promise<ConsolidationResult> {
     // Get all orders on this shipment with their weights
     const orderShipments = await this.prisma.orderShipment.findMany({
-      where: { shipmentId },
+      where: { shipmentId, order: { orgId } },
       include: {
         order: {
           select: {
@@ -86,6 +86,7 @@ export class ConsolidationBillingService implements IConsolidationBillingService
     // Get total shipment cost charges
     const costCharges = await this.prisma.charge.findMany({
       where: {
+        orgId,
         shipmentId,
         chargeCategory: 'cost',
         status: { not: 'written_off' },
