@@ -1036,6 +1036,9 @@ model Geofence {
 
   @@index([orgId])
   @@index([entityType, entityId])
+  // Also: a DB-level partial unique index — "Geofence_one_active_per_entity" on
+  // (orgId, entityType, entityId) WHERE active — enforces at most one active geofence per
+  // entity. Added via raw migration since this Prisma version has no partial-index syntax.
 }
 
 // ─── Issue Labels ───────────────────────────────────────────────────────────

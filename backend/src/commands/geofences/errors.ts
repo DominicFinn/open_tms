@@ -4,10 +4,15 @@
  */
 export const GEOFENCE_ENTITY_NOT_FOUND = 'GEOFENCE_ENTITY_NOT_FOUND';
 
+/** Thrown when the one-active-geofence-per-entity DB constraint rejects a concurrent create. */
+export const GEOFENCE_CONCURRENT_WRITE = 'GEOFENCE_CONCURRENT_WRITE';
+
 export function statusForGeofenceError(error: string | undefined): number {
   switch (error) {
     case GEOFENCE_ENTITY_NOT_FOUND:
       return 404;
+    case GEOFENCE_CONCURRENT_WRITE:
+      return 409;
     default:
       return 400;
   }
