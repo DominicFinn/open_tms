@@ -63,7 +63,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     const { laneId } = req.params;
 
     const laneRoute = await prisma.laneRoute.findUnique({
-      where: { laneId },
+      where: { laneId, orgId: req.orgId! },
     });
 
     return { data: laneRoute, error: null };
@@ -108,7 +108,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     }
 
     const lane = await prisma.lane.findUnique({
-      where: { id: req.params.laneId },
+      where: { id: req.params.laneId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,
@@ -216,18 +216,17 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     // which produced it stops the two being compared as though they measured the same thing.
     const provider = req.body.provider === 'manual' ? 'manual' : 'google';
 
-    const lane = await prisma.lane.findUnique({ where: { id: laneId } });
+    const orgId = req.orgId!;
+    const lane = await prisma.lane.findUnique({ where: { id: laneId, orgId } });
     if (!lane) {
       return reply.status(404).send({ data: null, error: 'Lane not found' });
     }
-
-    const orgId = req.orgId!;
 
     // Decode polyline if waypoints not provided
     const routeWaypoints = waypoints || decodePolyline(encodedPolyline);
 
     const laneRoute = await prisma.laneRoute.upsert({
-      where: { laneId },
+      where: { laneId, orgId },
       create: {
         id: randomUUID(),
         laneId,
@@ -253,7 +252,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
 
     // Also update the lane distance (in km for consistency)
     await prisma.lane.update({
-      where: { id: laneId },
+      where: { id: laneId, orgId },
       data: { distance: Math.round(distanceMeters / 1609.34 * 10) / 10 }, // meters to miles, 1 decimal
     });
 
@@ -274,12 +273,13 @@ export async function laneRouteRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest<{ Params: { laneId: string } }>, reply: FastifyReply) => {
     const { laneId } = req.params;
 
-    const existing = await prisma.laneRoute.findUnique({ where: { laneId } });
+    const orgId = req.orgId!;
+    const existing = await prisma.laneRoute.findUnique({ where: { laneId, orgId } });
     if (!existing) {
       return reply.status(404).send({ data: null, error: 'No route found for this lane' });
     }
 
-    await prisma.laneRoute.delete({ where: { laneId } });
+    await prisma.laneRoute.delete({ where: { laneId, orgId } });
 
     return { data: { deleted: true }, error: null };
   });
@@ -308,7 +308,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     Body: { lat: number; lng: number };
   }>, reply: FastifyReply) => {
     const laneRoute = await prisma.laneRoute.findUnique({
-      where: { laneId: req.params.laneId },
+      where: { laneId: req.params.laneId, orgId: req.orgId! },
     });
 
     if (!laneRoute) {

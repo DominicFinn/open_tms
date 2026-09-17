@@ -161,25 +161,25 @@ export interface IOrdersRepository {
   findByOrderNumber(orderNumber: string, orgId?: string | null): Promise<OrderWithRelations | null>;
   findByCustomerId(customerId: string, options?: { orgId?: string | null; status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]>;
   create(data: CreateOrderDTO): Promise<OrderWithRelations>;
-  update(id: string, data: UpdateOrderDTO): Promise<Order>;
-  archive(id: string): Promise<Order>;
-  validateLocation(id: string, locationType: 'origin' | 'destination', locationId: string): Promise<Order>;
+  update(id: string, orgId: string, data: UpdateOrderDTO): Promise<Order>;
+  archive(id: string, orgId: string): Promise<Order>;
+  validateLocation(id: string, orgId: string, locationType: 'origin' | 'destination', locationId: string): Promise<Order>;
 
   // Line items (legacy)
   addLineItem(orderId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem>;
-  removeLineItem(itemId: string): Promise<void>;
+  removeLineItem(itemId: string, orgId: string): Promise<void>;
 
   // Trackable units management
   addTrackableUnit(orderId: string, unit: CreateTrackableUnitDTO): Promise<TrackableUnit>;
-  updateTrackableUnit(unitId: string, data: { identifier?: string; notes?: string; barcode?: string }): Promise<TrackableUnit>;
-  removeTrackableUnit(unitId: string): Promise<void>;
-  addLineItemToUnit(unitId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem>;
-  moveLineItemToUnit(itemId: string, targetUnitId: string): Promise<OrderLineItem>;
-  generateBarcode(unitId: string): Promise<TrackableUnit>;
+  updateTrackableUnit(unitId: string, orgId: string, data: { identifier?: string; notes?: string; barcode?: string }): Promise<TrackableUnit>;
+  removeTrackableUnit(unitId: string, orgId: string): Promise<void>;
+  addLineItemToUnit(unitId: string, orgId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem>;
+  moveLineItemToUnit(itemId: string, orgId: string, targetUnitId: string): Promise<OrderLineItem>;
+  generateBarcode(unitId: string, orgId: string): Promise<TrackableUnit>;
 
   // Batch operations
-  mergeUnits(sourceUnitId: string, targetUnitId: string): Promise<void>;
-  splitUnit(unitId: string, itemIdsToMove: string[], newUnitData: { identifier: string; notes?: string }): Promise<TrackableUnit>;
+  mergeUnits(sourceUnitId: string, targetUnitId: string, orgId: string): Promise<void>;
+  splitUnit(unitId: string, orgId: string, itemIdsToMove: string[], newUnitData: { identifier: string; notes?: string }): Promise<TrackableUnit>;
 }
 
 export class OrdersRepository implements IOrdersRepository {
@@ -552,16 +552,16 @@ export class OrdersRepository implements IOrdersRepository {
     }) as Promise<OrderWithRelations>);
   }
 
-  async update(id: string, data: UpdateOrderDTO): Promise<Order> {
+  async update(id: string, orgId: string, data: UpdateOrderDTO): Promise<Order> {
     return this.prisma.order.update({
-      where: { id },
+      where: { id, orgId },
       data
     });
   }
 
-  async archive(id: string): Promise<Order> {
+  async archive(id: string, orgId: string): Promise<Order> {
     return this.prisma.order.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date(),
@@ -572,6 +572,7 @@ export class OrdersRepository implements IOrdersRepository {
 
   async validateLocation(
     id: string,
+    orgId: string,
     locationType: 'origin' | 'destination',
     locationId: string
   ): Promise<Order> {
@@ -588,7 +589,7 @@ export class OrdersRepository implements IOrdersRepository {
     }
 
     return this.prisma.order.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData
     });
   }
@@ -602,9 +603,9 @@ export class OrdersRepository implements IOrdersRepository {
     });
   }
 
-  async removeLineItem(itemId: string): Promise<void> {
+  async removeLineItem(itemId: string, orgId: string): Promise<void> {
     await this.prisma.orderLineItem.delete({
-      where: { id: itemId }
+      where: { id: itemId, order: { orgId } }
     });
   }
 
@@ -639,25 +640,26 @@ export class OrdersRepository implements IOrdersRepository {
 
   async updateTrackableUnit(
     unitId: string,
+    orgId: string,
     data: { identifier?: string; notes?: string; barcode?: string }
   ): Promise<TrackableUnit> {
     return this.prisma.trackableUnit.update({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId } },
       data
     });
   }
 
-  async removeTrackableUnit(unitId: string): Promise<void> {
+  async removeTrackableUnit(unitId: string, orgId: string): Promise<void> {
     // Cascade delete will handle line items
     await this.prisma.trackableUnit.delete({
-      where: { id: unitId }
+      where: { id: unitId, order: { orgId } }
     });
   }
 
-  async addLineItemToUnit(unitId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem> {
+  async addLineItemToUnit(unitId: string, orgId: string, item: CreateOrderLineItemDTO): Promise<OrderLineItem> {
     // Get the order ID from the unit
     const unit = await this.prisma.trackableUnit.findUnique({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId } },
       select: { orderId: true }
     });
 
@@ -674,46 +676,57 @@ export class OrdersRepository implements IOrdersRepository {
     });
   }
 
-  async moveLineItemToUnit(itemId: string, targetUnitId: string): Promise<OrderLineItem> {
+  async moveLineItemToUnit(itemId: string, orgId: string, targetUnitId: string): Promise<OrderLineItem> {
     return this.prisma.orderLineItem.update({
-      where: { id: itemId },
+      where: { id: itemId, order: { orgId, trackableUnits: { some: { id: targetUnitId } } } },
       data: { trackableUnitId: targetUnitId }
     });
   }
 
-  async generateBarcode(unitId: string): Promise<TrackableUnit> {
+  async generateBarcode(unitId: string, orgId: string): Promise<TrackableUnit> {
     // Generate a unique barcode using unit ID and timestamp
     const timestamp = Date.now().toString(36).toUpperCase();
     const uniquePart = unitId.slice(0, 8).toUpperCase();
     const barcode = `TU-${uniquePart}-${timestamp}`;
 
     return this.prisma.trackableUnit.update({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId } },
       data: { barcode }
     });
   }
 
-  async mergeUnits(sourceUnitId: string, targetUnitId: string): Promise<void> {
+  async mergeUnits(sourceUnitId: string, targetUnitId: string, orgId: string): Promise<void> {
+    // The source delete cascades to anything left on it, so refuse before moving anything if the
+    // target is not in the caller's org.
+    const target = await this.prisma.trackableUnit.findFirst({
+      where: { id: targetUnitId, order: { orgId } },
+      select: { id: true }
+    });
+    if (!target) {
+      throw new Error('Trackable unit not found');
+    }
+
     // Move all line items from source unit to target unit
     await this.prisma.orderLineItem.updateMany({
-      where: { trackableUnitId: sourceUnitId },
+      where: { trackableUnitId: sourceUnitId, order: { orgId } },
       data: { trackableUnitId: targetUnitId }
     });
 
     // Delete the source unit (now empty)
     await this.prisma.trackableUnit.delete({
-      where: { id: sourceUnitId }
+      where: { id: sourceUnitId, order: { orgId } }
     });
   }
 
   async splitUnit(
     unitId: string,
+    orgId: string,
     itemIdsToMove: string[],
     newUnitData: { identifier: string; notes?: string }
   ): Promise<TrackableUnit> {
     // Get the original unit to copy its properties
     const originalUnit = await this.prisma.trackableUnit.findUnique({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId } },
       include: { order: true }
     });
 
@@ -749,7 +762,8 @@ export class OrdersRepository implements IOrdersRepository {
     if (itemIdsToMove.length > 0) {
       await this.prisma.orderLineItem.updateMany({
         where: {
-          id: { in: itemIdsToMove }
+          id: { in: itemIdsToMove },
+          orderId: originalUnit.orderId
         },
         data: {
           trackableUnitId: newUnit.id

@@ -225,7 +225,7 @@ export class TriageAgentHandler implements IEventHandler {
   // AgentDecision for compliance/audit, same as a triage decision.
 
   private async enrichIssue(event: DomainEvent, config: LoadedConfig): Promise<void> {
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     // Only enrich engine-raised issues (deterministic). Manual issues (issueType
     // null) and already-enriched ones are left alone.
     if (!issue || !issue.issueType) return;
@@ -313,14 +313,14 @@ export class TriageAgentHandler implements IEventHandler {
     console.log(`[TriageAgent] Enriched issue ${issue.id} (${issue.issueType}) — recommended ${rec ?? 'no change'}`);
   }
 
-  private async gatherIssueContext(issue: { sourceEntityType: string | null; sourceEntityId: string | null; issueType: string | null; priority: string }): Promise<Record<string, unknown>> {
+  private async gatherIssueContext(issue: { orgId: string; sourceEntityType: string | null; sourceEntityId: string | null; issueType: string | null; priority: string }): Promise<Record<string, unknown>> {
     const ctx: Record<string, unknown> = {
       issueType: issue.issueType,
       currentPriority: issue.priority,
     };
     if (issue.sourceEntityType === 'shipment' && issue.sourceEntityId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: issue.sourceEntityId },
+        where: { id: issue.sourceEntityId, orgId: issue.orgId },
         select: { id: true, reference: true, status: true, customerId: true, hasException: true },
       });
       if (shipment) {
@@ -335,7 +335,7 @@ export class TriageAgentHandler implements IEventHandler {
     // one-off scale drift vs a repeating mis-pack.
     if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId) {
       const packTask = await this.prisma.packTask.findUnique({
-        where: { id: issue.sourceEntityId },
+        where: { id: issue.sourceEntityId, orgId: issue.orgId },
         select: {
           id: true,
           orderId: true,
@@ -429,7 +429,7 @@ ${JSON.stringify(context, null, 2)}`;
 
       if (activeVersionId) {
         const version = await this.prisma.agentConfigVersion.findUnique({
-          where: { id: activeVersionId },
+          where: { id: activeVersionId, config: { orgId } },
           select: { systemPrompt: true },
         });
         if (version) systemPrompt = version.systemPrompt;
@@ -487,7 +487,7 @@ ${JSON.stringify(context, null, 2)}`;
 
     if (entityType === 'shipment' && entityId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: entityId },
+        where: { id: entityId, orgId: event.orgId },
         include: {
           customer: { select: { id: true, name: true } },
           origin: { select: { id: true, name: true, city: true, state: true } },

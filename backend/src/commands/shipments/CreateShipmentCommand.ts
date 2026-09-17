@@ -18,8 +18,6 @@ import { syncShipmentStops } from './syncShipmentStops.js';
 
 export interface CreateShipmentPayload {
   reference?: string;
-  /** Multi-tenancy scope. Route handlers thread this from the JWT. */
-  orgId?: string | null;
   customerId: string;
   laneId?: string;
   carrierId?: string;
@@ -111,7 +109,8 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
     // Multi-tenancy: resolve the writing orgId once at the top so every
     // entity created in this transaction lands in the same tenant. Both
     // Shipment.orgId and Location.orgId are NOT NULL post phase-2/3.
-    const orgIdToWrite = body.orgId || command.orgId;
+    // The org comes from the command, never the payload, so a caller cannot write into another tenant.
+    const orgIdToWrite = command.orgId;
     if (!orgIdToWrite) {
       throw new Error('orgId is required to create a Shipment (multi-tenancy)');
     }
@@ -122,7 +121,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
 
     if (body.laneId) {
       const lane = await tx.lane.findFirst({
-        where: { id: body.laneId, archived: false },
+        where: { id: body.laneId, orgId: orgIdToWrite, archived: false },
         include: { origin: true, destination: true },
       });
       if (!lane) {
@@ -136,6 +135,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
     if (!finalOriginId && body.originData) {
       const existing = await tx.location.findFirst({
         where: {
+          orgId: orgIdToWrite,
           archived: false,
           name: { equals: body.originData.name, mode: 'insensitive' },
           city: { equals: body.originData.city, mode: 'insensitive' },
@@ -180,6 +180,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
     if (!finalDestinationId && body.destinationData) {
       const existing = await tx.location.findFirst({
         where: {
+          orgId: orgIdToWrite,
           archived: false,
           name: { equals: body.destinationData.name, mode: 'insensitive' },
           city: { equals: body.destinationData.city, mode: 'insensitive' },
@@ -226,12 +227,6 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
     const reference = body.reference && body.reference.trim().length > 0
       ? body.reference
       : `DRAFT-${Date.now().toString(36).toUpperCase()}`;
-
-    // Multi-tenancy: prefer the explicit payload orgId (admin tools acting
-    // on behalf of a tenant); fall back to command.orgId (the JWT path).
-    // Shipment.orgId is NOT NULL post phase-2 tightening — orgIdToWrite
-    // was resolved at the top of this method so every entity in this
-    // transaction lands in the same tenant.
 
     if (body.shipmentTypeId) {
       await tx.shipmentType.findFirstOrThrow({ where: { id: body.shipmentTypeId, orgId: orgIdToWrite }, select: { id: true } });

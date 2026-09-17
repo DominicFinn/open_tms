@@ -74,12 +74,12 @@ export class CustomerWebhookHandler implements IEventHandler {
       const packTaskId = payload?.packTaskId as string | undefined;
       if (!packTaskId) return null;
       const task = await this.prisma.packTask.findUnique({
-        where: { id: packTaskId },
+        where: { id: packTaskId, orgId: event.orgId },
         select: { orderId: true },
       });
       if (!task?.orderId) return null;
       const order = await this.prisma.order.findUnique({
-        where: { id: task.orderId },
+        where: { id: task.orderId, orgId: event.orgId },
         select: { customerId: true },
       });
       return order?.customerId ?? null;

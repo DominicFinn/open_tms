@@ -35,6 +35,7 @@ type Deps = {
 async function resolveMessageOrgId(prisma: PrismaClient, payload: WebhookEvent): Promise<string | null> {
   if (payload.orgId) return payload.orgId;
   if (!payload.apiKeyId) return null;
+  // tenancy-exempt: apiKeyId was written onto the message by our own route after it verified the key
   const apiKey = await prisma.apiKey.findUnique({ where: { id: payload.apiKeyId }, select: { orgId: true } });
   return apiKey?.orgId ?? null;
 }
@@ -64,9 +65,15 @@ async function publishLocation(
   }
 }
 
-async function markLog(prisma: PrismaClient, webhookLogId: string, status: string, reason: string): Promise<void> {
+async function markLog(
+  prisma: PrismaClient,
+  orgId: string,
+  webhookLogId: string,
+  status: string,
+  reason: string,
+): Promise<void> {
   await prisma.webhookLog.update({
-    where: { id: webhookLogId },
+    where: { id: webhookLogId, orgId },
     data: {
       status,
       processedAt: new Date(),
@@ -91,7 +98,7 @@ async function processSystemLoco(
     select: { enabled: true },
   });
   if (vendor && !vendor.enabled) {
-    await markLog(prisma, webhookLogId, 'disabled', 'System Loco vendor disabled');
+    await markLog(prisma, orgId, webhookLogId, 'disabled', 'System Loco vendor disabled');
     return;
   }
 
@@ -103,7 +110,7 @@ async function processSystemLoco(
       select: { id: true },
     });
     if (already) {
-      await markLog(prisma, webhookLogId, 'duplicate', 'Duplicate event id (already processed)');
+      await markLog(prisma, orgId, webhookLogId, 'duplicate', 'Duplicate event id (already processed)');
       return;
     }
   }
@@ -118,7 +125,7 @@ async function processSystemLoco(
   const lng = (location.lon || location.lng) ? Number(location.lon || location.lng) : null;
 
   await prisma.webhookLog.update({
-    where: { id: webhookLogId },
+    where: { id: webhookLogId, orgId },
     data: {
       status: result.matched ? 'success' : 'not_found',
       deviceName: deviceInfo.name || null,
@@ -152,6 +159,7 @@ async function processSystemLoco(
   if (deps.arrivalCriteriaService) {
     try {
       await deps.arrivalCriteriaService.evaluateAndUpdateOrders({
+        orgId,
         shipmentId: result.shipmentId,
         deviceId: deviceInfo.id || undefined,
         lat: lat ?? undefined,
@@ -167,7 +175,7 @@ async function processSystemLoco(
   // already transitioned the stop for orgs configured via ArrivalCriteria.
   if (lat !== null && lng !== null) {
     try {
-      await deps.deliveryService.checkGeofenceAndUpdateOrders(result.shipmentId, lat, lng);
+      await deps.deliveryService.checkGeofenceAndUpdateOrders(orgId, result.shipmentId, lat, lng);
     } catch {
       // Geofence check is non-critical
     }
@@ -240,14 +248,14 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
     const eventTime = event?.startTime ? new Date(event.startTime).toISOString() : new Date().toISOString();
     await publishLocation(deps, orgId, shipment.id, lat, lng, eventTime, 'legacy_webhook');
     try {
-      await deps.deliveryService.checkGeofenceAndUpdateOrders(shipment.id, lat, lng);
+      await deps.deliveryService.checkGeofenceAndUpdateOrders(orgId, shipment.id, lat, lng);
     } catch {
       // Geofence check is non-critical
     }
   }
 
   await prisma.webhookLog.update({
-    where: { id: webhookLogId },
+    where: { id: webhookLogId, orgId },
     data: {
       status: shipment ? 'success' : (deviceName ? 'not_found' : 'skipped'),
       deviceName: deviceName || null,
@@ -288,19 +296,20 @@ export function createInboundWebhookWorker(
   return async (message: QueueMessage<WebhookEvent>) => {
     const { webhookLogId, rawPayload } = message.payload;
 
-    const webhookLog = await prisma.webhookLog.findUnique({ where: { id: webhookLogId } });
+    const orgId = await resolveMessageOrgId(prisma, message.payload);
+    if (!orgId) {
+      console.error('[WebhookWorker] Cannot attribute webhook to a tenant; dead-lettering', { webhookLogId });
+      throw new WebhookTenantUnresolvedError(webhookLogId);
+    }
+
+    // A log row in another org reads as missing, the same as one that was never written.
+    const webhookLog = await prisma.webhookLog.findUnique({ where: { id: webhookLogId, orgId } });
     if (!webhookLog) {
-      console.warn('[WebhookWorker] Log not found, skipping', { webhookLogId });
+      console.warn('[WebhookWorker] Log not found, skipping', { webhookLogId, orgId });
       return;
     }
 
     try {
-      const orgId = await resolveMessageOrgId(prisma, message.payload);
-      if (!orgId) {
-        console.error('[WebhookWorker] Cannot attribute webhook to a tenant; dead-lettering', { webhookLogId });
-        throw new WebhookTenantUnresolvedError(webhookLogId);
-      }
-
       const feedType = SystemLocoAdapter.detect(rawPayload);
       if (feedType) {
         await processSystemLoco(deps, orgId, webhookLogId, rawPayload, feedType);
@@ -312,11 +321,11 @@ export function createInboundWebhookWorker(
         // Another tenant owns this device. Refuse rather than write into their data; a retry
         // would get the same answer, so this is not rethrown.
         console.warn('[WebhookWorker] Device belongs to another tenant; rejected', { webhookLogId });
-        await markLog(prisma, webhookLogId, 'rejected', 'Device is registered to another organization');
+        await markLog(prisma, orgId, webhookLogId, 'rejected', 'Device is registered to another organization');
         return;
       }
       await prisma.webhookLog.update({
-        where: { id: webhookLogId },
+        where: { id: webhookLogId, orgId },
         data: {
           status: 'error',
           errorMessage: err.message,

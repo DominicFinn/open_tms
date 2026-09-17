@@ -58,26 +58,26 @@ export type TradingPartnerWithTransactions = TradingPartner & {
 
 export interface ITradingPartnerRepository {
   create(data: CreateTradingPartnerDTO): Promise<TradingPartner>;
-  findById(id: string): Promise<TradingPartnerWithTransactions | null>;
-  findAll(filters?: { entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]>;
+  findById(id: string, orgId: string): Promise<TradingPartnerWithTransactions | null>;
+  findAll(filters: { orgId: string; entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]>;
   findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null>;
   findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null>;
   findInboundPartners(): Promise<TradingPartnerWithTransactions[]>;
   findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]>;
-  update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner>;
-  softDelete(id: string, deletedBy: string | null): Promise<TradingPartner>;
-  updateLastPolled(id: string): Promise<void>;
+  update(id: string, orgId: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner>;
+  softDelete(id: string, orgId: string, deletedBy: string | null): Promise<TradingPartner>;
+  updateLastPolled(id: string, orgId: string): Promise<void>;
   // Transactions
   addTransaction(data: CreateTransactionDTO): Promise<TradingPartnerTransaction>;
-  updateTransaction(id: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction>;
-  removeTransaction(id: string): Promise<void>;
+  updateTransaction(id: string, orgId: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction>;
+  removeTransaction(id: string, orgId: string): Promise<void>;
   // Logs
   createLog(data: Prisma.EdiTransactionLogUncheckedCreateInput): Promise<any>;
-  findLogById(id: string): Promise<any>;
+  findLogById(id: string, orgId: string): Promise<any>;
   findLogs(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
   findLogsWithPagination(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string }, limit?: number, offset?: number): Promise<{ logs: any[]; total: number }>;
   getLogStats(filters?: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string }): Promise<{ total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number }>;
-  updateLog(id: string, data: any): Promise<any>;
+  updateLog(id: string, orgId: string, data: any): Promise<any>;
 }
 
 const partnerInclude = {
@@ -93,18 +93,18 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return this.prisma.tradingPartner.create({ data });
   }
 
-  async findById(id: string): Promise<TradingPartnerWithTransactions | null> {
+  async findById(id: string, orgId: string): Promise<TradingPartnerWithTransactions | null> {
     return this.prisma.tradingPartner.findUnique({
-      where: { id },
+      where: { id, orgId },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
-  async findAll(filters?: { entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]> {
-    const where: any = {};
-    if (filters?.entityType) where.entityType = filters.entityType;
-    if (filters?.active !== undefined) where.active = filters.active;
-    if (!filters?.includeDeleted) where.deletedAt = null;
+  async findAll(filters: { orgId: string; entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]> {
+    const where: any = { orgId: filters.orgId };
+    if (filters.entityType) where.entityType = filters.entityType;
+    if (filters.active !== undefined) where.active = filters.active;
+    if (!filters.includeDeleted) where.deletedAt = null;
 
     return this.prisma.tradingPartner.findMany({
       where,
@@ -148,13 +148,13 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     }) as Promise<TradingPartnerWithTransactions[]>;
   }
 
-  async update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner> {
-    return this.prisma.tradingPartner.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner> {
+    return this.prisma.tradingPartner.update({ where: { id, orgId }, data });
   }
 
-  async softDelete(id: string, deletedBy: string | null): Promise<TradingPartner> {
+  async softDelete(id: string, orgId: string, deletedBy: string | null): Promise<TradingPartner> {
     return this.prisma.tradingPartner.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         deletedAt: new Date(),
         deletedBy,
@@ -165,9 +165,9 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     });
   }
 
-  async updateLastPolled(id: string): Promise<void> {
+  async updateLastPolled(id: string, orgId: string): Promise<void> {
     await this.prisma.tradingPartner.update({
-      where: { id },
+      where: { id, orgId },
       data: { lastPolledAt: new Date() },
     });
   }
@@ -178,12 +178,12 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return this.prisma.tradingPartnerTransaction.create({ data });
   }
 
-  async updateTransaction(id: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction> {
-    return this.prisma.tradingPartnerTransaction.update({ where: { id }, data: data as any });
+  async updateTransaction(id: string, orgId: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction> {
+    return this.prisma.tradingPartnerTransaction.update({ where: { id, partner: { orgId } }, data: data as any });
   }
 
-  async removeTransaction(id: string): Promise<void> {
-    await this.prisma.tradingPartnerTransaction.delete({ where: { id } });
+  async removeTransaction(id: string, orgId: string): Promise<void> {
+    await this.prisma.tradingPartnerTransaction.delete({ where: { id, partner: { orgId } } });
   }
 
   // ── Logs ──
@@ -192,9 +192,9 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return this.prisma.ediTransactionLog.create({ data });
   }
 
-  async findLogById(id: string): Promise<any> {
+  async findLogById(id: string, orgId: string): Promise<any> {
     return this.prisma.ediTransactionLog.findUnique({
-      where: { id },
+      where: { id, orgId },
       include: { partner: { select: { id: true, name: true } } },
     });
   }
@@ -271,7 +271,7 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return { total, pending, processing, success, error, duplicate, totalEntitiesCreated: entityAgg._sum.entitiesCreated || 0 };
   }
 
-  async updateLog(id: string, data: any): Promise<any> {
-    return this.prisma.ediTransactionLog.update({ where: { id }, data });
+  async updateLog(id: string, orgId: string, data: any): Promise<any> {
+    return this.prisma.ediTransactionLog.update({ where: { id, orgId }, data });
   }
 }

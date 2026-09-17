@@ -34,6 +34,8 @@ export interface CreateTenderBidDTO {
 }
 
 export interface TenderFilters {
+  /** Omit only for the org-wide expiry sweep. Every request path passes it. */
+  orgId?: string;
   status?: string;
   strategy?: string;
   shipmentId?: string;
@@ -48,6 +50,7 @@ export type TenderWithRelations = Tender & {
     status: string;
     pickupDate: Date | null;
     deliveryDate: Date | null;
+    orgId: string;
     customerId: string;
     originId: string;
     destinationId: string;
@@ -66,28 +69,32 @@ export type TenderWithRelations = Tender & {
 
 export interface ITenderRepository {
   create(data: CreateTenderDTO): Promise<Tender>;
-  findById(id: string): Promise<TenderWithRelations | null>;
+  findById(id: string, orgId: string): Promise<TenderWithRelations | null>;
   findAll(filters?: TenderFilters): Promise<TenderWithRelations[]>;
-  findByShipmentId(shipmentId: string): Promise<TenderWithRelations[]>;
-  update(id: string, data: Partial<Tender>): Promise<Tender>;
+  findByShipmentId(shipmentId: string, orgId: string): Promise<TenderWithRelations[]>;
+  update(id: string, orgId: string, data: Partial<Tender>): Promise<Tender>;
   getNextReference(): Promise<string>;
 
   // Offers
   createOffer(data: CreateTenderOfferDTO): Promise<TenderOffer>;
-  findOfferById(id: string): Promise<TenderOffer | null>;
+  findOfferById(id: string, orgId: string): Promise<TenderOffer | null>;
   findOffersByTenderId(tenderId: string): Promise<TenderOffer[]>;
   findActiveOffersForCarrier(carrierId: string): Promise<(TenderOffer & { tender: TenderWithRelations })[]>;
   findAllOffersForCarrier(carrierId: string): Promise<any[]>;
-  updateOffer(id: string, data: Partial<TenderOffer>): Promise<TenderOffer>;
-  findExpiredOffers(): Promise<TenderOffer[]>;
+  updateOffer(id: string, orgId: string, data: Partial<TenderOffer>): Promise<TenderOffer>;
+  findExpiredOffers(): Promise<ExpiredTenderOffer[]>;
 
   // Bids
   createBid(data: CreateTenderBidDTO): Promise<TenderBid>;
-  findBidById(id: string): Promise<TenderBid | null>;
-  findBidsByTenderId(tenderId: string): Promise<TenderBid[]>;
+  findBidById(id: string, orgId: string): Promise<TenderBid | null>;
+  findBidsByTenderId(tenderId: string, orgId: string): Promise<TenderBid[]>;
   findBidsByCarrierId(carrierId: string): Promise<TenderBid[]>;
-  updateBid(id: string, data: Partial<TenderBid>): Promise<TenderBid>;
+  updateBid(id: string, orgId: string, data: Partial<TenderBid>): Promise<TenderBid>;
 }
+
+export type ExpiredTenderOffer = TenderOffer & {
+  tender: Tender & { shipment: { orgId: string } };
+};
 
 const tenderInclude = {
   shipment: {
@@ -119,15 +126,16 @@ export class TenderRepository implements ITenderRepository {
     return this.prisma.tender.create({ data });
   }
 
-  async findById(id: string): Promise<TenderWithRelations | null> {
+  async findById(id: string, orgId: string): Promise<TenderWithRelations | null> {
     return this.prisma.tender.findUnique({
-      where: { id },
+      where: { id, shipment: { orgId } },
       include: tenderInclude,
     }) as Promise<TenderWithRelations | null>;
   }
 
   async findAll(filters?: TenderFilters): Promise<TenderWithRelations[]> {
     const where: any = {};
+    if (filters?.orgId) where.shipment = { orgId: filters.orgId };
     if (filters?.status) where.status = filters.status;
     if (filters?.strategy) where.strategy = filters.strategy;
     if (filters?.shipmentId) where.shipmentId = filters.shipmentId;
@@ -142,12 +150,12 @@ export class TenderRepository implements ITenderRepository {
     }) as Promise<TenderWithRelations[]>;
   }
 
-  async findByShipmentId(shipmentId: string): Promise<TenderWithRelations[]> {
-    return this.findAll({ shipmentId });
+  async findByShipmentId(shipmentId: string, orgId: string): Promise<TenderWithRelations[]> {
+    return this.findAll({ shipmentId, orgId });
   }
 
-  async update(id: string, data: Partial<Tender>): Promise<Tender> {
-    return this.prisma.tender.update({ where: { id }, data: data as any });
+  async update(id: string, orgId: string, data: Partial<Tender>): Promise<Tender> {
+    return this.prisma.tender.update({ where: { id, shipment: { orgId } }, data: data as any });
   }
 
   async getNextReference(): Promise<string> {
@@ -166,9 +174,9 @@ export class TenderRepository implements ITenderRepository {
     return this.prisma.tenderOffer.create({ data });
   }
 
-  async findOfferById(id: string): Promise<TenderOffer | null> {
+  async findOfferById(id: string, orgId: string): Promise<TenderOffer | null> {
     return this.prisma.tenderOffer.findUnique({
-      where: { id },
+      where: { id, tender: { shipment: { orgId } } },
       include: {
         carrier: { select: { id: true, name: true, scacCode: true, contactEmail: true } },
         bids: true,
@@ -225,18 +233,18 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async updateOffer(id: string, data: Partial<TenderOffer>): Promise<TenderOffer> {
-    return this.prisma.tenderOffer.update({ where: { id }, data: data as any });
+  async updateOffer(id: string, orgId: string, data: Partial<TenderOffer>): Promise<TenderOffer> {
+    return this.prisma.tenderOffer.update({ where: { id, tender: { shipment: { orgId } } }, data: data as any });
   }
 
-  async findExpiredOffers(): Promise<TenderOffer[]> {
+  async findExpiredOffers(): Promise<ExpiredTenderOffer[]> {
     return this.prisma.tenderOffer.findMany({
       where: {
         status: { in: ['sent', 'viewed'] },
         expiresAt: { lte: new Date() },
       },
       include: {
-        tender: true,
+        tender: { include: { shipment: { select: { orgId: true } } } },
       },
     });
   }
@@ -247,9 +255,9 @@ export class TenderRepository implements ITenderRepository {
     return this.prisma.tenderBid.create({ data });
   }
 
-  async findBidById(id: string): Promise<TenderBid | null> {
+  async findBidById(id: string, orgId: string): Promise<TenderBid | null> {
     return this.prisma.tenderBid.findUnique({
-      where: { id },
+      where: { id, tender: { shipment: { orgId } } },
       include: {
         carrier: { select: { id: true, name: true } },
         tenderOffer: true,
@@ -258,9 +266,9 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async findBidsByTenderId(tenderId: string): Promise<TenderBid[]> {
+  async findBidsByTenderId(tenderId: string, orgId: string): Promise<TenderBid[]> {
     return this.prisma.tenderBid.findMany({
-      where: { tenderId },
+      where: { tenderId, tender: { shipment: { orgId } } },
       include: {
         carrier: { select: { id: true, name: true } },
       },
@@ -280,7 +288,7 @@ export class TenderRepository implements ITenderRepository {
     });
   }
 
-  async updateBid(id: string, data: Partial<TenderBid>): Promise<TenderBid> {
-    return this.prisma.tenderBid.update({ where: { id }, data: data as any });
+  async updateBid(id: string, orgId: string, data: Partial<TenderBid>): Promise<TenderBid> {
+    return this.prisma.tenderBid.update({ where: { id, tender: { shipment: { orgId } } }, data: data as any });
   }
 }

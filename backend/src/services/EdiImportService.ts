@@ -18,8 +18,8 @@ import { ILocationResolutionService } from './LocationResolutionService.js';
 import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 
 export interface EdiImportOptions {
-  /** Multi-tenancy scope. Required post phase-2 tightening. */
-  orgId?: string;
+  /** Multi-tenancy scope. Every lookup and write in the import is keyed on it. */
+  orgId: string;
   partnerId?: string;
   customerId?: string; // Override — if not provided, resolved from partner
   fileName?: string;
@@ -41,8 +41,8 @@ export interface EdiImportResult {
 }
 
 export interface IEdiImportService {
-  importEdi(ediContent: string, options?: EdiImportOptions): Promise<EdiImportResult>;
-  previewEdi(ediContent: string, options?: EdiImportOptions): Promise<ParseResult>;
+  importEdi(ediContent: string, options: EdiImportOptions): Promise<EdiImportResult>;
+  previewEdi(ediContent: string, options: EdiImportOptions): Promise<ParseResult>;
 }
 
 export class EdiImportService implements IEdiImportService {
@@ -59,12 +59,12 @@ export class EdiImportService implements IEdiImportService {
   /**
    * Preview: parse EDI content without creating orders
    */
-  async previewEdi(ediContent: string, options?: EdiImportOptions): Promise<ParseResult> {
+  async previewEdi(ediContent: string, options: EdiImportOptions): Promise<ParseResult> {
     // Load partner field mapping if partnerId provided
-    let fieldMapping = options?.fieldMapping;
-    if (options?.partnerId && !fieldMapping) {
+    let fieldMapping = options.fieldMapping;
+    if (options.partnerId && !fieldMapping) {
       const tp = this.tradingPartnerRepo
-        ? await this.tradingPartnerRepo.findById(options.partnerId)
+        ? await this.tradingPartnerRepo.findById(options.partnerId, options.orgId)
         : null;
       if (tp) {
         const txn = tp.transactions?.find(
@@ -82,7 +82,7 @@ export class EdiImportService implements IEdiImportService {
   /**
    * Full import: parse EDI, create orders, track in EdiTransactionLog
    */
-  async importEdi(ediContent: string, options: EdiImportOptions = {}): Promise<EdiImportResult> {
+  async importEdi(ediContent: string, options: EdiImportOptions): Promise<EdiImportResult> {
     const fileHash = createHash('sha256').update(ediContent).digest('hex');
 
     // Check for duplicate in EdiTransactionLog
@@ -106,15 +106,14 @@ export class EdiImportService implements IEdiImportService {
     let customerId = options.customerId;
     let fieldMapping = options.fieldMapping;
     let tradingPartnerId: string | null = null;
-    let logOrgId = options.orgId;
+    const logOrgId = options.orgId;
 
     if (options.partnerId) {
       const tp = this.tradingPartnerRepo
-        ? await this.tradingPartnerRepo.findById(options.partnerId)
+        ? await this.tradingPartnerRepo.findById(options.partnerId, options.orgId)
         : null;
       if (tp) {
         tradingPartnerId = tp.id;
-        logOrgId = logOrgId ?? tp.orgId;
         if (!customerId) customerId = tp.customerId || undefined;
         const txn = tp.transactions?.find(
           (t: any) => t.transactionType === '850' && t.direction === 'inbound'
@@ -164,7 +163,7 @@ export class EdiImportService implements IEdiImportService {
       result.errors.push(...parseResult.errors);
 
       if (!parseResult.success || parseResult.orders.length === 0) {
-        await this.updateStatus(logEntry?.id, 'failed', result, parseResult);
+        await this.updateStatus(logEntry?.id, logOrgId, 'failed', result, parseResult);
         return result;
       }
 
@@ -189,16 +188,7 @@ export class EdiImportService implements IEdiImportService {
             continue;
           }
 
-          // orgId comes from options (passed by the route from the JWT) or, for backward compat,
-          // from the customer's org. Customer.orgId is NOT NULL post phase 2.
-          let resolvedOrgId = options.orgId;
-          if (!resolvedOrgId) {
-            const cust = await this.customersRepo.findById(orderCustomerId);
-            resolvedOrgId = cust?.orgId;
-          }
-          if (!resolvedOrgId) {
-            throw new Error('Cannot import EDI: no orgId in options and customer has no orgId');
-          }
+          const resolvedOrgId = options.orgId;
 
           // Resolve origin location
           let originId: string | undefined;
@@ -298,11 +288,11 @@ export class EdiImportService implements IEdiImportService {
       }
 
       result.success = result.ordersCreated > 0;
-      await this.updateStatus(logEntry?.id, result.success ? 'completed' : 'failed', result, parseResult);
+      await this.updateStatus(logEntry?.id, logOrgId, result.success ? 'completed' : 'failed', result, parseResult);
 
     } catch (err: any) {
       result.errors.push(`Import failed: ${err.message}`);
-      await this.updateStatus(logEntry?.id, 'failed', result);
+      await this.updateStatus(logEntry?.id, logOrgId, 'failed', result);
     }
 
     return result;
@@ -310,13 +300,14 @@ export class EdiImportService implements IEdiImportService {
 
   private async updateStatus(
     logId: string | undefined,
+    orgId: string,
     status: string,
     result: EdiImportResult,
     parseResult?: ParseResult,
   ): Promise<void> {
     // Update EdiTransactionLog
     if (logId && this.tradingPartnerRepo) {
-      await this.tradingPartnerRepo.updateLog(logId, {
+      await this.tradingPartnerRepo.updateLog(logId, orgId, {
         status: status === 'completed' ? 'success' : status === 'failed' ? 'error' : status,
         processedAt: new Date(),
         transactionCount: result.transactionCount,

@@ -33,7 +33,7 @@ export class UpdateLaneCommandHandler extends BaseCommandHandler<UpdateLanePaylo
   ): Promise<{ id: string }> {
     const { id, data, stops } = command.payload;
 
-    const updated = await tx.lane.update({ where: { id }, data: data as any });
+    const updated = await tx.lane.update({ where: { id, orgId: command.orgId }, data: data as any });
 
     // Replace stops if provided
     if (stops) {

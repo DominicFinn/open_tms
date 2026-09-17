@@ -50,12 +50,12 @@ export type { LockoutStatus } from './auth/lockout.js';
 export interface ICarrierAuthService {
   register(carrierId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<LoginResult>;
-  changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>;
-  adminResetPassword(userId: string, newPassword: string): Promise<void>;
+  changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void>;
+  adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void>;
   validatePasswordStrength(password: string): PasswordValidation;
   verifyToken(token: string): CarrierJWTPayload;
-  unlockAccount(userId: string): Promise<void>;
-  getLockoutStatus(userId: string): Promise<LockoutStatus>;
+  unlockAccount(userId: string, orgId: string): Promise<void>;
+  getLockoutStatus(userId: string, orgId: string): Promise<LockoutStatus>;
 }
 
 export class CarrierAuthService implements ICarrierAuthService {
@@ -109,10 +109,11 @@ export class CarrierAuthService implements ICarrierAuthService {
 
     if (!user.active) throw new Error('Account is deactivated');
 
+    const userOrgId = ((user as any).carrier as { orgId: string }).orgId;
     const valid = await this.verifyPassword(password, user.passwordHash);
     if (!valid) {
       const next = nextFailedAttemptState(user);
-      await this.carrierUserRepo.applyFailedAttempt(user.id, next.failedLoginAttempts, next.lockedUntil);
+      await this.carrierUserRepo.applyFailedAttempt(user.id, userOrgId, next.failedLoginAttempts, next.lockedUntil);
       if (next.triggeredLock) {
         throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
       }
@@ -124,7 +125,7 @@ export class CarrierAuthService implements ICarrierAuthService {
     }
 
     // updateLastLogin also clears any lingering lockout state
-    await this.carrierUserRepo.updateLastLogin(user.id);
+    await this.carrierUserRepo.updateLastLogin(user.id, userOrgId);
 
     const carrier = (user as any).carrier;
     const token = this.generateToken({
@@ -148,8 +149,8 @@ export class CarrierAuthService implements ICarrierAuthService {
     };
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
-    const user = await this.carrierUserRepo.findById(userId);
+  async changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const user = await this.carrierUserRepo.findById(userId, orgId);
     if (!user) throw new Error('User not found');
 
     const valid = await this.verifyPassword(oldPassword, user.passwordHash);
@@ -159,27 +160,27 @@ export class CarrierAuthService implements ICarrierAuthService {
     if (!validation.valid) throw new Error(validation.errors.join('; '));
 
     const newHash = await this.hashPassword(newPassword);
-    await this.carrierUserRepo.updatePassword(userId, newHash);
+    await this.carrierUserRepo.updatePassword(userId, orgId, newHash);
   }
 
-  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
-    const user = await this.carrierUserRepo.findById(userId);
+  async adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void> {
+    const user = await this.carrierUserRepo.findById(userId, orgId);
     if (!user) throw new Error('User not found');
 
     const validation = this.validatePasswordStrength(newPassword);
     if (!validation.valid) throw new Error(validation.errors.join('; '));
 
     const newHash = await this.hashPassword(newPassword);
-    await this.carrierUserRepo.updatePassword(userId, newHash);
-    await this.carrierUserRepo.clearLockout(userId);
+    await this.carrierUserRepo.updatePassword(userId, orgId, newHash);
+    await this.carrierUserRepo.clearLockout(userId, orgId);
   }
 
-  async unlockAccount(userId: string): Promise<void> {
-    await this.carrierUserRepo.clearLockout(userId);
+  async unlockAccount(userId: string, orgId: string): Promise<void> {
+    await this.carrierUserRepo.clearLockout(userId, orgId);
   }
 
-  async getLockoutStatus(userId: string): Promise<LockoutStatus> {
-    const user = await this.carrierUserRepo.findById(userId);
+  async getLockoutStatus(userId: string, orgId: string): Promise<LockoutStatus> {
+    const user = await this.carrierUserRepo.findById(userId, orgId);
     return computeLockoutStatus(user);
   }
 

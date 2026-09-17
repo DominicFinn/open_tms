@@ -23,11 +23,12 @@ export class ArchiveShipmentCommandHandler extends BaseCommandHandler<ArchiveShi
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id } = command.payload;
+    const { orgId } = command;
 
-    const existing = await tx.shipment.findFirstOrThrow({ where: { id } });
+    const existing = await tx.shipment.findFirstOrThrow({ where: { id, orgId } });
 
     const shipment = await tx.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date(),

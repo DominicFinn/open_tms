@@ -45,8 +45,8 @@ export class UpdateTrackableUnitCommandHandler extends BaseCommandHandler<Update
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
 
-    const previous = await tx.trackableUnit.findUniqueOrThrow({ where: { id } });
-    const updated = await tx.trackableUnit.update({ where: { id }, data });
+    const previous = await tx.trackableUnit.findUniqueOrThrow({ where: { id, order: { orgId: command.orgId } } });
+    const updated = await tx.trackableUnit.update({ where: { id, order: { orgId: command.orgId } }, data });
 
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     for (const [key, value] of Object.entries(data)) {

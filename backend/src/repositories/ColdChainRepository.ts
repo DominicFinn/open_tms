@@ -22,11 +22,11 @@ export interface IColdChainRepository {
   listCalibrations(deviceId: string): Promise<DeviceCalibration[]>;
 
   // Cold Chain Excursions
-  getExcursion(id: string): Promise<ColdChainExcursion | null>;
+  getExcursion(id: string, orgId: string): Promise<ColdChainExcursion | null>;
   listExcursions(shipmentId: string): Promise<ColdChainExcursion[]>;
 
   // CAPA Reports
-  getCAPAReport(id: string): Promise<CAPAReport | null>;
+  getCAPAReport(id: string, orgId: string): Promise<CAPAReport | null>;
   listCAPAReports(orgId: string, filters?: CAPAReportFilters): Promise<CAPAReport[]>;
 }
 
@@ -57,9 +57,9 @@ export class ColdChainRepository implements IColdChainRepository {
 
   // ── Cold Chain Excursions ──
 
-  async getExcursion(id: string): Promise<ColdChainExcursion | null> {
+  async getExcursion(id: string, orgId: string): Promise<ColdChainExcursion | null> {
     return this.prisma.coldChainExcursion.findUnique({
-      where: { id },
+      where: { id, orgId },
     });
   }
 
@@ -72,9 +72,9 @@ export class ColdChainRepository implements IColdChainRepository {
 
   // ── CAPA Reports ──
 
-  async getCAPAReport(id: string): Promise<CAPAReport | null> {
+  async getCAPAReport(id: string, orgId: string): Promise<CAPAReport | null> {
     return this.prisma.cAPAReport.findUnique({
-      where: { id },
+      where: { id, orgId },
       include: {
         issue: true,
         shipment: true,

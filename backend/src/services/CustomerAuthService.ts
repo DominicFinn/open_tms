@@ -50,12 +50,12 @@ export type { LockoutStatus } from './auth/lockout.js';
 export interface ICustomerAuthService {
   register(customerId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<CustomerLoginResult>;
-  changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>;
-  adminResetPassword(userId: string, newPassword: string): Promise<void>;
+  changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void>;
+  adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void>;
   validatePasswordStrength(password: string): PasswordValidation;
   verifyToken(token: string): CustomerJWTPayload;
-  unlockAccount(userId: string): Promise<void>;
-  getLockoutStatus(userId: string): Promise<LockoutStatus>;
+  unlockAccount(userId: string, orgId: string): Promise<void>;
+  getLockoutStatus(userId: string, orgId: string): Promise<LockoutStatus>;
 }
 
 export class CustomerAuthService implements ICustomerAuthService {
@@ -99,10 +99,11 @@ export class CustomerAuthService implements ICustomerAuthService {
 
     if (!user.active) throw new Error('Account is deactivated');
 
+    const userOrgId = ((user as any).customer as { orgId: string }).orgId;
     const valid = await this.verifyPassword(password, user.passwordHash);
     if (!valid) {
       const next = nextFailedAttemptState(user);
-      await this.customerUserRepo.applyFailedAttempt(user.id, next.failedLoginAttempts, next.lockedUntil);
+      await this.customerUserRepo.applyFailedAttempt(user.id, userOrgId, next.failedLoginAttempts, next.lockedUntil);
       if (next.triggeredLock) {
         throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
       }
@@ -113,7 +114,7 @@ export class CustomerAuthService implements ICustomerAuthService {
       throw new Error('Invalid email or password');
     }
 
-    await this.customerUserRepo.updateLastLogin(user.id);
+    await this.customerUserRepo.updateLastLogin(user.id, userOrgId);
 
     const customer = (user as any).customer;
     const token = this.generateToken({
@@ -137,8 +138,8 @@ export class CustomerAuthService implements ICustomerAuthService {
     };
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
-    const user = await this.customerUserRepo.findById(userId);
+  async changePassword(userId: string, orgId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const user = await this.customerUserRepo.findById(userId, orgId);
     if (!user) throw new Error('User not found');
 
     const valid = await this.verifyPassword(oldPassword, user.passwordHash);
@@ -148,27 +149,27 @@ export class CustomerAuthService implements ICustomerAuthService {
     if (!validation.valid) throw new Error(validation.errors.join('; '));
 
     const newHash = await this.hashPassword(newPassword);
-    await this.customerUserRepo.updatePassword(userId, newHash);
+    await this.customerUserRepo.updatePassword(userId, orgId, newHash);
   }
 
-  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
-    const user = await this.customerUserRepo.findById(userId);
+  async adminResetPassword(userId: string, orgId: string, newPassword: string): Promise<void> {
+    const user = await this.customerUserRepo.findById(userId, orgId);
     if (!user) throw new Error('User not found');
 
     const validation = this.validatePasswordStrength(newPassword);
     if (!validation.valid) throw new Error(validation.errors.join('; '));
 
     const newHash = await this.hashPassword(newPassword);
-    await this.customerUserRepo.updatePassword(userId, newHash);
-    await this.customerUserRepo.clearLockout(userId);
+    await this.customerUserRepo.updatePassword(userId, orgId, newHash);
+    await this.customerUserRepo.clearLockout(userId, orgId);
   }
 
-  async unlockAccount(userId: string): Promise<void> {
-    await this.customerUserRepo.clearLockout(userId);
+  async unlockAccount(userId: string, orgId: string): Promise<void> {
+    await this.customerUserRepo.clearLockout(userId, orgId);
   }
 
-  async getLockoutStatus(userId: string): Promise<LockoutStatus> {
-    const user = await this.customerUserRepo.findById(userId);
+  async getLockoutStatus(userId: string, orgId: string): Promise<LockoutStatus> {
+    const user = await this.customerUserRepo.findById(userId, orgId);
     return computeLockoutStatus(user);
   }
 

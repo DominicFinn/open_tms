@@ -29,7 +29,7 @@ export class TenderAwardFinancialHandler implements IEventHandler {
     try {
       // Get the tender and shipment
       const tender = await this.prisma.tender.findUnique({
-        where: { id: event.entityId },
+        where: { id: event.entityId, shipment: { orgId: event.orgId } },
         select: {
           id: true,
           shipmentId: true,
@@ -52,7 +52,7 @@ export class TenderAwardFinancialHandler implements IEventHandler {
 
       // Get the bid for full details
       const bid = await this.prisma.tenderBid.findUnique({
-        where: { id: payload.bidId },
+        where: { id: payload.bidId, tender: { shipment: { orgId: event.orgId } } },
         select: {
           id: true,
           rate: true,

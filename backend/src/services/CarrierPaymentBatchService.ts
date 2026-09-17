@@ -208,7 +208,7 @@ export class CarrierPaymentBatchService {
       const amount = inv.approvedCents ?? inv.totalCents;
 
       await this.prisma.carrierInvoice.update({
-        where: { id: inv.id },
+        where: { id: inv.id, orgId },
         data: {
           status: 'paid',
           paidCents: amount,

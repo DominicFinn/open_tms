@@ -26,13 +26,15 @@ export class RejectRmaCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; status: string }> {
-    const rma = await tx.rma.findUnique({ where: { id: command.payload.rmaId } });
+    const rma = await tx.rma.findUnique({
+      where: { id: command.payload.rmaId, orgId: command.orgId },
+    });
     if (!rma) throw new Error(`RMA ${command.payload.rmaId} not found`);
     if (rma.status === 'completed') throw new Error('Cannot reject a completed RMA');
     if (rma.status === 'rejected') throw new Error('RMA is already rejected');
 
     await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: { status: 'rejected', rejectionNotes: command.payload.rejectionNotes },
     });
 

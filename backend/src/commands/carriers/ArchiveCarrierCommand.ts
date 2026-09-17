@@ -20,7 +20,7 @@ export class ArchiveCarrierCommandHandler extends BaseCommandHandler<{ id: strin
   ): Promise<{ id: string }> {
     const { id } = command.payload;
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date() },
     });
 

@@ -58,8 +58,8 @@ export interface ICarriersRepository {
   findArchived(orgId?: string | null): Promise<Carrier[]>;
   findById(id: string, orgId?: string | null): Promise<Carrier | null>;
   create(data: CreateCarrierDTO): Promise<Carrier>;
-  update(id: string, data: UpdateCarrierDTO): Promise<Carrier>;
-  archive(id: string): Promise<Carrier>;
+  update(id: string, orgId: string, data: UpdateCarrierDTO): Promise<Carrier>;
+  archive(id: string, orgId: string): Promise<Carrier>;
 }
 
 export class CarriersRepository implements ICarriersRepository {
@@ -101,16 +101,16 @@ export class CarriersRepository implements ICarriersRepository {
     return this.prisma.carrier.create({ data });
   }
 
-  async update(id: string, data: UpdateCarrierDTO): Promise<Carrier> {
+  async update(id: string, orgId: string, data: UpdateCarrierDTO): Promise<Carrier> {
     return this.prisma.carrier.update({
-      where: { id },
+      where: { id, orgId },
       data
     });
   }
 
-  async archive(id: string): Promise<Carrier> {
+  async archive(id: string, orgId: string): Promise<Carrier> {
     return this.prisma.carrier.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()

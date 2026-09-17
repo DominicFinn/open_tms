@@ -240,7 +240,7 @@ export class ShipmentCutoffMonitorService {
   private async maybeEmitCutoffCleared(shipment: Shipment, now: Date, orgId: string): Promise<void> {
     if (!shipment.lastCutoffRiskSeverity) return;
     await this.prisma.shipment.update({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: shipment.orgId },
       data: { lastCutoffRiskSeverity: null, lastCutoffRiskAt: now },
     });
     await this.eventBus.publish(createEvent({
@@ -282,7 +282,7 @@ export class ShipmentCutoffMonitorService {
     // `shipment_cutoff_risk`). The monitor only records severity for its own
     // event-level dedup so it doesn't re-emit the same severity repeatedly.
     await this.prisma.shipment.update({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: shipment.orgId },
       data: {
         lastCutoffRiskSeverity: result.severity,
         lastCutoffRiskAt: now,

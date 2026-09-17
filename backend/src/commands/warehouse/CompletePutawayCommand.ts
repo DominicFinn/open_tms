@@ -43,7 +43,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // 1. Load task with relations
     const task = await tx.putawayTask.findUnique({
-      where: { id: p.taskId },
+      where: { id: p.taskId, orgId: command.orgId },
       include: {
         targetBin: { include: { zone: true } },
       },
@@ -54,7 +54,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // 2. Resolve the scanned bin
     const scannedBin = await tx.warehouseBin.findFirst({
-      where: { locationId: task.locationId, label: p.scannedBinLabel },
+      where: { locationId: task.locationId, label: p.scannedBinLabel, orgId: command.orgId },
       include: { zone: true },
     });
     if (!scannedBin) {
@@ -73,7 +73,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // 4. Validate bin constraints against the unit being stored
     const unit = await tx.trackableUnit.findUnique({
-      where: { id: task.trackableUnitId },
+      where: { id: task.trackableUnitId, order: { orgId: command.orgId } },
       include: {
         lineItems: true,
         order: true,
@@ -111,7 +111,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // 6. Update TrackableUnit location
     await tx.trackableUnit.update({
-      where: { id: unit.id },
+      where: { id: unit.id, order: { orgId: command.orgId } },
       data: {
         currentBinId: actualBinId,
         currentZoneId: actualZone?.id ?? null,
@@ -130,7 +130,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     // 7. Update bin capacity counters
     if (unit.unitType === 'pallet') {
       await tx.warehouseBin.update({
-        where: { id: actualBinId },
+        where: { id: actualBinId, orgId: command.orgId },
         data: { currentPalletCount: { increment: 1 } },
       });
     }
@@ -138,7 +138,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     const totalWeight = unit.lineItems?.reduce((sum, li) => sum + (li.weight ?? 0), 0) ?? 0;
     if (totalWeight > 0) {
       await tx.warehouseBin.update({
-        where: { id: actualBinId },
+        where: { id: actualBinId, orgId: command.orgId },
         data: { currentWeightKg: { increment: totalWeight } },
       });
     }
@@ -150,6 +150,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     // Find or create inventory record for this bin+sku combination
     let inventoryRecord = await tx.inventoryRecord.findFirst({
       where: {
+        orgId: command.orgId,
         binId: actualBinId,
         sku,
         uomCode: 'EA',
@@ -162,7 +163,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       // Update existing record
       const previousQty = inventoryRecord.quantityOnHand;
       inventoryRecord = await tx.inventoryRecord.update({
-        where: { id: inventoryRecord.id },
+        where: { id: inventoryRecord.id, orgId: command.orgId },
         data: {
           quantityOnHand: { increment: quantity },
           quantityAvailable: { increment: quantity },
@@ -220,7 +221,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
 
     // 9. Mark task completed
     await tx.putawayTask.update({
-      where: { id: task.id },
+      where: { id: task.id, orgId: command.orgId },
       data: { status: 'completed' },
     });
 

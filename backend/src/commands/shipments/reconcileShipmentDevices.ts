@@ -50,7 +50,7 @@ export async function reconcileShipmentDevices(
   for (const a of current) {
     if (!desired.has(a.device.externalId)) {
       await tx.deviceAssignment.update({
-        where: { id: a.id },
+        where: { id: a.id, device: { orgId } },
         data: { active: false, unassignedAt: new Date() },
       });
       emitUnassigned(a.deviceId, a.id);

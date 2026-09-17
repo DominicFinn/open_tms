@@ -99,7 +99,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      await authService.changePassword(userId, currentPassword, newPassword);
+      await authService.changePassword(userId, req.orgId!, currentPassword, newPassword);
       return { data: { changed: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -125,7 +125,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const carrierId = (req as any).carrierUser.carrierId;
     try {
-      const result = await tenderService.getTenderForCarrier(id, carrierId);
+      const result = await tenderService.getTenderForCarrier(id, carrierId, req.orgId!);
       return { data: result, error: null };
     } catch (err: any) {
       reply.code(404);
@@ -164,7 +164,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
 
     try {
       // Find the offer for this carrier on this tender
-      const tender = await tenderRepo.findById(tenderId);
+      const tender = await tenderRepo.findById(tenderId, req.orgId!);
       if (!tender) {
         reply.code(404);
         return { data: null, error: 'Tender not found' };
@@ -185,7 +185,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
         notes: body.notes,
         submittedById: carrierUser.sub,
         sourceType: 'portal',
-      });
+      }, req.orgId!);
 
       reply.code(201);
       return { data: bid, error: null };
@@ -204,7 +204,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     const carrierId = (req as any).carrierUser.carrierId;
 
     try {
-      const tender = await tenderRepo.findById(tenderId);
+      const tender = await tenderRepo.findById(tenderId, req.orgId!);
       if (!tender) {
         reply.code(404);
         return { data: null, error: 'Tender not found' };
@@ -215,7 +215,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
         return { data: null, error: 'No tender offer for this carrier' };
       }
 
-      await tenderService.declineTenderOffer(offer.id, carrierId);
+      await tenderService.declineTenderOffer(offer.id, carrierId, req.orgId!);
       return { data: { declined: true }, error: null };
     } catch (err: any) {
       reply.code(400);

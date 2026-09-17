@@ -32,7 +32,7 @@ export class UpdateIssueLabelCommandHandler extends BaseCommandHandler<UpdateIss
     const { id, data } = command.payload;
 
     const label = await tx.issueLabel.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data,
     });
 

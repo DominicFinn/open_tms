@@ -65,7 +65,7 @@ export class WarehouseService {
 
     // Verify user exists and belongs to the caller's organization.
     // Cross-tenant target reads as "not found" so existence stays opaque.
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId, organizationId: orgId } });
     if (!user || !user.active || user.organizationId !== orgId) {
       return { success: false, error: 'User not found or inactive' };
     }
@@ -125,7 +125,7 @@ export class WarehouseService {
 
     if (magicLink.expiresAt && magicLink.expiresAt < new Date()) {
       await this.prisma.magicLink.update({
-        where: { id: magicLink.id },
+        where: { id: magicLink.id, user: { organizationId: magicLink.user.organizationId } },
         data: { active: false },
       });
       await this.logLoginAttempt({
@@ -145,7 +145,7 @@ export class WarehouseService {
 
     // Valid — update last login (do NOT deactivate — reusable QR codes)
     await this.prisma.user.update({
-      where: { id: magicLink.userId },
+      where: { id: magicLink.userId, organizationId: magicLink.user.organizationId },
       data: { lastLoginAt: new Date(), failedLoginAttempts: 0 },
     });
 
@@ -204,14 +204,14 @@ export class WarehouseService {
       if (attempts >= 5) {
         lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
       }
-      await this.prisma.user.update({ where: { id: user.id }, data: lockData });
+      await this.prisma.user.update({ where: { id: user.id, organizationId: user.organizationId }, data: lockData });
       await this.logLoginAttempt({ userId: user.id, method: 'password', ipAddress, userAgent, success: false, failReason: 'invalid_password' });
       return { success: false, error: 'Invalid credentials', statusCode: 401 };
     }
 
     // Success
     await this.prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.id, organizationId: user.organizationId },
       data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
     });
     await this.logLoginAttempt({ userId: user.id, method: 'password', ipAddress, userAgent, success: true, failReason: null });
@@ -282,7 +282,7 @@ export class WarehouseService {
     }
 
     const updated = await this.prisma.shipmentFlag.update({
-      where: { id: flagId },
+      where: { id: flagId, shipment: { orgId } },
       data: { resolved: true, resolvedBy, resolvedAt: new Date() },
     });
 
@@ -303,14 +303,14 @@ export class WarehouseService {
 
     // Check for unresolved flags
     const unresolvedFlags = await this.prisma.shipmentFlag.count({
-      where: { shipmentId, resolved: false },
+      where: { shipmentId, shipment: { orgId }, resolved: false },
     });
     if (unresolvedFlags > 0) {
       return { success: false, error: `Cannot launch: ${unresolvedFlags} unresolved flag(s)` };
     }
 
     const updated = await this.prisma.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       data: {
         launchedAt: new Date(),
         launchedBy,

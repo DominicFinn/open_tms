@@ -41,7 +41,7 @@ export class AdjustInventoryCommandHandler extends BaseCommandHandler<
 
     // Update the inventory record
     await tx.inventoryRecord.update({
-      where: { id: record.id },
+      where: { id: record.id, orgId: command.orgId },
       data: {
         quantityOnHand: newQuantity,
         quantityAvailable: newQuantity - record.quantityAllocated - record.quantityOnHold,

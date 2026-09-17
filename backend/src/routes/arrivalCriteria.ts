@@ -24,7 +24,7 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId } = req.params as { locationId: string };
 
-    const location = await locationsRepo.findById(locationId);
+    const location = await locationsRepo.findById(locationId, req.orgId!);
     if (!location) {
       reply.code(404);
       return { data: null, error: 'Location not found' };
@@ -43,7 +43,7 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId } = req.params as { locationId: string };
 
-    const location = await locationsRepo.findById(locationId);
+    const location = await locationsRepo.findById(locationId, req.orgId!);
     if (!location) {
       reply.code(404);
       return { data: null, error: 'Location not found' };
@@ -108,7 +108,7 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, id } = req.params as { locationId: string; id: string };
 
-    const criteria = await arrivalCriteriaRepo.findById(id);
+    const criteria = await arrivalCriteriaRepo.findById(id, req.orgId!);
     if (!criteria || criteria.locationId !== locationId) {
       reply.code(404);
       return { data: null, error: 'Arrival criteria not found' };
@@ -132,7 +132,7 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
       priority: z.number().int().optional(),
     }).parse((req as any).body);
 
-    const updated = await arrivalCriteriaRepo.update(id, body);
+    const updated = await arrivalCriteriaRepo.update(id, req.orgId!, body);
     return { data: updated, error: null };
   });
 
@@ -145,13 +145,13 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, id } = req.params as { locationId: string; id: string };
 
-    const criteria = await arrivalCriteriaRepo.findById(id);
+    const criteria = await arrivalCriteriaRepo.findById(id, req.orgId!);
     if (!criteria || criteria.locationId !== locationId) {
       reply.code(404);
       return { data: null, error: 'Arrival criteria not found' };
     }
 
-    await arrivalCriteriaRepo.delete(id);
+    await arrivalCriteriaRepo.delete(id, req.orgId!);
     return { data: { deleted: true }, error: null };
   });
 }

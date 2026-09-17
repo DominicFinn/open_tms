@@ -70,7 +70,7 @@ export interface IWarehouseZoneRepository {
   findZones(orgId: string, scope: WarehouseScope): Promise<WarehouseZoneWithCounts[]>;
   findZoneById(orgId: string, id: string): Promise<WarehouseZone | null>;
   createZone(data: CreateWarehouseZoneDTO): Promise<WarehouseZone>;
-  updateZone(id: string, data: UpdateWarehouseZoneDTO): Promise<WarehouseZone>;
+  updateZone(orgId: string, id: string, data: UpdateWarehouseZoneDTO): Promise<WarehouseZone>;
 
   // Aisles
   findAislesByZone(orgId: string, zoneId: string): Promise<WarehouseAisle[]>;
@@ -83,7 +83,7 @@ export interface IWarehouseZoneRepository {
   findBinByLabel(orgId: string, locationId: string, label: string): Promise<WarehouseBin | null>;
   createBin(data: CreateWarehouseBinDTO): Promise<WarehouseBin>;
   createBins(data: CreateWarehouseBinDTO[]): Promise<{ count: number }>;
-  updateBin(id: string, data: UpdateWarehouseBinDTO): Promise<WarehouseBin>;
+  updateBin(orgId: string, id: string, data: UpdateWarehouseBinDTO): Promise<WarehouseBin>;
 }
 
 // ── Implementation ───────────────────────────────────────────
@@ -109,8 +109,8 @@ export class WarehouseZoneRepository implements IWarehouseZoneRepository {
     return this.prisma.warehouseZone.create({ data });
   }
 
-  async updateZone(id: string, data: UpdateWarehouseZoneDTO): Promise<WarehouseZone> {
-    return this.prisma.warehouseZone.update({ where: { id }, data });
+  async updateZone(orgId: string, id: string, data: UpdateWarehouseZoneDTO): Promise<WarehouseZone> {
+    return this.prisma.warehouseZone.update({ where: { id, orgId }, data });
   }
 
   // ── Aisles ─────────────────────────────────────────────────
@@ -164,7 +164,7 @@ export class WarehouseZoneRepository implements IWarehouseZoneRepository {
     return this.prisma.warehouseBin.createMany({ data });
   }
 
-  async updateBin(id: string, data: UpdateWarehouseBinDTO): Promise<WarehouseBin> {
-    return this.prisma.warehouseBin.update({ where: { id }, data });
+  async updateBin(orgId: string, id: string, data: UpdateWarehouseBinDTO): Promise<WarehouseBin> {
+    return this.prisma.warehouseBin.update({ where: { id, orgId }, data });
   }
 }

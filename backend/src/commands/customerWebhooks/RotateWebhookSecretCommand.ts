@@ -32,13 +32,13 @@ export class RotateWebhookSecretCommandHandler extends BaseCommandHandler<Rotate
   ): Promise<RotateWebhookSecretResult> {
     const { id, customerId, newSecret } = command.payload;
 
-    const existing = await tx.customerWebhook.findUnique({ where: { id } });
+    const existing = await tx.customerWebhook.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing || existing.customerId !== customerId) {
       throw new Error('Webhook not found');
     }
 
     const updated = await tx.customerWebhook.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { secret: newSecret },
     });
 

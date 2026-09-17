@@ -84,7 +84,7 @@ export const SCOPE_HELPERS: readonly string[] = [
   'attachOrgScopeHook',
   'attachOrgScopeFromCustomerUserHook',
   'attachOrgScopeFromCarrierUserHook',
-  'attachOrgScopeFromPartnerHook',
+  'attachEdiOrgScopeHook',
   'attachOrgScopeFromApiKeyHook',
   'attachOrgScopeFromIotWebhookHook',
 ];
@@ -105,13 +105,6 @@ export const UNSCOPED_ROUTE_FILES: Readonly<Record<string, string>> = {
 export const ORG_LOOKUP_EXEMPTIONS: Readonly<Record<string, string>> = {
   'routes/seed.ts': 'Seeding targets the sole development organisation and is 403 in production.',
 };
-
-/**
- * Files allowed to look up tenant rows by id alone (#314), because the id itself is the proof of
- * tenancy: a principal read from its own verified token, for example. Anything else goes in the
- * baseline until it is fixed.
- */
-export const ID_LOOKUP_EXEMPTIONS: Readonly<Record<string, string>> = {};
 
 /** Source that is not application code. */
 export const EXEMPT_PATHS: readonly RegExp[] = [/^__tests__\//, /^scripts\//, /^tooling\//];

@@ -272,7 +272,7 @@ describe('Quote Command Handlers', () => {
       // Original quote was superseded
       expect(reviseTx.quote.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'quote-1' },
+          where: { id: 'quote-1', orgId: 'test-org' },
           data: { status: 'superseded' },
         })
       );

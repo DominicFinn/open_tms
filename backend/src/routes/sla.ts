@@ -73,7 +73,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
-    const policy = await slaRepo.findPolicyById(request.params.id);
+    const policy = await slaRepo.findPolicyById(request.params.id, request.orgId!);
     if (!policy) {
       reply.status(404);
       return { data: null, error: 'SLA policy not found' };
@@ -269,7 +269,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
 
-    const source = await slaRepo.findPolicyById(request.params.id);
+    const source = await slaRepo.findPolicyById(request.params.id, request.orgId!);
     if (!source) {
       reply.status(404);
       return { data: null, error: 'Source policy not found' };

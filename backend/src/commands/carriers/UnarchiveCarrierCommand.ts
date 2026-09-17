@@ -24,13 +24,13 @@ export class UnarchiveCarrierCommandHandler extends BaseCommandHandler<{ id: str
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
-    const existing = await tx.carrier.findFirstOrThrow({ where: { id, deletedAt: null } });
+    const existing = await tx.carrier.findFirstOrThrow({ where: { id, orgId: command.orgId, deletedAt: null } });
     if (!existing.archived) {
       return { id };
     }
 
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: false, archivedAt: null },
     });
 

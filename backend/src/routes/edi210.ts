@@ -61,7 +61,7 @@ export async function edi210Routes(server: FastifyInstance) {
     const parsed = edi210ParseService.parseEDI210(body.content);
 
     if (!parsed.success) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: parsed.errors.join('; '),
         processedAt: new Date(),
@@ -135,7 +135,7 @@ export async function edi210Routes(server: FastifyInstance) {
       });
 
       if (!result.success) {
-        await tradingPartnerRepo.updateLog(logEntry.id, {
+        await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
           status: 'error',
           errorMessage: result.error,
           shipmentReference: parsed.shipmentReference,
@@ -146,7 +146,7 @@ export async function edi210Routes(server: FastifyInstance) {
         return { data: null, error: result.error };
       }
 
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'success',
         shipmentId: shipmentId || null,
         shipmentReference: parsed.shipmentReference,
@@ -172,7 +172,7 @@ export async function edi210Routes(server: FastifyInstance) {
         error: null,
       };
     } catch (err: any) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: err.message,
         processedAt: new Date(),

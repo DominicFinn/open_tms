@@ -29,7 +29,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const { carrierId } = req.params as { carrierId: string };
     const cutoffs = await prisma.carrierCutoff.findMany({
-      where: { carrierId },
+      where: { carrierId, orgId: req.orgId! },
       orderBy: [{ dayOfWeek: 'asc' }, { cutoffLocalTime: 'asc' }],
     });
     return { data: cutoffs, error: null };
@@ -66,7 +66,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const carrier = await prisma.carrier.findUnique({ where: { id: carrierId }, select: { id: true } });
+    const carrier = await prisma.carrier.findUnique({ where: { id: carrierId, orgId }, select: { id: true } });
     if (!carrier) { reply.code(404); return { data: null, error: 'Carrier not found' }; }
 
     const created = await prisma.carrierCutoff.create({
@@ -100,9 +100,10 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const existing = await prisma.carrierCutoff.findUnique({ where: { id } });
+    const orgId = req.orgId!;
+    const existing = await prisma.carrierCutoff.findUnique({ where: { id, orgId } });
     if (!existing) { reply.code(404); return { data: null, error: 'Cutoff not found' }; }
-    const updated = await prisma.carrierCutoff.update({ where: { id }, data: body });
+    const updated = await prisma.carrierCutoff.update({ where: { id, orgId }, data: body });
     return { data: updated, error: null };
   });
 
@@ -110,9 +111,10 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Cutoff Monitoring'], summary: 'Delete a carrier cutoff row' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const existing = await prisma.carrierCutoff.findUnique({ where: { id } });
+    const orgId = req.orgId!;
+    const existing = await prisma.carrierCutoff.findUnique({ where: { id, orgId } });
     if (!existing) { reply.code(404); return { data: null, error: 'Cutoff not found' }; }
-    await prisma.carrierCutoff.delete({ where: { id } });
+    await prisma.carrierCutoff.delete({ where: { id, orgId } });
     return { data: { success: true }, error: null };
   });
 
@@ -129,7 +131,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as { severity?: 'warning' | 'critical' };
-    const where: any = { lastCutoffRiskSeverity: { not: null } };
+    const where: any = { orgId: req.orgId!, lastCutoffRiskSeverity: { not: null } };
     if (q.severity) where.lastCutoffRiskSeverity = q.severity;
     else where.lastCutoffRiskSeverity = { in: ['warning', 'critical'] };
 

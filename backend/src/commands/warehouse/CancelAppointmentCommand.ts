@@ -42,7 +42,7 @@ export class CancelAppointmentCommandHandler extends BaseCommandHandler<
     }
 
     const updated = await tx.receivingAppointment.update({
-      where: { id: p.appointmentId },
+      where: { id: p.appointmentId, orgId: command.orgId },
       data: { status: 'cancelled' },
     });
 

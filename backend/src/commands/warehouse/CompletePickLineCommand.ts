@@ -31,7 +31,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const line = await tx.pickLine.findUnique({
-      where: { id: p.pickLineId },
+      where: { id: p.pickLineId, pickTask: { orgId: command.orgId } },
       include: { pickTask: true },
     });
     if (!line) throw new Error(`Pick line ${p.pickLineId} not found`);
@@ -47,7 +47,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
     // Auto-start task if pending
     if (task.status === 'pending') {
       await tx.pickTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: { status: 'in_progress', startedAt: new Date() },
       });
     }
@@ -57,7 +57,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
 
     // Update pick line
     await tx.pickLine.update({
-      where: { id: line.id },
+      where: { id: line.id, pickTask: { orgId: command.orgId } },
       data: {
         pickedQuantity: p.pickedQuantity,
         status: lineStatus,
@@ -67,10 +67,10 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
 
     // Deduct from inventory
     if (p.pickedQuantity > 0) {
-      const invRecord = await tx.inventoryRecord.findUnique({ where: { id: line.inventoryRecordId } });
+      const invRecord = await tx.inventoryRecord.findUnique({ where: { id: line.inventoryRecordId, orgId: command.orgId } });
       if (invRecord) {
         await tx.inventoryRecord.update({
-          where: { id: invRecord.id },
+          where: { id: invRecord.id, orgId: command.orgId },
           data: {
             quantityOnHand: { decrement: p.pickedQuantity },
             quantityAllocated: { decrement: p.pickedQuantity },
@@ -100,7 +100,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
       if (p.shortPickAction === 'cancel_line') {
         // Release the allocation back to available
         await tx.inventoryRecord.update({
-          where: { id: line.inventoryRecordId },
+          where: { id: line.inventoryRecordId, orgId: command.orgId },
           data: {
             quantityAllocated: { decrement: shortQty },
             quantityAvailable: { increment: shortQty },
@@ -130,7 +130,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
     });
 
     await tx.pickTask.update({
-      where: { id: task.id },
+      where: { id: task.id, orgId: command.orgId },
       data: { completedLines },
     });
 
@@ -141,7 +141,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
         where: { pickTaskId: task.id, status: 'short' },
       });
       await tx.pickTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: {
           status: hasShorts > 0 ? 'short_pick' : 'completed',
           completedAt: new Date(),
@@ -168,7 +168,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
         });
         if (remainingTasks === 0) {
           await tx.wave.update({
-            where: { id: task.waveId },
+            where: { id: task.waveId, orgId: command.orgId },
             data: { status: 'completed' },
           });
           emit(this.createEvent(command, {

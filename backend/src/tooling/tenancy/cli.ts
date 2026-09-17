@@ -14,6 +14,7 @@ const REASONS: Record<string, string> = {
   'route-without-scope': 'Public plugin with no org scope helper. Register one.',
   'route-not-registered': 'Route file no module registers. Register or delete it.',
   'org-fallback': 'Falls back to a literal or an any-cast org. Read req.orgId from the scope hook.',
+  'unscoped-query': 'Tenant data listed, counted or bulk-written without the org in the where.',
   'id-only-lookup': 'Tenant data looked up or written by id alone. Put the org in the where.',
   'unscoped-org-lookup': 'Picks the first organization for every tenant (#296). Key it on the caller org.',
 };
@@ -22,6 +23,7 @@ const describe = (finding: Finding): string => `  ${finding.rule.padEnd(22)} ${f
 
 async function main(): Promise<number> {
   const write = process.argv.includes('--write-baseline');
+  const list = process.argv.includes('--list');
   const baseline = await loadBaseline(BASELINE_PATH);
   const result = await check(SOURCE_ROOT, SCHEMA_DIR, baseline);
   const policyErrors = result.findings.filter((finding) => finding.rule === 'policy-invalid');
@@ -43,6 +45,12 @@ async function main(): Promise<number> {
       .sort((a, b) => findingKey(a).localeCompare(findingKey(b)));
     await writeFile(BASELINE_PATH, `${JSON.stringify(entries, null, 2)}\n`);
     console.log(`Wrote ${entries.length} entries to ${path.relative(process.cwd(), BASELINE_PATH)}`);
+    return 0;
+  }
+
+  if (list) {
+    // Every finding with its lines, baselined or not, so a burn-down can see exactly what is left.
+    for (const finding of [...result.baselined, ...result.findings]) console.log(describe(finding));
     return 0;
   }
 

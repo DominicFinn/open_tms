@@ -442,7 +442,7 @@ export async function rmaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const rma = await prisma.rma.findUnique({
-      where: { id },
+      where: { id, orgId: req.orgId! },
       select: { returnLabelStorageKey: true, returnLabelFormat: true, rmaNumber: true },
     });
     if (!rma || !rma.returnLabelStorageKey) {

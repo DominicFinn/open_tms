@@ -193,7 +193,7 @@ export async function chargeRoutes(server: FastifyInstance) {
       return { data: null, error: `Cannot delete charge in status "${charge.status}"` };
     }
 
-    await chargeRepo.delete(id);
+    await chargeRepo.delete(id, req.orgId!);
 
     // Recalculate summary
     if (charge.shipmentId) {

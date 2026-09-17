@@ -91,10 +91,10 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     }));
 
     expect(prisma.packTask.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'pt-1' }, select: { orderId: true } }),
+      expect.objectContaining({ where: { id: 'pt-1', orgId: 'org1' }, select: { orderId: true } }),
     );
     expect(prisma.order.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'order-42' }, select: { customerId: true } }),
+      expect.objectContaining({ where: { id: 'order-42', orgId: 'org1' }, select: { customerId: true } }),
     );
     expect(prisma.customerWebhook.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { customerId: 'cust-42', enabled: true } }),

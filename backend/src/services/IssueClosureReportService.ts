@@ -102,13 +102,13 @@ export class IssueClosureReportService {
 
     // Comments on this issue
     const comments = await this.prisma.comment.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'asc' },
     });
 
     // Domain events for this issue
     const events = await this.prisma.domainEventLog.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -116,13 +116,13 @@ export class IssueClosureReportService {
     let triggerEvent = null;
     if (issue.sourceEventId) {
       triggerEvent = await this.prisma.domainEventLog.findUnique({
-        where: { id: issue.sourceEventId },
+        where: { id: issue.sourceEventId, orgId },
       });
     }
 
     // SLA evaluations
     const slaEvaluations = await this.prisma.slaEvaluation.findMany({
-      where: { entityType: 'issue', entityId: issueId },
+      where: { orgId, entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'desc' },
     });
 

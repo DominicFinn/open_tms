@@ -29,7 +29,7 @@ export class UpdateCargoDiscrepancyCommandHandler extends BaseCommandHandler<Upd
     const resolving = changes.status === 'resolved' && existing.status !== 'resolved';
 
     const updated = await tx.cargoDiscrepancy.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         ...changes,
         ...(resolving ? { resolvedAt: new Date(), resolvedBy: changes.resolvedBy ?? command.actorId } : {}),

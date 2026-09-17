@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { ICargoReconciliationService } from './CargoReconciliationService.js';
 
 export interface DeliveryStatusUpdate {
+  orgId: string;
   orderId: string;
   deliveryStatus: 'in_transit' | 'delivered' | 'exception';
   deliveryMethod?: 'manual' | 'geofence' | 'geofence_iot' | 'auto' | 'driver_app';
@@ -12,6 +13,7 @@ export interface DeliveryStatusUpdate {
 }
 
 export interface DeliveryException {
+  orgId: string;
   orderId: string;
   exceptionType: 'delay' | 'damage' | 'refused' | 'address_issue' | 'weather' | 'other';
   exceptionNotes: string;
@@ -20,11 +22,11 @@ export interface DeliveryException {
 
 export interface IOrderDeliveryService {
   updateOrderDeliveryStatus(update: DeliveryStatusUpdate): Promise<any>;
-  markOrderDelivered(orderId: string, method: string, confirmedBy?: string, notes?: string): Promise<any>;
+  markOrderDelivered(orgId: string, orderId: string, method: string, confirmedBy?: string, notes?: string): Promise<any>;
   createDeliveryException(exception: DeliveryException): Promise<any>;
-  resolveDeliveryException(orderId: string, resolvedBy?: string, notes?: string): Promise<any>;
-  updateOrdersForStop(shipmentStopId: string, status: string, method: string): Promise<number>;
-  checkGeofenceAndUpdateOrders(shipmentId: string, currentLat: number, currentLng: number): Promise<number>;
+  resolveDeliveryException(orgId: string, orderId: string, resolvedBy?: string, notes?: string): Promise<any>;
+  updateOrdersForStop(orgId: string, shipmentStopId: string, status: string, method: string): Promise<number>;
+  checkGeofenceAndUpdateOrders(orgId: string, shipmentId: string, currentLat: number, currentLng: number): Promise<number>;
 }
 
 export class OrderDeliveryService implements IOrderDeliveryService {
@@ -44,7 +46,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    */
   async updateOrderDeliveryStatus(update: DeliveryStatusUpdate): Promise<any> {
     const order = await this.prisma.order.findUnique({
-      where: { id: update.orderId },
+      where: { id: update.orderId, orgId: update.orgId },
       include: {
         deliveryStop: {
           include: {
@@ -81,7 +83,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
 
     // Update order
     const updatedOrder = await this.prisma.order.update({
-      where: { id: update.orderId },
+      where: { id: update.orderId, orgId: update.orgId },
       data: updateData,
       include: {
         customer: true,
@@ -129,12 +131,14 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    * Mark order as delivered (convenience method)
    */
   async markOrderDelivered(
+    orgId: string,
     orderId: string,
     method: string = 'manual',
     confirmedBy?: string,
     notes?: string
   ): Promise<any> {
     return this.updateOrderDeliveryStatus({
+      orgId,
       orderId,
       deliveryStatus: 'delivered',
       deliveryMethod: method as any,
@@ -148,6 +152,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    */
   async createDeliveryException(exception: DeliveryException): Promise<any> {
     return this.updateOrderDeliveryStatus({
+      orgId: exception.orgId,
       orderId: exception.orderId,
       deliveryStatus: 'exception',
       exceptionType: exception.exceptionType,
@@ -161,12 +166,13 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    * Resolve delivery exception and move order back to in_transit
    */
   async resolveDeliveryException(
+    orgId: string,
     orderId: string,
     resolvedBy?: string,
     notes?: string
   ): Promise<any> {
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId }
+      where: { id: orderId, orgId }
     });
 
     if (!order) {
@@ -178,7 +184,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     }
 
     const updated = await this.prisma.order.update({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       data: {
         deliveryStatus: 'in_transit',
         exceptionResolvedAt: new Date(),
@@ -219,12 +225,13 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    * Used when a stop is reached/completed
    */
   async updateOrdersForStop(
+    orgId: string,
     shipmentStopId: string,
     status: string,
     method: string = 'auto'
   ): Promise<number> {
     const stop = await this.prisma.shipmentStop.findUnique({
-      where: { id: shipmentStopId },
+      where: { id: shipmentStopId, shipment: { orgId } },
       include: {
         orders: {
           // Prisma's notIn doesn't reliably include NULL rows (the common
@@ -252,7 +259,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     const result = await this.prisma.$transaction(async (tx) => {
       // Update stop status
       await tx.shipmentStop.update({
-        where: { id: shipmentStopId },
+        where: { id: shipmentStopId, shipment: { orgId } },
         data: {
           status,
           actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? new Date() : stop.actualArrival,
@@ -266,6 +273,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         const affectedOrders = stop.orders;
         const updateResult = await tx.order.updateMany({
           where: {
+            orgId,
             deliveryStopId: shipmentStopId,
             OR: [
               { deliveryStatus: null },
@@ -310,6 +318,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         );
         const updateResult = await tx.order.updateMany({
           where: {
+            orgId,
             deliveryStopId: shipmentStopId,
             deliveryStatus: null,
           },
@@ -346,17 +355,17 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     // Cargo reconciliation runs outside the transaction (non-blocking side effect)
     if (status === 'completed' && this.cargoReconciliation) {
       try {
-        await this.cargoReconciliation.reconcileCompletedStop(stop.shipment.orgId, shipmentStopId, method);
+        await this.cargoReconciliation.reconcileCompletedStop(orgId, shipmentStopId, method);
 
         // If this was the last stop, check for cargo left on vehicle
         const allStops = await this.prisma.shipmentStop.findMany({
-          where: { shipmentId: stop.shipmentId },
+          where: { shipmentId: stop.shipmentId, shipment: { orgId } },
         });
         const allCompleted = allStops.every(
           (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
         );
         if (allCompleted) {
-          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipment.orgId, stop.shipmentId);
+          await this.cargoReconciliation.checkLeftOnVehicle(orgId, stop.shipmentId);
         }
       } catch (err) {
         console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);
@@ -371,6 +380,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    * This would be called by a geofencing service/webhook
    */
   async checkGeofenceAndUpdateOrders(
+    orgId: string,
     shipmentId: string,
     currentLat: number,
     currentLng: number
@@ -379,6 +389,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     const stops = await this.prisma.shipmentStop.findMany({
       where: {
         shipmentId,
+        shipment: { orgId },
         geofenceEnabled: true,
         status: {
           in: ['pending', 'arrived']
@@ -424,7 +435,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       // 'arrived' with a fresh timestamp on every subsequent ping.
       if (distance <= stop.geofenceRadius && stop.status === 'pending') {
         await this.prisma.shipmentStop.update({
-          where: { id: stop.id },
+          where: { id: stop.id, shipment: { orgId } },
           data: {
             status: 'arrived',
             actualArrival: new Date(),
@@ -434,6 +445,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
 
         // Update orders for this stop
         const ordersUpdated = await this.updateOrdersForStop(
+          orgId,
           stop.id,
           'arrived',
           'geofence'
@@ -474,6 +486,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
    * This would be called by IoT webhook/integration
    */
   async processIoTDeliveryEvent(
+    orgId: string,
     shipmentId: string,
     eventType: 'light' | 'door_open' | 'temperature' | 'shock',
     location: { lat: number; lng: number },
@@ -485,6 +498,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       const stops = await this.prisma.shipmentStop.findMany({
         where: {
           shipmentId,
+          shipment: { orgId },
           status: {
             in: ['arrived', 'in_progress']
           }
@@ -508,6 +522,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         // If within 500m of stop and door opened, mark orders delivered
         if (distance <= 500) {
           const ordersUpdated = await this.updateOrdersForStop(
+            orgId,
             stop.id,
             'completed',
             'geofence_iot'

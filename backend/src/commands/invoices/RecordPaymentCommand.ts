@@ -64,7 +64,7 @@ export class RecordPaymentCommandHandler extends BaseCommandHandler<RecordPaymen
     const newStatus = fullyPaid ? 'paid' : 'partial_paid';
 
     await tx.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: {
         paidCents: newPaidCents,
         balanceCents: Math.max(0, newBalanceCents),

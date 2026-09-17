@@ -119,7 +119,7 @@ export class SlaEvaluationHandler implements IEventHandler {
     }
     // If shipment cancelled, cancel active evaluations
     if (payload.newStatus === 'cancelled') {
-      await this.cancelEvaluations('shipment', event.entityId);
+      await this.cancelEvaluations('shipment', event.entityId, event.orgId);
     }
   }
 
@@ -135,7 +135,7 @@ export class SlaEvaluationHandler implements IEventHandler {
     let customerId: string | undefined;
     if (payload.sourceEntityType === 'shipment' && payload.sourceEntityId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: payload.sourceEntityId },
+        where: { id: payload.sourceEntityId, orgId: event.orgId },
         select: { customerId: true },
       });
       customerId = shipment?.customerId ?? undefined;
@@ -198,7 +198,7 @@ export class SlaEvaluationHandler implements IEventHandler {
     let customerId: string | undefined;
     if (shipmentId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId: event.orgId },
         select: { customerId: true },
       });
       customerId = shipment?.customerId ?? undefined;
@@ -231,14 +231,14 @@ export class SlaEvaluationHandler implements IEventHandler {
     }
   }
 
-  private async cancelEvaluations(entityType: string, entityId: string): Promise<void> {
+  private async cancelEvaluations(entityType: string, entityId: string, orgId: string): Promise<void> {
     const evaluations = await this.prisma.slaEvaluation.findMany({
-      where: { entityType, entityId, status: { in: ['active', 'warning'] } },
+      where: { orgId, entityType, entityId, status: { in: ['active', 'warning'] } },
     });
     const now = new Date();
     for (const evaluation of evaluations) {
       await this.prisma.slaEvaluation.update({
-        where: { id: evaluation.id, status: evaluation.status },
+        where: { id: evaluation.id, orgId, status: evaluation.status },
         data: { status: 'cancelled', updatedAt: now },
       }).catch(() => {}); // Ignore race conditions
     }

@@ -156,3 +156,14 @@ describe('PaymentRepository', () => {
     expect(call.receivedDate).toBeInstanceOf(Date);
   });
 });
+
+describe('InvoiceRepository.update', () => {
+  it('only touches an invoice in the caller org', async () => {
+    const prisma = buildPrisma();
+    await new InvoiceRepository(prisma).update('inv-1', 'org-1', { status: 'sent' } as any);
+    expect(prisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: 'inv-1', orgId: 'org-1' },
+      data: { status: 'sent' },
+    });
+  });
+});

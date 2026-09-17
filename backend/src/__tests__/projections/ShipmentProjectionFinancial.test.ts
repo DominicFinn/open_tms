@@ -57,7 +57,7 @@ describe('ShipmentProjection - Financial Columns', () => {
     });
 
     expect(prisma.shipmentReadModel.update).toHaveBeenCalledWith({
-      where: { id: 'ship-1' },
+      where: { id: 'ship-1', orgId: 'test-org' },
       data: expect.objectContaining({
         expectedRevenueCents: 10000,
         expectedCostCents: 5000,

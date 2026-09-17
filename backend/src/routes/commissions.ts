@@ -27,7 +27,7 @@ export async function commissionRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.userId) where.userId = query.userId;
     if (query.shipmentId) where.shipmentId = query.shipmentId;
     if (query.status) where.status = query.status;
@@ -75,7 +75,7 @@ export async function commissionRoutes(server: FastifyInstance) {
 
     // Look up the shipment's financial summary
     const summary = await server.prisma.shipmentFinancialSummary.findUnique({
-      where: { shipmentId: body.shipmentId },
+      where: { shipmentId: body.shipmentId, orgId },
     });
 
     if (!summary) {
@@ -118,7 +118,8 @@ export async function commissionRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const commission = await server.prisma.commission.findUnique({ where: { id } });
+    const orgId = req.orgId!;
+    const commission = await server.prisma.commission.findUnique({ where: { id, orgId } });
 
     if (!commission) { reply.code(404); return { data: null, error: 'Commission not found' }; }
     if (commission.status !== 'accrued') {
@@ -127,7 +128,7 @@ export async function commissionRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.commission.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         status: 'approved',
         approvedBy: (req as any).user?.sub ?? 'system',
@@ -153,7 +154,8 @@ export async function commissionRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = (req as any).body || {};
 
-    const commission = await server.prisma.commission.findUnique({ where: { id } });
+    const orgId = req.orgId!;
+    const commission = await server.prisma.commission.findUnique({ where: { id, orgId } });
     if (!commission) { reply.code(404); return { data: null, error: 'Commission not found' }; }
     if (commission.status !== 'approved') {
       reply.code(400);
@@ -161,7 +163,7 @@ export async function commissionRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.commission.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         status: 'paid',
         paidAt: new Date(),
@@ -187,7 +189,7 @@ export async function commissionRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as { dateFrom?: string; dateTo?: string };
-    const where: any = {};
+    const where: any = { orgId: req.orgId! };
     if (query.dateFrom || query.dateTo) {
       where.createdAt = {};
       if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);

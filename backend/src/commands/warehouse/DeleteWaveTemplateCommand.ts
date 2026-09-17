@@ -40,7 +40,7 @@ export class DeleteWaveTemplateCommandHandler extends BaseCommandHandler<
       throw new Error('Cannot delete a template that has released waves; deactivate it instead');
     }
 
-    await tx.waveTemplate.delete({ where: { id: templateId } });
+    await tx.waveTemplate.delete({ where: { id: templateId, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.WAVE_TEMPLATE_DELETED,

@@ -96,6 +96,15 @@ describe('CustomersRepository orgId scoping', () => {
     await repo.create({ orgId: 'org-1', name: 'Acme' });
     expect(prisma.customer.create.mock.calls[0][0].data.orgId).toBe('org-1');
   });
+
+  it('update() and archive() only touch a row in the caller org', async () => {
+    const prisma = customerPrisma();
+    const repo = new CustomersRepository(prisma);
+    await repo.update('c-1', 'org-1', { name: 'Acme' });
+    await repo.archive('c-1', 'org-1');
+    expect(prisma.customer.update.mock.calls[0][0].where).toEqual({ id: 'c-1', orgId: 'org-1' });
+    expect(prisma.customer.update.mock.calls[1][0].where).toEqual({ id: 'c-1', orgId: 'org-1' });
+  });
 });
 
 describe('CarriersRepository orgId scoping', () => {

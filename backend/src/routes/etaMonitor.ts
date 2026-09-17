@@ -179,7 +179,7 @@ export const etaMonitorRoutes: FastifyPluginAsync = async (server) => {
   }, async (request, reply) => {
     try {
       const etaService = container.resolve<IShipmentEtaMonitorService>(TOKENS.IShipmentEtaMonitorService);
-      const result = await etaService.checkSingleShipment(request.params.shipmentId);
+      const result = await etaService.checkSingleShipment(request.orgId!, request.params.shipmentId);
       return { data: result, error: null };
     } catch (err) {
       if ((err as Error).message?.includes('No registration')) {

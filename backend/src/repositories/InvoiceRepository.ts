@@ -66,7 +66,7 @@ export interface IInvoiceRepository {
   create(data: CreateInvoiceDTO): Promise<Invoice>;
   findById(id: string, orgId: string): Promise<InvoiceWithLineItems | null>;
   findAll(filters: InvoiceFilters): Promise<InvoiceWithLineItems[]>;
-  update(id: string, data: Partial<Invoice>): Promise<Invoice>;
+  update(id: string, orgId: string, data: Partial<Invoice>): Promise<Invoice>;
   addLineItem(data: CreateInvoiceLineItemDTO): Promise<InvoiceLineItem>;
   addLineItems(data: CreateInvoiceLineItemDTO[]): Promise<number>;
   getNextInvoiceNumber(orgId: string): Promise<string>;
@@ -134,8 +134,8 @@ export class InvoiceRepository implements IInvoiceRepository {
     }) as Promise<InvoiceWithLineItems[]>;
   }
 
-  async update(id: string, data: Partial<Invoice>): Promise<Invoice> {
-    return this.prisma.invoice.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<Invoice>): Promise<Invoice> {
+    return this.prisma.invoice.update({ where: { id, orgId }, data });
   }
 
   async addLineItem(data: CreateInvoiceLineItemDTO): Promise<InvoiceLineItem> {

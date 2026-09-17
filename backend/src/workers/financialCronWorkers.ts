@@ -93,6 +93,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         },
         select: {
           id: true,
+          orgId: true,
           invoiceNumber: true,
           customerId: true,
           totalCents: true,
@@ -116,7 +117,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         // Update status to overdue if not already
         // (We check via query but the status column might still be 'sent')
         await prisma.invoice.update({
-          where: { id: invoice.id },
+          where: { id: invoice.id, orgId: invoice.orgId },
           data: { status: 'overdue' },
         });
         statusUpdated++;
@@ -124,7 +125,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         // Update InvoiceReadModel daysPastDue
         const daysPastDue = Math.floor((now.getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24));
         await prisma.invoiceReadModel.update({
-          where: { id: invoice.id },
+          where: { id: invoice.id, orgId: invoice.orgId },
           data: { status: 'overdue', daysPastDue },
         }).catch(() => {
           // Read model might not exist
@@ -138,7 +139,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
 
         if (lastReminder < sevenDaysAgo) {
           await prisma.invoice.update({
-            where: { id: invoice.id },
+            where: { id: invoice.id, orgId: invoice.orgId },
             data: {
               lastReminderSentAt: now,
               reminderCount: { increment: 1 },
@@ -223,6 +224,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         },
         select: {
           id: true,
+          orgId: true,
           name: true,
           paymentTermsDays: true,
           invoiceConsolidation: true,
@@ -244,7 +246,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
 
         // Find all ready-to-invoice shipments for this customer
         const summaries = await prisma.shipmentFinancialSummary.findMany({
-          where: { billingStatus: 'ready_to_invoice' },
+          where: { orgId: customer.orgId, billingStatus: 'ready_to_invoice' },
           select: { shipmentId: true },
         });
 
@@ -256,6 +258,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         const customerShipments = await prisma.shipment.findMany({
           where: {
             id: { in: shipmentIds },
+            orgId: customer.orgId,
             customerId: customer.id,
           },
           select: { id: true, reference: true },
@@ -268,6 +271,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         // Collect all approved revenue charges
         const charges = await prisma.charge.findMany({
           where: {
+            orgId: customer.orgId,
             shipmentId: { in: custShipmentIds },
             chargeCategory: 'revenue',
             status: 'approved',
@@ -334,13 +338,13 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
 
         // Mark charges as invoiced
         await prisma.charge.updateMany({
-          where: { id: { in: charges.map(c => c.id) } },
+          where: { orgId: customer.orgId, id: { in: charges.map(c => c.id) } },
           data: { status: 'invoiced' },
         });
 
         // Update shipment billing status
         await prisma.shipmentFinancialSummary.updateMany({
-          where: { shipmentId: { in: custShipmentIds } },
+          where: { orgId: customer.orgId, shipmentId: { in: custShipmentIds } },
           data: { billingStatus: 'invoiced' },
         });
 
@@ -423,7 +427,7 @@ export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
         const amount = inv.approvedCents ?? inv.totalCents;
 
         await prisma.carrierInvoice.update({
-          where: { id: inv.id },
+          where: { id: inv.id, orgId: inv.orgId },
           data: {
             status: 'paid',
             paidCents: amount,
@@ -436,7 +440,7 @@ export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
         const shipmentIds = [...new Set(inv.lineItems.map((l: { shipmentId: string | null }) => l.shipmentId).filter(Boolean) as string[])];
         if (shipmentIds.length > 0) {
           await prisma.shipmentFinancialSummary.updateMany({
-            where: { shipmentId: { in: shipmentIds } },
+            where: { orgId: inv.orgId, shipmentId: { in: shipmentIds } },
             data: { carrierPaymentStatus: 'paid' },
           });
         }

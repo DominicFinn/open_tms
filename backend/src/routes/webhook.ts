@@ -187,7 +187,7 @@ export async function webhookRoutes(server: FastifyInstance) {
       } catch (queueErr) {
         server.log.warn({ webhookLogId, orgId, err: (queueErr as Error).message }, 'Queue publish failed, webhook will not be processed');
         await server.prisma.webhookLog.update({
-          where: { id: webhookLogId },
+          where: { id: logEntry.id, orgId: orgId! },
           data: {
             status: 'error',
             errorMessage: 'Failed to queue for processing: ' + (queueErr as Error).message,
@@ -220,9 +220,9 @@ export async function webhookRoutes(server: FastifyInstance) {
       };
 
       // Update log if we have one
-      if (webhookLogId) {
+      if (webhookLogId && orgId) {
         await server.prisma.webhookLog.update({
-          where: { id: webhookLogId },
+          where: { id: webhookLogId, orgId },
           data: {
             status: 'error',
             errorMessage: error.message,

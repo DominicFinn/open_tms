@@ -31,11 +31,11 @@ export class RecordGeofenceArrivalCommandHandler extends BaseCommandHandler<Reco
   protected async handle(command: Command<RecordGeofenceArrivalPayload>, tx: TransactionClient, emit: EmitFn) {
     const { shipmentId, stopId, locationId, lat, lng, eventTime, isDestination } = command.payload;
 
-    const stop = await tx.shipmentStop.findUnique({ where: { id: stopId } });
+    const stop = await tx.shipmentStop.findUnique({ where: { id: stopId, shipment: { orgId: command.orgId } } });
     if (!stop || stop.status !== 'pending') return { arrived: false };
 
     await tx.shipmentStop.update({
-      where: { id: stopId },
+      where: { id: stopId, shipment: { orgId: command.orgId } },
       data: { status: 'arrived', actualArrival: new Date(eventTime) },
     });
 

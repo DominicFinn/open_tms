@@ -105,7 +105,7 @@ export class ComplianceReportService {
 
     // Temperature summary
     const coldChainService = new ColdChainService(this.prisma);
-    const summary = await coldChainService.getTemperatureSummary(shipmentId);
+    const summary = await coldChainService.getTemperatureSummary(orgId, shipmentId);
 
     // Excursions
     const excursions = await this.prisma.coldChainExcursion.findMany({

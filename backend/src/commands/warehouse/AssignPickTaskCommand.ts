@@ -43,7 +43,7 @@ export class AssignPickTaskCommandHandler extends BaseCommandHandler<
     }
 
     const updated = await tx.pickTask.update({
-      where: { id: taskId },
+      where: { id: taskId, orgId: command.orgId },
       data: { assignedToUserId, status: 'assigned' },
     });
 

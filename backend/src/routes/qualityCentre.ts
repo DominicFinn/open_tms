@@ -567,6 +567,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
       body: {
         type: 'object',
+        // Strips anything else, so the spread below can never move the row to another org.
+        additionalProperties: false,
         properties: {
           title: { type: 'string' },
           description: { type: 'string' },
@@ -592,7 +594,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.sOPChecklist.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         ...body,
         nextDueDate: body.nextDueDate ? new Date(body.nextDueDate) : undefined,
@@ -986,7 +988,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.sOPAuditResponse.update({
-      where: { id: responseId },
+      where: { id: responseId, audit: { orgId: req.orgId! } },
       data: {
         evidenceRef: body.evidenceRef !== undefined ? body.evidenceRef : undefined,
         correctiveAction: body.correctiveAction !== undefined ? body.correctiveAction : undefined,

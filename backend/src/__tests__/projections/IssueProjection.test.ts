@@ -48,7 +48,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         create: expect.objectContaining({
           title: 'Shipment delayed',
           status: 'open',
@@ -116,7 +116,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           snoozedUntil: new Date('2026-05-01T00:00:00Z'),
           snoozedBy: 'user-1',
@@ -135,7 +135,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           snoozedUntil: null,
           snoozedBy: null,
@@ -154,7 +154,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           status: 'closed',
           closedAt: new Date('2026-04-12T12:00:00Z'),
@@ -173,7 +173,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           status: 'open',
           closedAt: null,
@@ -192,7 +192,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           needsCapa: true,
         }),
@@ -223,7 +223,7 @@ describe('IssueProjection', () => {
     );
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           labels: [
             { id: 'lbl-1', name: 'urgent', color: '#ff0000' },
@@ -244,7 +244,7 @@ describe('IssueProjection', () => {
 
     expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'issue-1' },
+        where: { id: 'issue-1', orgId: 'test-org' },
         data: expect.objectContaining({
           commentCount: { increment: 1 },
         }),
@@ -322,7 +322,7 @@ describe('IssueProjection', () => {
 
       expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'issue-1' },
+          where: { id: 'issue-1', orgId: 'test-org' },
           data: expect.objectContaining({
             status: 'resolved',
             timeToResolutionMins: 90,

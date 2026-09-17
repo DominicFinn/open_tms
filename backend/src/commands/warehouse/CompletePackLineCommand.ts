@@ -31,7 +31,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const line = await tx.packLine.findUnique({
-      where: { id: p.packLineId },
+      where: { id: p.packLineId, packTask: { orgId: command.orgId } },
       include: { packTask: true },
     });
     if (!line) throw new Error(`Pack line ${p.packLineId} not found`);
@@ -45,7 +45,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     // Auto-start task if pending
     if (task.status === 'pending') {
       await tx.packTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: { status: 'in_progress' },
       });
     }
@@ -55,7 +55,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     const lineStatus = verified ? 'packed' : 'verified';
 
     await tx.packLine.update({
-      where: { id: line.id },
+      where: { id: line.id, packTask: { orgId: command.orgId } },
       data: {
         packedQuantity: p.packedQuantity,
         status: p.packedQuantity > 0 ? 'packed' : 'verified',
@@ -85,7 +85,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     const taskComplete = completedLines >= totalLines;
     if (taskComplete) {
       await tx.packTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: { status: 'completed' },
       });
 

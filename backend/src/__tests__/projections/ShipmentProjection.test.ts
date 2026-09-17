@@ -59,7 +59,7 @@ describe('ShipmentProjection', () => {
 
       expect(mockPrisma.shipmentReadModel.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'test-org' },
           create: expect.objectContaining({
             reference: 'SH-001',
             customerName: 'Acme',
@@ -84,7 +84,7 @@ describe('ShipmentProjection', () => {
 
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'test-org' },
           data: expect.objectContaining({ status: 'in_progress' }),
         })
       );
@@ -102,7 +102,7 @@ describe('ShipmentProjection', () => {
 
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'test-org' },
           data: expect.objectContaining({ status: 'complete' }),
         })
       );
@@ -120,7 +120,7 @@ describe('ShipmentProjection', () => {
 
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'test-org' },
           data: expect.objectContaining({ status: 'archived' }),
         })
       );
@@ -139,7 +139,7 @@ describe('ShipmentProjection', () => {
 
       await proj.handle(event);
 
-      expect(deleteFn).toHaveBeenCalledWith({ where: { id: 'ship-1' } });
+      expect(deleteFn).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'test-org' } });
     });
   });
 
@@ -154,7 +154,7 @@ describe('ShipmentProjection', () => {
 
       // Routed through the create/upsert path now that archived is cleared.
       expect(mockPrisma.shipmentReadModel.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'ship-1' } })
+        expect.objectContaining({ where: { id: 'ship-1', orgId: 'test-org' } })
       );
     });
   });
@@ -178,7 +178,7 @@ describe('ShipmentProjection', () => {
       expect(del).not.toHaveBeenCalled();
       expect(upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'test-org' },
           create: expect.objectContaining({ status: 'archived' }),
           update: expect.objectContaining({ status: 'archived' }),
         })
@@ -201,7 +201,7 @@ describe('ShipmentProjection', () => {
       await proj.handle(event);
 
       expect(upsert).not.toHaveBeenCalled();
-      expect(del).toHaveBeenCalledWith({ where: { id: 'ship-1' } });
+      expect(del).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'test-org' } });
     });
   });
 
@@ -215,7 +215,7 @@ describe('ShipmentProjection', () => {
       await projection.handle(event);
 
       const call = mockPrisma.shipmentReadModel.update.mock.calls[0][0];
-      expect(call.where).toEqual({ id: 'ship-1' });
+      expect(call.where).toEqual({ id: 'ship-1', orgId: 'test-org' });
       expect(call.data).toEqual(expect.objectContaining({ hasException: true }));
       expect(call.data.status).toBeUndefined();
     });
@@ -231,7 +231,7 @@ describe('ShipmentProjection', () => {
       await projection.handle(event);
 
       expect(mockPrisma.carrier.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'carrier-1' } })
+        expect.objectContaining({ where: { id: 'carrier-1', orgId: 'test-org' } })
       );
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({

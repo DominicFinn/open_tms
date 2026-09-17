@@ -96,7 +96,7 @@ export class CompleteSOPAuditCommandHandler extends BaseCommandHandler<CompleteS
     const status = passed ? 'completed' : 'failed';
 
     await tx.sOPAudit.update({
-      where: { id: auditId },
+      where: { id: auditId, orgId: command.orgId },
       data: {
         status,
         score,
@@ -111,7 +111,7 @@ export class CompleteSOPAuditCommandHandler extends BaseCommandHandler<CompleteS
 
     // Update checklist last completed
     await tx.sOPChecklist.update({
-      where: { id: audit.checklistId },
+      where: { id: audit.checklistId, orgId: command.orgId },
       data: {
         lastCompletedAt: new Date(),
         lastCompletedBy: command.actorId,

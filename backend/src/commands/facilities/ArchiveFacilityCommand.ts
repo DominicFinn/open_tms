@@ -42,7 +42,7 @@ export class ArchiveFacilityCommandHandler extends BaseCommandHandler<
     }
 
     await tx.facility.update({
-      where: { id: facilityId },
+      where: { id: facilityId, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date(), active: false },
     });
 

@@ -52,7 +52,7 @@ export function createEdiRetryWorker(
     for (const log of failedLogs) {
       try {
         // Mark as retrying
-        await partnerRepo.updateLog(log.id, {
+        await partnerRepo.updateLog(log.id, log.orgId, {
           retryCount: log.retryCount + 1,
           lastRetryAt: new Date(),
           status: 'processing',
@@ -62,6 +62,7 @@ export function createEdiRetryWorker(
         if (log.direction === 'outbound' && log.partnerId && log.partner?.active) {
           // Retry outbound delivery
           const result = await deliveryService.deliver({
+            orgId: log.orgId,
             partnerId: log.partnerId,
             transactionType: log.transactionType,
             ediContent: log.fileContent!,
@@ -72,14 +73,14 @@ export function createEdiRetryWorker(
           });
 
           if (result.success) {
-            await partnerRepo.updateLog(log.id, {
+            await partnerRepo.updateLog(log.id, log.orgId, {
               status: 'success',
               processedAt: new Date(),
               errorMessage: null,
             });
             succeeded++;
           } else {
-            await partnerRepo.updateLog(log.id, {
+            await partnerRepo.updateLog(log.id, log.orgId, {
               status: 'error',
               errorMessage: `Retry ${log.retryCount + 1}/${MAX_RETRIES}: ${result.errorMessage}`,
             });
@@ -88,14 +89,14 @@ export function createEdiRetryWorker(
         } else if (log.direction === 'inbound') {
           // For inbound, re-post to the universal endpoint would be complex
           // Instead, just mark it for manual attention if retries exhausted
-          await partnerRepo.updateLog(log.id, {
+          await partnerRepo.updateLog(log.id, log.orgId, {
             status: 'error',
             errorMessage: `Retry ${log.retryCount + 1}/${MAX_RETRIES}: Inbound re-processing requires manual action via /api/v1/edi-logs/${log.id}/retry`,
           });
           failed++;
         } else {
           // Partner inactive or no partner - can't retry
-          await partnerRepo.updateLog(log.id, {
+          await partnerRepo.updateLog(log.id, log.orgId, {
             status: 'error',
             errorMessage: `Cannot retry: ${!log.partnerId ? 'no partner' : 'partner inactive'}`,
           });
@@ -104,7 +105,7 @@ export function createEdiRetryWorker(
 
         retried++;
       } catch (err: any) {
-        await partnerRepo.updateLog(log.id, {
+        await partnerRepo.updateLog(log.id, log.orgId, {
           status: 'error',
           errorMessage: `Retry error: ${err.message}`,
         }).catch(() => {});

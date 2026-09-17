@@ -31,14 +31,15 @@ export class SoftDeleteShipmentCommandHandler extends BaseCommandHandler<SoftDel
     emit: EmitFn
   ): Promise<{ id: string; alreadyDeleted?: boolean }> {
     const { id } = command.payload;
+    const { orgId } = command;
 
-    const existing = await tx.shipment.findFirstOrThrow({ where: { id } });
+    const existing = await tx.shipment.findFirstOrThrow({ where: { id, orgId } });
     if (existing.deletedAt) {
       return { id, alreadyDeleted: true };
     }
 
     const shipment = await tx.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data: { deletedAt: new Date(), deletedBy: command.actorId ?? null },
     });
 

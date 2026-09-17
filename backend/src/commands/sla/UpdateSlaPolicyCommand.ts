@@ -55,7 +55,7 @@ export class UpdateSlaPolicyCommandHandler extends BaseCommandHandler<UpdateSlaP
 
     // Update the policy fields
     await tx.slaPolicy.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: policyData,
     });
 
@@ -70,7 +70,7 @@ export class UpdateSlaPolicyCommandHandler extends BaseCommandHandler<UpdateSlaP
     }
 
     const updated = await tx.slaPolicy.findUniqueOrThrow({
-      where: { id },
+      where: { id, orgId: command.orgId },
       include: { rules: true },
     });
 

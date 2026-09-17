@@ -48,7 +48,7 @@ export class SplitTrackableUnitCommandHandler extends BaseCommandHandler<SplitUn
       throw new Error('Split requires at least one line item to move to the new unit');
     }
 
-    const source = await tx.trackableUnit.findUniqueOrThrow({ where: { id: unitId } });
+    const source = await tx.trackableUnit.findUniqueOrThrow({ where: { id: unitId, order: { orgId: command.orgId } } });
 
     // Ensure the lines actually live on the source unit before we move them.
     const linesOnSource = await tx.orderLineItem.findMany({

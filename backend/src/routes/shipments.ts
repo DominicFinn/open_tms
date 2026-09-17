@@ -332,7 +332,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     // map pin and a route-deviation check), so reading the read model here
     // doesn't cross into deciding anything from it.
     const readModel = await server.prisma.shipmentReadModel.findUnique({
-      where: { id },
+      where: { id, orgId },
       select: { currentLat: true, currentLng: true, lastLocationAt: true },
     });
 

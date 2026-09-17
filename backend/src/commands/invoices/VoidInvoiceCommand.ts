@@ -33,7 +33,7 @@ export class VoidInvoiceCommandHandler extends BaseCommandHandler<VoidInvoicePay
     }
 
     await tx.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: { status: 'void' },
     });
 

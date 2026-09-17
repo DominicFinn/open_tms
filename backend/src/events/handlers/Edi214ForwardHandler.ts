@@ -36,7 +36,7 @@ export class Edi214ForwardHandler implements IEventHandler {
 
       // Load shipment to get customer ID
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId: event.orgId },
         select: { customerId: true, proNumber: true },
       });
 
@@ -79,6 +79,7 @@ export class Edi214ForwardHandler implements IEventHandler {
           });
 
           await this.deliveryService.deliver({
+            orgId: event.orgId,
             partnerId: partner.id,
             transactionType: '214',
             ediContent,

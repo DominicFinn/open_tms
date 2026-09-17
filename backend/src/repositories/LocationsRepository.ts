@@ -48,11 +48,11 @@ export interface UpdateLocationDTO {
 export interface ILocationsRepository {
   all(orgId?: string | null): Promise<Location[]>;
   findById(id: string, orgId?: string | null): Promise<Location | null>;
-  findByIdUnique(id: string, orgId?: string | null): Promise<Location | null>;
+  findByIdUnique(id: string, orgId: string): Promise<Location | null>;
   search(query: string, orgId?: string | null): Promise<Location[]>;
   create(data: CreateLocationDTO): Promise<Location>;
-  update(id: string, data: UpdateLocationDTO): Promise<Location>;
-  archive(id: string): Promise<Location>;
+  update(id: string, orgId: string, data: UpdateLocationDTO): Promise<Location>;
+  archive(id: string, orgId: string): Promise<Location>;
   findMany(orgId?: string | null): Promise<Location[]>;
   findManyByIds(ids: string[], orgId?: string | null): Promise<Location[]>;
   createMany(data: CreateLocationDTO[]): Promise<void>;
@@ -77,14 +77,8 @@ export class LocationsRepository implements ILocationsRepository {
     return this.prisma.location.findFirst({ where });
   }
 
-  async findByIdUnique(id: string, orgId?: string | null): Promise<Location | null> {
-    // findUnique can't include orgId in the where (Prisma requires the
-    // unique key). If a caller passes orgId we do a post-fetch guard so
-    // the contract stays consistent across both find* methods.
-    const row = await this.prisma.location.findUnique({ where: { id } });
-    if (!row) return null;
-    if (orgId && row.orgId && row.orgId !== orgId) return null;
-    return row;
+  async findByIdUnique(id: string, orgId: string): Promise<Location | null> {
+    return this.prisma.location.findUnique({ where: { id, orgId } });
   }
 
   async search(query: string, orgId?: string | null): Promise<Location[]> {
@@ -122,16 +116,16 @@ export class LocationsRepository implements ILocationsRepository {
     });
   }
 
-  async update(id: string, data: UpdateLocationDTO): Promise<Location> {
+  async update(id: string, orgId: string, data: UpdateLocationDTO): Promise<Location> {
     return this.prisma.location.update({
-      where: { id },
+      where: { id, orgId },
       data
     });
   }
 
-  async archive(id: string): Promise<Location> {
+  async archive(id: string, orgId: string): Promise<Location> {
     return this.prisma.location.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()

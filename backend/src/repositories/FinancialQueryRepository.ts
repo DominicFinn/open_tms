@@ -47,7 +47,7 @@ export interface IFinancialQueryRepository {
   create(data: CreateFinancialQueryDTO): Promise<FinancialQuery>;
   findById(id: string, orgId: string): Promise<FinancialQuery | null>;
   findAll(filters: FinancialQueryFilters): Promise<FinancialQuery[]>;
-  update(id: string, data: Partial<FinancialQuery>): Promise<FinancialQuery>;
+  update(id: string, orgId: string, data: Partial<FinancialQuery>): Promise<FinancialQuery>;
   getNextQueryNumber(orgId: string): Promise<string>;
 }
 
@@ -55,7 +55,7 @@ export interface ICreditNoteRepository {
   create(data: CreateCreditNoteDTO): Promise<CreditNote>;
   findById(id: string, orgId: string): Promise<CreditNote | null>;
   findAll(orgId: string): Promise<CreditNote[]>;
-  update(id: string, data: Partial<CreditNote>): Promise<CreditNote>;
+  update(id: string, orgId: string, data: Partial<CreditNote>): Promise<CreditNote>;
   getNextCreditNoteNumber(orgId: string): Promise<string>;
 }
 
@@ -85,8 +85,8 @@ export class FinancialQueryRepository implements IFinancialQueryRepository {
     });
   }
 
-  async update(id: string, data: Partial<FinancialQuery>): Promise<FinancialQuery> {
-    return this.prisma.financialQuery.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<FinancialQuery>): Promise<FinancialQuery> {
+    return this.prisma.financialQuery.update({ where: { id, orgId }, data });
   }
 
   async getNextQueryNumber(orgId: string): Promise<string> {
@@ -119,8 +119,8 @@ export class CreditNoteRepository implements ICreditNoteRepository {
     });
   }
 
-  async update(id: string, data: Partial<CreditNote>): Promise<CreditNote> {
-    return this.prisma.creditNote.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<CreditNote>): Promise<CreditNote> {
+    return this.prisma.creditNote.update({ where: { id, orgId }, data });
   }
 
   async getNextCreditNoteNumber(orgId: string): Promise<string> {

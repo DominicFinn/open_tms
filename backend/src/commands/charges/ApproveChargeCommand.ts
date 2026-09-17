@@ -31,7 +31,7 @@ export class ApproveChargeCommandHandler extends BaseCommandHandler<ApproveCharg
     }
 
     const updated = await tx.charge.update({
-      where: { id: charge.id },
+      where: { id: charge.id, orgId: command.orgId },
       data: {
         status: 'approved',
         approvedBy: command.actorId,

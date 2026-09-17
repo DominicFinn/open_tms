@@ -35,7 +35,7 @@ export class CarrierArchivalNotificationHandler implements IEventHandler {
     const reason = event.type === EVENT_TYPES.CARRIER_DELETED ? 'deleted' : 'archived';
 
     const carrier = await this.prisma.carrier.findUnique({
-      where: { id: carrierId },
+      where: { id: carrierId, orgId: event.orgId },
       select: { id: true, name: true },
     });
     if (!carrier) return;

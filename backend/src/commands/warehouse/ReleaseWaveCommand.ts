@@ -102,7 +102,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
         // Hard-allocate
         await tx.inventoryRecord.update({
-          where: { id: inv.id },
+          where: { id: inv.id, orgId: command.orgId },
           data: {
             quantityAllocated: { increment: allocQty },
             quantityAvailable: { decrement: allocQty },
@@ -205,7 +205,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
       const binZoneMap = new Map<string, string>(); // binId -> zoneId
       for (const al of allocatedLines) {
         if (!binZoneMap.has(al.binId)) {
-          const bin = await tx.warehouseBin.findUnique({ where: { id: al.binId }, select: { zoneId: true } });
+          const bin = await tx.warehouseBin.findUnique({ where: { id: al.binId, orgId: command.orgId }, select: { zoneId: true } });
           if (bin) binZoneMap.set(al.binId, bin.zoneId);
         }
       }
@@ -220,7 +220,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
       // Get zone sort orders for sequencing
       const zoneIds = [...byZone.keys()];
       const zones = await tx.warehouseZone.findMany({
-        where: { id: { in: zoneIds } },
+        where: { id: { in: zoneIds }, orgId: command.orgId },
         select: { id: true, sortOrder: true, name: true },
         orderBy: { sortOrder: 'asc' },
       });
@@ -327,7 +327,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
     // Update wave status
     await tx.wave.update({
-      where: { id: wave.id },
+      where: { id: wave.id, orgId: command.orgId },
       data: { status: allocationFailures.length > 0 ? 'released' : 'released' },
     });
 

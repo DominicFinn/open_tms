@@ -41,7 +41,7 @@ export async function authenticateApiKey(server: FastifyInstance, req: FastifyRe
 
   // Update last used
   await server.prisma.apiKey.update({
-    where: { id: apiKey.id },
+    where: { id: apiKey.id, orgId: apiKey.orgId },
     data: { lastUsedAt: new Date() }
   });
 

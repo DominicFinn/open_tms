@@ -39,10 +39,10 @@ export class UpdateAgentConfigCommandHandler extends BaseCommandHandler<UpdateAg
   ): Promise<UpdateAgentConfigResult> {
     const { id, data } = command.payload;
 
-    const existing = await tx.agentConfig.findUnique({ where: { id } });
+    const existing = await tx.agentConfig.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing) throw new Error('Agent config not found');
 
-    const updated = await tx.agentConfig.update({ where: { id }, data });
+    const updated = await tx.agentConfig.update({ where: { id, orgId: command.orgId }, data });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.AGENT_CONFIG_UPDATED,

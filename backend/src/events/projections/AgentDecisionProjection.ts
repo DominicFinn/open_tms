@@ -35,14 +35,14 @@ export class AgentDecisionProjection implements IEventHandler {
   }
 
   private async onCreated(event: DomainEvent): Promise<void> {
-    const record = await this.prisma.agentDecision.findUnique({ where: { id: event.entityId } });
+    const record = await this.prisma.agentDecision.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     if (!record) {
       console.error(`[AgentDecisionProjection] Decision ${event.entityId} not found for created event`);
       return;
     }
 
     await this.prisma.agentDecisionReadModel.upsert({
-      where: { id: record.id },
+      where: { id: record.id, orgId: event.orgId },
       create: {
         id: record.id,
         orgId: record.orgId,
@@ -78,11 +78,11 @@ export class AgentDecisionProjection implements IEventHandler {
   }
 
   private async onOutcomeRecorded(event: DomainEvent): Promise<void> {
-    const record = await this.prisma.agentDecision.findUnique({ where: { id: event.entityId } });
+    const record = await this.prisma.agentDecision.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     if (!record) return;
 
     await this.prisma.agentDecisionReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         outcomeStatus: record.outcomeStatus,
         updatedAt: new Date(),
@@ -94,7 +94,7 @@ export class AgentDecisionProjection implements IEventHandler {
 
   private async onPromoted(event: DomainEvent): Promise<void> {
     await this.prisma.agentDecisionReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         promotedToAutomation: true,
         updatedAt: new Date(),

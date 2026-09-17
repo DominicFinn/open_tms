@@ -84,14 +84,14 @@ export class IssueProjection implements IEventHandler {
   }
 
   private async onIssueCreated(event: DomainEvent): Promise<void> {
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     if (!issue) {
       console.error(`[IssueProjection] Issue ${event.entityId} not found for created event`);
       return;
     }
 
     await this.prisma.issueReadModel.upsert({
-      where: { id: issue.id },
+      where: { id: issue.id, orgId: event.orgId },
       create: {
         id: issue.id,
         orgId: issue.orgId,
@@ -130,11 +130,11 @@ export class IssueProjection implements IEventHandler {
   }
 
   private async onIssueUpdated(event: DomainEvent): Promise<void> {
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     if (!issue) return;
 
     await this.prisma.issueReadModel.update({
-      where: { id: issue.id },
+      where: { id: issue.id, orgId: event.orgId },
       data: {
         title: issue.title,
         description: issue.description ?? null,
@@ -158,7 +158,7 @@ export class IssueProjection implements IEventHandler {
   private async onIssueAssigned(event: DomainEvent): Promise<void> {
     const payload = event.payload as { assigneeName?: string };
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         assigneeName: payload.assigneeName ?? null,
         updatedAt: new Date(),
@@ -171,7 +171,7 @@ export class IssueProjection implements IEventHandler {
   private async onIssueEscalated(event: DomainEvent): Promise<void> {
     const payload = event.payload as { escalatedTo?: string };
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         escalatedTo: payload.escalatedTo ?? null,
         status: 'in_progress',
@@ -185,9 +185,9 @@ export class IssueProjection implements IEventHandler {
   private async onIssueResolved(event: DomainEvent): Promise<void> {
     // Re-read: resolution stamps timeToResolutionMins and the SLA verdict onto
     // Issue, and the reports queue reads both off the read model.
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         status: 'resolved',
         resolvedAt: issue?.resolvedAt ?? new Date(),
@@ -202,7 +202,7 @@ export class IssueProjection implements IEventHandler {
   private async onIssueSnoozed(event: DomainEvent): Promise<void> {
     const payload = event.payload as { snoozedUntil: string; snoozedBy: string };
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         snoozedUntil: new Date(payload.snoozedUntil),
         snoozedBy: payload.snoozedBy,
@@ -215,7 +215,7 @@ export class IssueProjection implements IEventHandler {
 
   private async onIssueUnsnoozed(event: DomainEvent): Promise<void> {
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         snoozedUntil: null,
         snoozedBy: null,
@@ -228,9 +228,9 @@ export class IssueProjection implements IEventHandler {
 
   private async onIssueClosed(event: DomainEvent): Promise<void> {
     const payload = event.payload as { closedAt: string };
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         status: 'closed',
         closedAt: new Date(payload.closedAt),
@@ -244,7 +244,7 @@ export class IssueProjection implements IEventHandler {
 
   private async onIssueReopened(event: DomainEvent): Promise<void> {
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         status: 'open',
         closedAt: null,
@@ -258,7 +258,7 @@ export class IssueProjection implements IEventHandler {
   private async onIssueNeedsCapaMarked(event: DomainEvent): Promise<void> {
     const payload = event.payload as { needsCapa: boolean };
     await this.prisma.issueReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         needsCapa: payload.needsCapa,
         updatedAt: new Date(),
@@ -281,7 +281,7 @@ export class IssueProjection implements IEventHandler {
         color: a.label.color,
       }));
       await this.prisma.issueReadModel.update({
-        where: { id: issueId },
+        where: { id: issueId, orgId: event.orgId },
         data: {
           labels,
           updatedAt: new Date(),
@@ -297,7 +297,7 @@ export class IssueProjection implements IEventHandler {
     if (payload.entityType !== 'issue') return;
     const issueId = payload.entityId ?? event.entityId;
     await this.prisma.issueReadModel.update({
-      where: { id: issueId },
+      where: { id: issueId, orgId: event.orgId },
       data: {
         commentCount: { increment: 1 },
         updatedAt: new Date(),
@@ -312,7 +312,7 @@ export class IssueProjection implements IEventHandler {
     if (payload.entityType !== 'issue') return;
     const issueId = payload.entityId ?? event.entityId;
     await this.prisma.issueReadModel.update({
-      where: { id: issueId },
+      where: { id: issueId, orgId: event.orgId },
       data: {
         commentCount: { decrement: 1 },
         updatedAt: new Date(),

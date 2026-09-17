@@ -3,7 +3,8 @@ import {
   requireOrgScope,
   attachOrgScopeFromCustomerUserHook,
   attachOrgScopeFromCarrierUserHook,
-  attachOrgScopeFromPartnerHook,
+  attachEdiOrgScopeHook,
+  registerOrgScopeForEdi,
   registerStrictOrgScope,
 } from '../../auth/orgScopeMiddleware';
 import Fastify from 'fastify';
@@ -228,177 +229,78 @@ describe('attachOrgScopeFromCarrierUserHook', () => {
   });
 });
 
-describe('attachOrgScopeFromPartnerHook', () => {
-  it('JWT always wins — does not even touch the partner table when orgId is in the JWT', async () => {
-    const prisma: any = { tradingPartner: { findUnique: jest.fn() } };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = {
-      user: { organizationId: 'org-from-jwt' },
-      body: { partnerId: 'p-1' },
-    };
+describe('attachEdiOrgScopeHook', () => {
+  it('leaves an org set by the authenticated scope alone', async () => {
+    const prisma: any = { apiKey: { findUnique: jest.fn() } };
+    const req: any = { orgId: 'preset', headers: {} };
 
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(req.orgId).toBe('org-from-jwt');
-    expect(prisma.tradingPartner.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('walks body.partnerId → partner.customer.orgId for unauthed webhook ingest', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockResolvedValue({
-          customer: { orgId: 'org-from-customer' },
-          carrier: null,
-        }),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { body: { partnerId: 'p-1' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(prisma.tradingPartner.findUnique).toHaveBeenCalledWith({
-      where: { id: 'p-1' },
-      select: {
-        customer: { select: { orgId: true } },
-        carrier: { select: { orgId: true } },
-      },
-    });
-    expect(req.orgId).toBe('org-from-customer');
-  });
-
-  it('falls back to partner.carrier.orgId when the partner has no customer link', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockResolvedValue({
-          customer: null,
-          carrier: { orgId: 'org-from-carrier' },
-        }),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { body: { partnerId: 'p-1' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(req.orgId).toBe('org-from-carrier');
-  });
-
-  it('reads partnerId from URL params when body has none', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockResolvedValue({
-          customer: { orgId: 'org-from-customer' },
-          carrier: null,
-        }),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { params: { partnerId: 'p-99' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(prisma.tradingPartner.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'p-99' } }),
-    );
-    expect(req.orgId).toBe('org-from-customer');
-  });
-
-  it('reads params.id as a last resort for /trading-partners/:id-style routes', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockResolvedValue({
-          customer: { orgId: 'org-from-id' },
-          carrier: null,
-        }),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { params: { id: 'p-42' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(prisma.tradingPartner.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'p-42' } }),
-    );
-    expect(req.orgId).toBe('org-from-id');
-  });
-
-  it('leaves req.orgId undefined when no JWT, no partnerId, and no params are available — so a downstream fallback hook can run', async () => {
-    const prisma: any = { tradingPartner: { findUnique: jest.fn() } };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = {};
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(req.orgId).toBeUndefined();
-    expect(prisma.tradingPartner.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('leaves req.orgId undefined when the partner exists but has no customer or carrier link', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockResolvedValue({ customer: null, carrier: null }),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { body: { partnerId: 'p-orphan' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(req.orgId).toBeUndefined();
-  });
-
-  it('is idempotent — never overrides an upstream-set req.orgId', async () => {
-    const prisma: any = { tradingPartner: { findUnique: jest.fn() } };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { orgId: 'preset', body: { partnerId: 'p-1' } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
+    await (attachEdiOrgScopeHook(prisma) as any).call({}, req, {} as any);
 
     expect(req.orgId).toBe('preset');
+    expect(prisma.apiKey.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('takes the org from a verified internal user', async () => {
+    const prisma: any = { apiKey: { findUnique: jest.fn() } };
+    const req: any = { user: { organizationId: 'org-from-jwt' }, headers: {}, body: { partnerId: 'p-other' } };
+
+    await (attachEdiOrgScopeHook(prisma) as any).call({}, req, {} as any);
+
+    expect(req.orgId).toBe('org-from-jwt');
+    expect(prisma.apiKey.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('takes the org from an active API key', async () => {
+    const prisma: any = {
+      apiKey: { findUnique: jest.fn().mockResolvedValue({ orgId: 'org-from-key', active: true }) },
+    };
+    const req: any = { headers: { 'x-api-key': 'sk_live_x' }, body: { partnerId: 'p-other' } };
+
+    await (attachEdiOrgScopeHook(prisma) as any).call({}, req, {} as any);
+
+    expect(req.orgId).toBe('org-from-key');
+  });
+
+  it('gives no org for an inactive API key', async () => {
+    const prisma: any = {
+      apiKey: { findUnique: jest.fn().mockResolvedValue({ orgId: 'org-from-key', active: false }) },
+    };
+    const req: any = { headers: { 'x-api-key': 'sk_live_x' } };
+
+    await (attachEdiOrgScopeHook(prisma) as any).call({}, req, {} as any);
+
+    expect(req.orgId).toBeNull();
+  });
+
+  it('refuses a request that only names a partner, without looking the partner up', async () => {
+    const prisma: any = { tradingPartner: { findUnique: jest.fn() }, apiKey: { findUnique: jest.fn() } };
+    const app = Fastify();
+    app.decorate('prisma', prisma);
+    await app.register(async (scoped) => {
+      await registerOrgScopeForEdi(scoped);
+      scoped.post('/edi', async () => ({ data: 'reached', error: null }));
+    });
+
+    const res = await app.inject({ method: 'POST', url: '/edi', payload: { partnerId: 'p-1' } });
+
+    expect(res.statusCode).toBe(401);
     expect(prisma.tradingPartner.findUnique).not.toHaveBeenCalled();
   });
 
-  it('leaves req.orgId undefined on DB error (defensive — lets a downstream fallback hook run)', async () => {
-    const prisma: any = {
-      tradingPartner: {
-        findUnique: jest.fn().mockRejectedValue(new Error('DB down')),
-      },
-    };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { body: { partnerId: 'p-1' } };
+  it('refuses an unknown API key', async () => {
+    const prisma: any = { apiKey: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const app = Fastify();
+    app.decorate('prisma', prisma);
+    await app.register(async (scoped) => {
+      await registerOrgScopeForEdi(scoped);
+      scoped.post('/edi', async () => ({ data: 'reached', error: null }));
+    });
 
-    await (hook as any).call({}, req, {} as any, jest.fn());
+    const res = await app.inject({
+      method: 'POST', url: '/edi', headers: { 'x-api-key': 'sk_live_bad' }, payload: { partnerId: 'p-1' },
+    });
 
-    expect(req.orgId).toBeUndefined();
-  });
-
-  it('ignores non-string body.partnerId values (safety against odd payloads)', async () => {
-    const prisma: any = { tradingPartner: { findUnique: jest.fn() } };
-    const hook = attachOrgScopeFromPartnerHook(prisma);
-    const req: any = { body: { partnerId: { id: 'p-1' } } };
-
-    await (hook as any).call({}, req, {} as any, jest.fn());
-
-    expect(req.orgId).toBeUndefined();
-    expect(prisma.tradingPartner.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('chains with attachOrgScopeHook: partner-hook leaves it undefined → fallback hook applies the sole Organization', async () => {
-    const prisma: any = {
-      tradingPartner: { findUnique: jest.fn() },
-      organization: { findMany: jest.fn().mockResolvedValue([{ id: 'fallback-org' }]) },
-    };
-    const partnerHook = attachOrgScopeFromPartnerHook(prisma);
-    const fallbackHook = attachOrgScopeHook(prisma);
-    const req: any = {};
-
-    await (partnerHook as any).call({}, req, {} as any, jest.fn());
-    expect(req.orgId).toBeUndefined();
-
-    await (fallbackHook as any).call({}, req, {} as any, jest.fn());
-    expect(req.orgId).toBe('fallback-org');
+    expect(res.statusCode).toBe(401);
   });
 });
 

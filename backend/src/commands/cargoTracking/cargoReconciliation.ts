@@ -44,8 +44,8 @@ export async function findStopWithExpectedUnits(tx: TransactionClient, orgId: st
   return stop;
 }
 
-export async function setUnitLocation(tx: TransactionClient, trackableUnitId: string, currentStopId: string) {
-  await tx.trackableUnit.update({ where: { id: trackableUnitId }, data: { currentStopId } });
+export async function setUnitLocation(tx: TransactionClient, orgId: string, trackableUnitId: string, currentStopId: string) {
+  await tx.trackableUnit.update({ where: { id: trackableUnitId, order: { orgId } }, data: { currentStopId } });
 }
 
 /**
@@ -62,7 +62,7 @@ export async function autoScanStop(
   let count = 0;
   for (const order of stop.orders) {
     for (const unit of order.trackableUnits) {
-      await setUnitLocation(tx, unit.id, stop.id);
+      await setUnitLocation(tx, orgId, unit.id, stop.id);
       await tx.cargoScan.create({
         data: {
           orgId,
@@ -105,7 +105,7 @@ export async function reconcileStop(
   // BUSINESS RULE: a completed stop with no unload scans at all was completed automatically
   // (geofence, IoT), so every expected unit is assumed delivered rather than missing.
   if (scannedUnitIds.size === 0 && units.size > 0) {
-    for (const unitId of units.keys()) await setUnitLocation(tx, unitId, shipmentStopId);
+    for (const unitId of units.keys()) await setUnitLocation(tx, orgId, unitId, shipmentStopId);
     return result;
   }
 

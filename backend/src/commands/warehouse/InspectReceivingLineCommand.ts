@@ -36,7 +36,7 @@ export class InspectReceivingLineCommandHandler extends BaseCommandHandler<
     if (!existing) throw new Error(`Receiving line ${p.lineId} not found`);
 
     const line = await tx.receivingLine.update({
-      where: { id: p.lineId },
+      where: { id: p.lineId, receivingTask: { orgId: command.orgId } },
       data: { inspectionStatus: p.inspectionStatus },
     });
 

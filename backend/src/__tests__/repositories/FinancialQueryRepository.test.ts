@@ -128,3 +128,23 @@ describe('CreditNoteRepository', () => {
     });
   });
 });
+
+describe('update scoping', () => {
+  it('FinancialQueryRepository.update only touches a query in the caller org', async () => {
+    const prisma = buildPrisma();
+    await new FinancialQueryRepository(prisma).update('q-1', 'org-1', { status: 'resolved' } as any);
+    expect(prisma.financialQuery.update).toHaveBeenCalledWith({
+      where: { id: 'q-1', orgId: 'org-1' },
+      data: { status: 'resolved' },
+    });
+  });
+
+  it('CreditNoteRepository.update only touches a note in the caller org', async () => {
+    const prisma = buildPrisma();
+    await new CreditNoteRepository(prisma).update('cn-1', 'org-1', { status: 'applied' } as any);
+    expect(prisma.creditNote.update).toHaveBeenCalledWith({
+      where: { id: 'cn-1', orgId: 'org-1' },
+      data: { status: 'applied' },
+    });
+  });
+});

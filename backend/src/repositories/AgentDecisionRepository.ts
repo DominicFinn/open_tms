@@ -49,7 +49,7 @@ export interface DailyUsage {
 // ── Interface ─────────────────────────────────────────────────────
 
 export interface IAgentDecisionRepository {
-  findById(id: string): Promise<AgentDecision | null>;
+  findById(id: string, orgId: string): Promise<AgentDecision | null>;
   findAll(filters: AgentDecisionFilters): Promise<{ items: AgentDecisionReadModel[]; total: number }>;
   getStats(orgId: string): Promise<AgentDecisionStats>;
   getDailyUsage(orgId: string, days?: number): Promise<DailyUsage[]>;
@@ -60,8 +60,8 @@ export interface IAgentDecisionRepository {
 export class AgentDecisionRepository implements IAgentDecisionRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findById(id: string): Promise<AgentDecision | null> {
-    return this.prisma.agentDecision.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<AgentDecision | null> {
+    return this.prisma.agentDecision.findUnique({ where: { id, orgId } });
   }
 
   async findAll(filters: AgentDecisionFilters): Promise<{ items: AgentDecisionReadModel[]; total: number }> {

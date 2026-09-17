@@ -3,7 +3,7 @@ import { createCarrierTrackingPollWorker } from '../../workers/carrierTrackingPo
 function buildIntegration(id: string, overrides: any = {}) {
   return {
     id,
-    carrier: { name: `carrier-${id}` },
+    carrier: { name: `carrier-${id}`, orgId: `org-${id}` },
     pollingIntervalSeconds: 60,
     lastPolledAt: new Date(0), // long ago — always due
     ...overrides,
@@ -44,7 +44,7 @@ describe('carrierTrackingPollWorker', () => {
     const slowPromise = new Promise((res) => { resolveSlow = res; });
 
     const trackingService: any = {
-      pollForUpdates: jest.fn(async (id: string) => {
+      pollForUpdates: jest.fn(async (_orgId: string, id: string) => {
         if (id === 'slow') {
           await slowPromise;
           return { polled: 1, eventsCreated: 0 };
@@ -65,10 +65,10 @@ describe('carrierTrackingPollWorker', () => {
 
     // Without parallelism the for-loop would only have called pollForUpdates
     // once (the slow one). With parallelism every integration is in flight.
-    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('slow');
-    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('a');
-    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('b');
-    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('c');
+    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('org-slow', 'slow');
+    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('org-a', 'a');
+    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('org-b', 'b');
+    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('org-c', 'c');
 
     resolveSlow({ polled: 1, eventsCreated: 0 });
     await runPromise;
@@ -84,7 +84,7 @@ describe('carrierTrackingPollWorker', () => {
     ];
 
     const trackingService: any = {
-      pollForUpdates: jest.fn(async (id: string) => {
+      pollForUpdates: jest.fn(async (_orgId: string, id: string) => {
         if (id === 'boom') throw new Error('upstream 503');
         return { polled: 1, eventsCreated: 1 };
       }),
@@ -117,7 +117,7 @@ describe('carrierTrackingPollWorker', () => {
     await worker();
 
     expect(trackingService.pollForUpdates).toHaveBeenCalledTimes(1);
-    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('ready');
+    expect(trackingService.pollForUpdates).toHaveBeenCalledWith('org-ready', 'ready');
   });
 
   it('respects the CARRIER_TRACKING_POLL_CONCURRENCY env cap', async () => {

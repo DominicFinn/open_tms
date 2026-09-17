@@ -123,3 +123,14 @@ describe('QuoteRepository', () => {
     });
   });
 });
+
+describe('QuoteRepository.update', () => {
+  it('only touches a quote in the caller org', async () => {
+    const prisma = buildPrisma();
+    await new QuoteRepository(prisma).update('qt-1', 'org-1', { status: 'sent' } as any);
+    expect(prisma.quote.update).toHaveBeenCalledWith({
+      where: { id: 'qt-1', orgId: 'org-1' },
+      data: { status: 'sent' },
+    });
+  });
+});

@@ -51,7 +51,7 @@ export class UpdateCarrierTrackingIntegrationCommandHandler extends BaseCommandH
     if (!before) throw new CarrierTrackingNotFoundError('integration', id);
 
     const updated = await tx.carrierTrackingIntegration.update({
-      where: { id },
+      where: { id, carrier: { orgId: command.orgId } },
       data: dataToWrite,
     });
 

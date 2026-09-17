@@ -12,17 +12,17 @@ import { IFileStorageProvider } from './IFileStorageProvider.js';
 export class DatabaseFileStorage implements IFileStorageProvider {
   constructor(private prisma: PrismaClient) {}
 
-  async store(fileId: string, content: string): Promise<string> {
+  async store(orgId: string, fileId: string, content: string): Promise<string> {
     await this.prisma.ediTransactionLog.update({
-      where: { id: fileId },
+      where: { id: fileId, orgId },
       data: { fileContent: content }
     });
     return fileId;
   }
 
-  async retrieve(storageKey: string): Promise<string> {
+  async retrieve(orgId: string, storageKey: string): Promise<string> {
     const log = await this.prisma.ediTransactionLog.findUnique({
-      where: { id: storageKey },
+      where: { id: storageKey, orgId },
       select: { fileContent: true }
     });
     if (!log || !log.fileContent) {
@@ -31,16 +31,16 @@ export class DatabaseFileStorage implements IFileStorageProvider {
     return log.fileContent;
   }
 
-  async delete(storageKey: string): Promise<void> {
+  async delete(orgId: string, storageKey: string): Promise<void> {
     await this.prisma.ediTransactionLog.update({
-      where: { id: storageKey },
+      where: { id: storageKey, orgId },
       data: { fileContent: '' }
     });
   }
 
-  async exists(storageKey: string): Promise<boolean> {
+  async exists(orgId: string, storageKey: string): Promise<boolean> {
     const log = await this.prisma.ediTransactionLog.findUnique({
-      where: { id: storageKey },
+      where: { id: storageKey, orgId },
       select: { id: true }
     });
     return !!log;

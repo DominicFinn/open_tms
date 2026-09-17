@@ -19,6 +19,7 @@ export interface DeliveryResult {
 }
 
 export interface OutboundDeliveryRequest {
+  orgId: string;
   partnerId: string;
   transactionType: string;
   ediContent: string;
@@ -37,7 +38,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
   constructor(private partnerRepo: ITradingPartnerRepository) {}
 
   async deliver(request: OutboundDeliveryRequest): Promise<DeliveryResult> {
-    const partner = await this.partnerRepo.findById(request.partnerId);
+    const partner = await this.partnerRepo.findById(request.partnerId, request.orgId);
     if (!partner) {
       return { success: false, transport: 'none', destination: '', errorMessage: 'Trading partner not found' };
     }
@@ -83,7 +84,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
       }
 
       // Update log
-      await this.partnerRepo.updateLog(log.id, {
+      await this.partnerRepo.updateLog(log.id, partner.orgId, {
         status: result.success ? 'success' : 'error',
         url: result.destination,
         responseCode: result.responseCode,
@@ -92,7 +93,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
       });
     } catch (err: any) {
       result = { success: false, transport: partner.outboundTransport, destination: '', errorMessage: err.message };
-      await this.partnerRepo.updateLog(log.id, {
+      await this.partnerRepo.updateLog(log.id, partner.orgId, {
         status: 'error',
         errorMessage: err.message,
         processedAt: new Date(),
@@ -118,6 +119,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
     if (!txn) return null;
 
     return this.deliver({
+      orgId: partner.orgId,
       partnerId: partner.id,
       transactionType,
       ediContent,

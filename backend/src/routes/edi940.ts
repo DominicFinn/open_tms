@@ -46,11 +46,16 @@ export async function edi940Routes(server: FastifyInstance) {
       return { data: null, error: `EDI 940 parse failed: ${parsed.errors.join('; ')}`, warnings: parsed.warnings };
     }
 
+    // Multi-tenancy: req.orgId is populated by the EDI hook chain
+    // registered at the top of this plugin (JWT → partner.customer.orgId
+    // → default Organization).
+    const orgId = req.orgId!;
+
     // Resolve customer
     let customerId: string | null = null;
     if (body.partnerId) {
       const partner = await prisma.tradingPartner.findUnique({
-        where: { id: body.partnerId },
+        where: { id: body.partnerId, orgId },
         select: { customerId: true },
       });
       customerId = partner?.customerId ?? null;
@@ -60,7 +65,7 @@ export async function edi940Routes(server: FastifyInstance) {
       const sf = parsed.addresses.find(a => a.partyQualifier === 'SF');
       if (sf) {
         const cust = await prisma.customer.findFirst({
-          where: { OR: [sf.idCode ? { id: sf.idCode } : {}, { name: sf.name }].filter(v => Object.keys(v).length > 0) },
+          where: { orgId, OR: [sf.idCode ? { id: sf.idCode } : {}, { name: sf.name }].filter(v => Object.keys(v).length > 0) },
           select: { id: true },
         });
         customerId = cust?.id ?? null;
@@ -83,6 +88,7 @@ export async function edi940Routes(server: FastifyInstance) {
     }
     const existingDest = await prisma.location.findFirst({
       where: {
+        orgId,
         name: shipTo.name,
         city: shipTo.city ?? undefined,
         postalCode: shipTo.postalCode ?? undefined,
@@ -91,12 +97,9 @@ export async function edi940Routes(server: FastifyInstance) {
     });
 
     const orderNumber = parsed.depositorOrderNumber || `940-${Date.now()}`;
-    // Multi-tenancy: req.orgId is populated by the EDI hook chain
-    // registered at the top of this plugin (JWT → partner.customer.orgId
-    // → default Organization). The actor is best-effort: prefer the JWT
-    // sub, fall back to a synthetic identifier for unauthed ingest.
+    // The actor is best-effort: prefer the JWT sub, fall back to a
+    // synthetic identifier for unauthed ingest.
     const actorId = req.user?.sub ?? 'edi-940-inbound';
-    const orgId = req.orgId!;
 
     const orderData: any = {
       orderNumber,
@@ -184,7 +187,7 @@ export async function edi940Routes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     const shipment = await prisma.shipment.findUnique({
-      where: { id: body.shipmentId },
+      where: { id: body.shipmentId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,

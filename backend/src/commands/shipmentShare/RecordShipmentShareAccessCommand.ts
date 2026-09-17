@@ -87,7 +87,7 @@ export class RecordShipmentShareAccessCommandHandler extends BaseCommandHandler<
       // A correct code clears the failure count, so an honest recipient who mistyped twice
       // does not carry those attempts toward a future lockout.
       await tx.shipmentShareLink.update({
-        where: { id: link.id },
+        where: { id: link.id, orgId: command.orgId },
         data: {
           accessCount: { increment: 1 },
           lastAccessedAt: now,
@@ -97,14 +97,14 @@ export class RecordShipmentShareAccessCommandHandler extends BaseCommandHandler<
       });
     } else if (outcome === 'denied_bad_code') {
       const bumped = await tx.shipmentShareLink.update({
-        where: { id: link.id },
+        where: { id: link.id, orgId: command.orgId },
         data: { failedAttempts: { increment: 1 } },
         select: { failedAttempts: true },
       });
       if (this.shareService.isLockoutTriggered(bumped.failedAttempts)) {
         lockedUntil = this.shareService.lockoutUntil(now);
         await tx.shipmentShareLink.update({
-          where: { id: link.id },
+          where: { id: link.id, orgId: command.orgId },
           data: { lockedUntil, failedAttempts: 0 },
         });
       }

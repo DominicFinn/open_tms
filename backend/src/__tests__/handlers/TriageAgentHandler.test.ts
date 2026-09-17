@@ -380,7 +380,7 @@ describe('TriageAgentHandler', () => {
 
     // Verify context was gathered: shipment, issues, SLA
     expect(mockPrisma.shipment.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'ship-1' } })
+      expect.objectContaining({ where: { id: 'ship-1', orgId: 'test-org' } })
     );
     expect(mockPrisma.issue.findMany).toHaveBeenCalled();
     expect(mockPrisma.slaEvaluation.findMany).toHaveBeenCalled();

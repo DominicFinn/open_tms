@@ -16,8 +16,8 @@ export interface ICustomersRepository {
   all(orgId?: string | null): Promise<Customer[]>;
   findById(id: string, orgId?: string | null): Promise<Customer | null>;
   create(data: CreateCustomerDTO): Promise<Customer>;
-  update(id: string, data: UpdateCustomerDTO): Promise<Customer>;
-  archive(id: string): Promise<Customer>;
+  update(id: string, orgId: string, data: UpdateCustomerDTO): Promise<Customer>;
+  archive(id: string, orgId: string): Promise<Customer>;
 }
 
 export class CustomersRepository implements ICustomersRepository {
@@ -52,16 +52,16 @@ export class CustomersRepository implements ICustomersRepository {
     });
   }
 
-  async update(id: string, data: UpdateCustomerDTO): Promise<Customer> {
+  async update(id: string, orgId: string, data: UpdateCustomerDTO): Promise<Customer> {
     return this.prisma.customer.update({
-      where: { id },
+      where: { id, orgId },
       data
     });
   }
 
-  async archive(id: string): Promise<Customer> {
+  async archive(id: string, orgId: string): Promise<Customer> {
     return this.prisma.customer.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()

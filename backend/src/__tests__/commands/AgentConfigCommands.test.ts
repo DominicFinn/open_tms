@@ -86,7 +86,7 @@ describe('Agent config command handlers', () => {
       );
       // Active pointer set after create
       expect(tx.agentConfig.update).toHaveBeenCalledWith({
-        where: { id: 'cfg-1' },
+        where: { id: 'cfg-1', orgId: 'test-org' },
         data: { activeVersionId: 'v-1' },
       });
       expect(result.events[0].type).toBe(EVENT_TYPES.AGENT_CONFIG_CREATED);
@@ -123,6 +123,20 @@ describe('Agent config command handlers', () => {
       );
 
       expect((result.events[0].payload as any).enabledChanged).toBe(false);
+    });
+
+    it('scopes the lookup to the caller org so another tenant\'s config reads as not found', async () => {
+      const { prisma, tx } = buildPrisma({ findUnique: null });
+      const { bus } = mockEventBus();
+      const handler = new UpdateAgentConfigCommandHandler(prisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_AGENT_CONFIG, { id: 'cfg-other', data: { enabled: false } }, { orgId: 'org-b' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(tx.agentConfig.findUnique).toHaveBeenCalledWith({ where: { id: 'cfg-other', orgId: 'org-b' } });
+      expect(tx.agentConfig.update).not.toHaveBeenCalled();
     });
 
     it('fails on unknown config id', async () => {
@@ -191,7 +205,7 @@ describe('Agent config command handlers', () => {
       );
 
       expect(tx.agentConfig.update).toHaveBeenCalledWith({
-        where: { id: 'cfg-1' },
+        where: { id: 'cfg-1', orgId: 'test-org' },
         data: { activeVersionId: 'v-4' },
       });
     });
@@ -212,7 +226,7 @@ describe('Agent config command handlers', () => {
 
       expect(result.success).toBe(true);
       expect(tx.agentConfig.update).toHaveBeenCalledWith({
-        where: { id: 'cfg-1' },
+        where: { id: 'cfg-1', orgId: 'test-org' },
         data: { activeVersionId: 'v-3' },
       });
       const payload = result.events[0].payload as any;

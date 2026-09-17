@@ -85,7 +85,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     if (!policy) return 0;
 
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       select: { id: true, reference: true, pickupDate: true, customerId: true },
     });
     if (!shipment) return 0;
@@ -169,7 +169,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     if (!policy) return 0;
 
     const issue = await this.prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: issueId, orgId },
       select: { id: true, title: true, createdAt: true },
     });
     if (!issue) return 0;
@@ -244,7 +244,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
     // Get the stop with its location to determine facility type
     const stop = await this.prisma.shipmentStop.findUnique({
-      where: { id: stopId },
+      where: { id: stopId, shipment: { orgId } },
       select: {
         id: true,
         shipmentId: true,
@@ -341,6 +341,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         evaluation.status,
         { status: 'met', metAt: now, updatedAt: now },
       );
@@ -378,6 +379,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
       evaluationsChecked++;
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         'active',
         {
           status: 'warning',
@@ -413,6 +415,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
       const updated = await this.slaRepo.updateEvaluationStatus(
         evaluation.id,
+        evaluation.orgId,
         evaluation.status, // could be 'active' or 'warning'
         {
           status: 'breached',
@@ -427,7 +430,9 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
         // Auto-create triage issue if configured
         let issueId: string | undefined;
-        const rule = await this.prisma.slaRule.findUnique({ where: { id: evaluation.ruleId } });
+        const rule = await this.prisma.slaRule.findUnique({
+          where: { id: evaluation.ruleId, policy: { orgId: evaluation.orgId } },
+        });
 
         if (rule?.autoCreateIssue) {
           const issue = await this.createBreachIssue(evaluation, rule);
@@ -437,7 +442,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
 
             // Link issue back to the evaluation
             await this.prisma.slaEvaluation.update({
-              where: { id: evaluation.id },
+              where: { id: evaluation.id, orgId: evaluation.orgId },
               data: { issueId: issue.id },
             });
           }
@@ -476,6 +481,7 @@ export class SlaEvaluationService implements ISlaEvaluationService {
     // Check if an open issue already exists for this entity + SLA
     const existing = await this.prisma.issue.findFirst({
       where: {
+        orgId: evaluation.orgId,
         sourceEntityType: evaluation.entityType,
         sourceEntityId: evaluation.entityId,
         category: 'compliance',

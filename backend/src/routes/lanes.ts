@@ -278,8 +278,8 @@ export async function laneRoutes(server: FastifyInstance) {
         const finalDestinationId = body.destinationId || lane.destinationId;
 
         const [origin, destination] = await Promise.all([
-          tx.location.findUnique({ where: { id: finalOriginId } }),
-          tx.location.findUnique({ where: { id: finalDestinationId } })
+          tx.location.findUnique({ where: { id: finalOriginId, orgId } }),
+          tx.location.findUnique({ where: { id: finalDestinationId, orgId } })
         ]);
 
         if (origin && destination) {
@@ -289,7 +289,7 @@ export async function laneRoutes(server: FastifyInstance) {
 
       // Update the lane
       await tx.lane.update({
-        where: { id },
+        where: { id, orgId },
         data: updateData
       });
 
@@ -316,7 +316,7 @@ export async function laneRoutes(server: FastifyInstance) {
 
       // Return the complete updated lane
       return await tx.lane.findUnique({
-        where: { id },
+        where: { id, orgId },
         include: {
           origin: true,
           destination: true,
@@ -375,8 +375,9 @@ export async function laneRoutes(server: FastifyInstance) {
       customerId: z.string().uuid()
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
     const lane = await server.prisma.lane.findFirst({
-      where: { id, archived: false }
+      where: { id, archived: false, orgId }
     });
     if (!lane) {
       reply.code(404);
@@ -384,7 +385,7 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     const customer = await server.prisma.customer.findFirst({
-      where: { id: body.customerId, archived: false }
+      where: { id: body.customerId, archived: false, orgId }
     });
     if (!customer) {
       reply.code(404);
@@ -411,8 +412,9 @@ export async function laneRoutes(server: FastifyInstance) {
   server.delete('/api/v1/lanes/:id/customers/:customerId', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id, customerId } = req.params as { id: string; customerId: string };
 
+    const orgId = req.orgId!;
     const customerLane = await server.prisma.customerLane.findFirst({
-      where: { laneId: id, customerId }
+      where: { laneId: id, customerId, customer: { orgId }, lane: { orgId } }
     });
     if (!customerLane) {
       reply.code(404);
@@ -420,7 +422,7 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     await server.prisma.customerLane.delete({
-      where: { id: customerLane.id }
+      where: { id: customerLane.id, customer: { orgId } }
     });
 
     return { data: { message: 'Customer removed from lane' }, error: null };
@@ -437,8 +439,9 @@ export async function laneRoutes(server: FastifyInstance) {
       notes: z.string().optional()
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
     const lane = await server.prisma.lane.findFirst({
-      where: { id, archived: false }
+      where: { id, archived: false, orgId }
     });
     if (!lane) {
       reply.code(404);
@@ -446,7 +449,7 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     const carrier = await server.prisma.carrier.findUnique({
-      where: { id: body.carrierId }
+      where: { id: body.carrierId, orgId }
     });
     if (!carrier) {
       reply.code(404);
@@ -484,8 +487,9 @@ export async function laneRoutes(server: FastifyInstance) {
       assigned: z.boolean().optional()
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
     const laneCarrier = await server.prisma.laneCarrier.findFirst({
-      where: { laneId: id, carrierId }
+      where: { laneId: id, carrierId, lane: { orgId } }
     });
     if (!laneCarrier) {
       reply.code(404);
@@ -495,13 +499,13 @@ export async function laneRoutes(server: FastifyInstance) {
     // If assigning this carrier, unassign all others for this lane
     if (body.assigned === true) {
       await server.prisma.laneCarrier.updateMany({
-        where: { laneId: id, id: { not: laneCarrier.id } },
+        where: { laneId: id, id: { not: laneCarrier.id }, lane: { orgId } },
         data: { assigned: false }
       });
     }
 
     const updated = await server.prisma.laneCarrier.update({
-      where: { id: laneCarrier.id },
+      where: { id: laneCarrier.id, lane: { orgId } },
       data: body,
       include: {
         carrier: true,
@@ -518,8 +522,9 @@ export async function laneRoutes(server: FastifyInstance) {
   server.post('/api/v1/lanes/:id/carriers/:carrierId/assign', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id, carrierId } = req.params as { id: string; carrierId: string };
 
+    const orgId = req.orgId!;
     const laneCarrier = await server.prisma.laneCarrier.findFirst({
-      where: { laneId: id, carrierId }
+      where: { laneId: id, carrierId, lane: { orgId } }
     });
     if (!laneCarrier) {
       reply.code(404);
@@ -528,13 +533,13 @@ export async function laneRoutes(server: FastifyInstance) {
 
     // Unassign all other carriers for this lane
     await server.prisma.laneCarrier.updateMany({
-      where: { laneId: id, id: { not: laneCarrier.id } },
+      where: { laneId: id, id: { not: laneCarrier.id }, lane: { orgId } },
       data: { assigned: false }
     });
 
     // Assign this carrier
     const updated = await server.prisma.laneCarrier.update({
-      where: { id: laneCarrier.id },
+      where: { id: laneCarrier.id, lane: { orgId } },
       data: { assigned: true },
       include: {
         carrier: true,
@@ -550,8 +555,9 @@ export async function laneRoutes(server: FastifyInstance) {
   server.delete('/api/v1/lanes/:id/carriers/:carrierId', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id, carrierId } = req.params as { id: string; carrierId: string };
 
+    const orgId = req.orgId!;
     const laneCarrier = await server.prisma.laneCarrier.findFirst({
-      where: { laneId: id, carrierId }
+      where: { laneId: id, carrierId, lane: { orgId } }
     });
     if (!laneCarrier) {
       reply.code(404);
@@ -559,7 +565,7 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     await server.prisma.laneCarrier.delete({
-      where: { id: laneCarrier.id }
+      where: { id: laneCarrier.id, lane: { orgId } }
     });
 
     return { data: { message: 'Carrier removed from lane' }, error: null };

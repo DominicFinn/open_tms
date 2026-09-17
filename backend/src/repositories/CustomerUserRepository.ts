@@ -16,14 +16,14 @@ export interface UpdateCustomerUserDTO {
 
 export interface ICustomerUserRepository {
   create(data: CreateCustomerUserDTO): Promise<CustomerUser>;
-  findById(id: string): Promise<CustomerUser | null>;
+  findById(id: string, orgId: string): Promise<CustomerUser | null>;
   findByEmail(email: string): Promise<CustomerUser | null>;
-  findByCustomerId(customerId: string): Promise<CustomerUser[]>;
-  update(id: string, data: UpdateCustomerUserDTO): Promise<CustomerUser>;
-  updatePassword(id: string, passwordHash: string): Promise<CustomerUser>;
-  updateLastLogin(id: string): Promise<CustomerUser>;
-  applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser>;
-  clearLockout(id: string): Promise<CustomerUser>;
+  findByCustomerId(customerId: string, orgId: string): Promise<CustomerUser[]>;
+  update(id: string, orgId: string, data: UpdateCustomerUserDTO): Promise<CustomerUser>;
+  updatePassword(id: string, orgId: string, passwordHash: string): Promise<CustomerUser>;
+  updateLastLogin(id: string, orgId: string): Promise<CustomerUser>;
+  applyFailedAttempt(id: string, orgId: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser>;
+  clearLockout(id: string, orgId: string): Promise<CustomerUser>;
 }
 
 export class CustomerUserRepository implements ICustomerUserRepository {
@@ -33,9 +33,9 @@ export class CustomerUserRepository implements ICustomerUserRepository {
     return this.prisma.customerUser.create({ data });
   }
 
-  async findById(id: string): Promise<CustomerUser | null> {
+  async findById(id: string, orgId: string): Promise<CustomerUser | null> {
     return this.prisma.customerUser.findUnique({
-      where: { id },
+      where: { id, customer: { orgId } },
       include: {
         customer: { select: { id: true, name: true } },
       },
@@ -46,46 +46,46 @@ export class CustomerUserRepository implements ICustomerUserRepository {
     return this.prisma.customerUser.findUnique({
       where: { email },
       include: {
-        customer: { select: { id: true, name: true } },
+        customer: { select: { id: true, orgId: true, name: true } },
       },
     });
   }
 
-  async findByCustomerId(customerId: string): Promise<CustomerUser[]> {
+  async findByCustomerId(customerId: string, orgId: string): Promise<CustomerUser[]> {
     return this.prisma.customerUser.findMany({
-      where: { customerId },
+      where: { customerId, customer: { orgId } },
       orderBy: { name: 'asc' },
     });
   }
 
-  async update(id: string, data: UpdateCustomerUserDTO): Promise<CustomerUser> {
-    return this.prisma.customerUser.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: UpdateCustomerUserDTO): Promise<CustomerUser> {
+    return this.prisma.customerUser.update({ where: { id, customer: { orgId } }, data });
   }
 
-  async updatePassword(id: string, passwordHash: string): Promise<CustomerUser> {
+  async updatePassword(id: string, orgId: string, passwordHash: string): Promise<CustomerUser> {
     return this.prisma.customerUser.update({
-      where: { id },
+      where: { id, customer: { orgId } },
       data: { passwordHash },
     });
   }
 
-  async updateLastLogin(id: string): Promise<CustomerUser> {
+  async updateLastLogin(id: string, orgId: string): Promise<CustomerUser> {
     return this.prisma.customerUser.update({
-      where: { id },
+      where: { id, customer: { orgId } },
       data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
     });
   }
 
-  async applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser> {
+  async applyFailedAttempt(id: string, orgId: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser> {
     return this.prisma.customerUser.update({
-      where: { id },
+      where: { id, customer: { orgId } },
       data: { failedLoginAttempts, lockedUntil },
     });
   }
 
-  async clearLockout(id: string): Promise<CustomerUser> {
+  async clearLockout(id: string, orgId: string): Promise<CustomerUser> {
     return this.prisma.customerUser.update({
-      where: { id },
+      where: { id, customer: { orgId } },
       data: { failedLoginAttempts: 0, lockedUntil: null },
     });
   }

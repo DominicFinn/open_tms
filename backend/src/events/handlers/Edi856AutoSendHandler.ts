@@ -86,6 +86,7 @@ export class Edi856AutoSendHandler implements IEventHandler {
           });
 
           await this.deliveryService.deliver({
+            orgId: event.orgId,
             partnerId: partner.id,
             transactionType: '856',
             ediContent,

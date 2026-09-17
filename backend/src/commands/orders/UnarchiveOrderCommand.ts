@@ -35,13 +35,15 @@ export class UnarchiveOrderCommandHandler extends BaseCommandHandler<UnarchiveOr
   ): Promise<{ id: string; notArchived?: boolean }> {
     const { id } = command.payload;
 
-    const existing = await tx.order.findFirstOrThrow({ where: { id, deletedAt: null } });
+    const existing = await tx.order.findFirstOrThrow({
+      where: { id, orgId: command.orgId, deletedAt: null },
+    });
     if (!existing.archived) {
       return { id, notArchived: true };
     }
 
     const order = await tx.order.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         archived: false,
         archivedAt: null,

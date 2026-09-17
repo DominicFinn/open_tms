@@ -48,9 +48,9 @@ export interface IChargeRepository {
   findAll(filters: ChargeFilters): Promise<Charge[]>;
   findByShipmentId(shipmentId: string, orgId: string): Promise<Charge[]>;
   findByOrderId(orderId: string, orgId: string): Promise<Charge[]>;
-  update(id: string, data: UpdateChargeDTO): Promise<Charge>;
-  updateMany(ids: string[], data: UpdateChargeDTO): Promise<{ count: number }>;
-  delete(id: string): Promise<void>;
+  update(id: string, orgId: string, data: UpdateChargeDTO): Promise<Charge>;
+  updateMany(ids: string[], orgId: string, data: UpdateChargeDTO): Promise<{ count: number }>;
+  delete(id: string, orgId: string): Promise<void>;
   sumByShipment(shipmentId: string, orgId: string, chargeCategory: string): Promise<number>;
 }
 
@@ -118,24 +118,24 @@ export class ChargeRepository implements IChargeRepository {
     });
   }
 
-  async update(id: string, data: UpdateChargeDTO): Promise<Charge> {
+  async update(id: string, orgId: string, data: UpdateChargeDTO): Promise<Charge> {
     return this.prisma.charge.update({
-      where: { id },
+      where: { id, orgId },
       data,
     });
   }
 
-  async updateMany(ids: string[], data: UpdateChargeDTO): Promise<{ count: number }> {
+  async updateMany(ids: string[], orgId: string, data: UpdateChargeDTO): Promise<{ count: number }> {
     if (ids.length === 0) return { count: 0 };
     const result = await this.prisma.charge.updateMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, orgId },
       data,
     });
     return { count: result.count };
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.charge.delete({ where: { id } });
+  async delete(id: string, orgId: string): Promise<void> {
+    await this.prisma.charge.delete({ where: { id, orgId } });
   }
 
   async sumByShipment(shipmentId: string, orgId: string, chargeCategory: string): Promise<number> {

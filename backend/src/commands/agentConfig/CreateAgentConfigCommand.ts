@@ -62,7 +62,7 @@ export class CreateAgentConfigCommandHandler extends BaseCommandHandler<CreateAg
 
     const firstVersion = config.versions[0];
     await tx.agentConfig.update({
-      where: { id: config.id },
+      where: { id: config.id, orgId: command.orgId },
       data: { activeVersionId: firstVersion.id },
     });
 

@@ -23,7 +23,7 @@ function makeOrgScopedPrisma(rows: Array<Record<string, any>>) {
     );
   });
   const findUnique = jest.fn().mockImplementation(({ where }: any) =>
-    Promise.resolve(rows.find((r) => r.id === where.id) ?? null)
+    Promise.resolve(rows.find((r) => r.id === where.id && (!where.orgId || r.orgId === where.orgId)) ?? null)
   );
   const findMany = jest.fn().mockImplementation(({ where }: any) => {
     return Promise.resolve(
@@ -73,9 +73,7 @@ describe('Cross-tenant isolation — Location', () => {
     expect(results.map((l) => l.id)).toEqual(['loc-a1', 'loc-a2']);
   });
 
-  it('findByIdUnique guards cross-tenant access at the application layer', async () => {
-    // Even though Prisma findUnique doesn't accept orgId in its where clause,
-    // the repo does a post-fetch check so the contract stays consistent.
+  it('findByIdUnique scopes the unique lookup by orgId', async () => {
     const repo = new LocationsRepository(prismaFor());
     expect(await repo.findByIdUnique('loc-b1', 'org-a')).toBeNull();
     expect((await repo.findByIdUnique('loc-b1', 'org-b'))?.id).toBe('loc-b1');
@@ -105,6 +103,15 @@ describe('Cross-tenant isolation — Location', () => {
       } as any)
     ).rejects.toThrow(/orgId is required/);
     expect(prisma.location.create).not.toHaveBeenCalled();
+  });
+
+  it('update() and archive() carry the caller org in the where', async () => {
+    const prisma = prismaFor();
+    const repo = new LocationsRepository(prisma);
+    await repo.update('loc-b1', 'org-a', { name: 'X' });
+    await repo.archive('loc-b1', 'org-a');
+    expect(prisma.location.update).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: 'loc-b1', orgId: 'org-a' } }));
+    expect(prisma.location.update).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { id: 'loc-b1', orgId: 'org-a' } }));
   });
 });
 

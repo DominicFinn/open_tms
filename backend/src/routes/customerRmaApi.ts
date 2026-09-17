@@ -47,13 +47,14 @@ export async function customerRmaApiRoutes(server: FastifyInstance) {
       return null;
     }
 
-    // API-key callers carry no token, so the tenant is walked from the customer the key
-    // belongs to — the same path attachOrgScopeFromCustomerUserHook takes for the portal.
-    // Never widen scope from a client-supplied id: this one comes from the authenticated key.
-    const customer = await prisma.customer.findUnique({
-      where: { id: authResult.customerId },
-      select: { orgId: true },
-    });
+    // The tenant is the org the authenticated key belongs to. The customer must sit in that
+    // same org, so a key can never reach another tenant's customer.
+    const customer = authResult.orgId
+      ? await prisma.customer.findUnique({
+        where: { id: authResult.customerId, orgId: authResult.orgId },
+        select: { orgId: true },
+      })
+      : null;
     if (!customer) {
       reply.code(403);
       reply.send({ data: null, error: 'This API key is not linked to a known customer.' });

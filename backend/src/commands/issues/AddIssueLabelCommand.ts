@@ -33,7 +33,13 @@ export class AddIssueLabelCommandHandler extends BaseCommandHandler<AddIssueLabe
   ): Promise<AddIssueLabelResult> {
     const { issueId, labelId } = command.payload;
 
-    const label = await tx.issueLabel.findUnique({ where: { id: labelId } });
+    const issue = await tx.issue.findFirst({
+      where: { id: issueId, orgId: command.orgId },
+      select: { id: true },
+    });
+    if (!issue) throw new Error('Issue not found');
+
+    const label = await tx.issueLabel.findUnique({ where: { id: labelId, orgId: command.orgId } });
     if (!label) throw new Error('Label not found');
 
     const existing = await tx.issueLabelAssignment.findFirst({

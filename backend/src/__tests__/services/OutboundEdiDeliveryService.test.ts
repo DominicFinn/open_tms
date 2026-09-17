@@ -78,6 +78,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: 'nonexistent',
       transactionType: '204',
       ediContent: 'ISA*...',
@@ -88,12 +89,29 @@ describe('OutboundEdiDeliveryService', () => {
     expect(result.errorMessage).toContain('not found');
   });
 
+  it('looks the partner up in the caller org, so a partner from another org is not found', async () => {
+    const repo = createMockRepo(null);
+    const service = new OutboundEdiDeliveryService(repo);
+
+    const result = await service.deliver({
+      orgId: 'org-1',
+      partnerId: 'partner-in-org-2',
+      transactionType: '204',
+      ediContent: 'ISA*...',
+      referenceId: 'REF-001',
+    });
+
+    expect(repo.findById).toHaveBeenCalledWith('partner-in-org-2', 'org-1');
+    expect(result.success).toBe(false);
+  });
+
   it('returns error when outbound not enabled', async () => {
     const partner = makePartner({ outboundEnabled: false });
     const repo = createMockRepo(partner);
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*...',
@@ -110,6 +128,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '810', // not in partner transactions
       ediContent: 'ISA*...',
@@ -127,6 +146,7 @@ describe('OutboundEdiDeliveryService', () => {
 
     // Will fail on SFTP since there's no real server, but log should be created
     await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*test content',
@@ -149,6 +169,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*test',

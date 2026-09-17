@@ -55,7 +55,7 @@ export class WaveAutoReleaseService {
 
       if (cmdResult.success) {
         await this.prisma.waveTemplate.update({
-          where: { id: t.id },
+          where: { id: t.id, orgId: t.orgId },
           data: { lastAutoReleasedAt: now },
         });
         result.templatesTriggered++;

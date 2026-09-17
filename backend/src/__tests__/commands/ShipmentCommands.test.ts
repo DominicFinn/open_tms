@@ -207,7 +207,7 @@ describe('Shipment Command Handlers', () => {
 
       expect(result.success).toBe(true);
       expect(mockTx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'ship-1' },
+        where: { id: 'ship-1', orgId: 'test-org' },
         data: expect.objectContaining({ status: 'archived', statusBeforeArchive: 'in_progress' }),
       }));
       expect(result.events).toHaveLength(1);

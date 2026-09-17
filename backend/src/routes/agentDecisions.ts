@@ -86,7 +86,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const decision = await repo.findById(result.data!.id);
+    const decision = await repo.findById(result.data!.id, orgId);
 
     reply.code(201);
     return { data: decision, error: null };
@@ -242,7 +242,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const decision = await repo.findById(request.params.id);
+    const decision = await repo.findById(request.params.id, request.orgId!);
     if (!decision) {
       reply.code(404);
       return { data: null, error: 'Decision not found' };
@@ -300,7 +300,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const decision = await repo.findById(request.params.id);
+    const decision = await repo.findById(request.params.id, orgId);
     return { data: decision, error: null };
   });
 

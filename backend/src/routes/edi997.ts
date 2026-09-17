@@ -66,7 +66,7 @@ export async function edi997Routes(server: FastifyInstance) {
     const result = edi997Service.parse997(body.content);
 
     if (!result.success) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: result.errors.join('; '),
         processedAt: new Date(),
@@ -80,6 +80,7 @@ export async function edi997Routes(server: FastifyInstance) {
     let originalLogUpdated = false;
     if (body.partnerId && result.groupControlNumber) {
       const outboundLogs = await tradingPartnerRepo.findLogs({
+        orgId: req.orgId!,
         partnerId: body.partnerId,
         direction: 'outbound',
         transactionType: result.acknowledgedTransactionType || undefined,
@@ -90,7 +91,7 @@ export async function edi997Routes(server: FastifyInstance) {
       for (const log of outboundLogs) {
         if (log.ack997Received) continue; // Already acknowledged
         if (log.fileContent?.includes(result.groupControlNumber)) {
-          await tradingPartnerRepo.updateLog(log.id, {
+          await tradingPartnerRepo.updateLog(log.id, req.orgId!, {
             ack997Received: true,
             ack997LogId: logEntry.id,
           });
@@ -101,7 +102,7 @@ export async function edi997Routes(server: FastifyInstance) {
     }
 
     // Update the 997 log entry
-    await tradingPartnerRepo.updateLog(logEntry.id, {
+    await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
       status: 'success',
       processedAt: new Date(),
     });

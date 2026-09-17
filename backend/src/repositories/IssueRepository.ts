@@ -307,7 +307,7 @@ export class IssueRepository implements IIssueRepository {
       if (input.isDefault) {
         await tx.kanbanView.updateMany({ where: { orgId, isDefault: true }, data: { isDefault: false } });
       }
-      return tx.kanbanView.update({ where: { id }, data: pickKanbanFields(input) });
+      return tx.kanbanView.update({ where: { id, orgId }, data: pickKanbanFields(input) });
     });
   }
 

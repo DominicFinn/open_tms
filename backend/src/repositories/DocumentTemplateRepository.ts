@@ -84,7 +84,7 @@ export class DocumentTemplateRepository implements IDocumentTemplateRepository {
       });
     }
 
-    return this.prisma.documentTemplate.update({ where: { id: template.id }, data });
+    return this.prisma.documentTemplate.update({ where: { id: template.id, orgId }, data });
   }
 
   async delete(orgId: string, id: string) {

@@ -54,11 +54,11 @@ export class CarrierTrackingService {
    * Finds all in-transit shipments for the integration's carrier,
    * polls the provider, and writes CarrierTrackingEvent records.
    */
-  async pollForUpdates(integrationId: string): Promise<{ polled: number; eventsCreated: number }> {
-    // Callers are the poll worker, which runs for every tenant, and routes that have already
-    // checked the integration belongs to the caller. The org comes from the integration's carrier.
+  async pollForUpdates(orgId: string, integrationId: string): Promise<{ polled: number; eventsCreated: number }> {
+    // The poll worker runs for every tenant and passes each integration's own carrier org; routes
+    // pass the caller's org.
     const integration = await this.prisma.carrierTrackingIntegration.findUnique({
-      where: { id: integrationId },
+      where: { id: integrationId, carrier: { orgId } },
       include: { carrier: true },
     });
 
@@ -69,7 +69,6 @@ export class CarrierTrackingService {
     if (integration.status !== 'active') {
       throw new Error(`Integration ${integrationId} is not active (status: ${integration.status})`);
     }
-    const orgId = integration.carrier.orgId;
 
     // Check rate limits
     if (integration.rateLimitDailyMax && integration.rateLimitCallsToday >= integration.rateLimitDailyMax) {
@@ -108,7 +107,7 @@ export class CarrierTrackingService {
 
     if (shipments.length === 0) {
       await this.prisma.carrierTrackingIntegration.update({
-        where: { id: integrationId },
+        where: { id: integrationId, carrier: { orgId } },
         data: { lastPolledAt: new Date() },
       });
       return { polled: 0, eventsCreated: 0 };
@@ -137,7 +136,7 @@ export class CarrierTrackingService {
 
       // Increment rate limit counter
       await this.prisma.carrierTrackingIntegration.update({
-        where: { id: integrationId },
+        where: { id: integrationId, carrier: { orgId } },
         data: { rateLimitCallsToday: { increment: 1 } },
       });
 
@@ -166,7 +165,7 @@ export class CarrierTrackingService {
 
     // Update last polled timestamp and clear errors on success
     await this.prisma.carrierTrackingIntegration.update({
-      where: { id: integrationId },
+      where: { id: integrationId, carrier: { orgId } },
       data: {
         lastPolledAt: new Date(),
         lastErrorMessage: null,
@@ -244,9 +243,9 @@ export class CarrierTrackingService {
   /**
    * Test a connection by authenticating and optionally polling a single tracking number.
    */
-  async testConnection(integrationId: string): Promise<{ success: boolean; message: string }> {
+  async testConnection(orgId: string, integrationId: string): Promise<{ success: boolean; message: string }> {
     const integration = await this.prisma.carrierTrackingIntegration.findUnique({
-      where: { id: integrationId },
+      where: { id: integrationId, carrier: { orgId } },
     });
 
     if (!integration) {
@@ -298,6 +297,7 @@ export class CarrierTrackingService {
     // status, and occurredAt timestamp
     const existing = await this.prisma.carrierTrackingEvent.findFirst({
       where: {
+        shipment: { orgId },
         trackingNumber,
         status: trackingStatus.status,
         occurredAt: trackingStatus.occurredAt,
@@ -426,7 +426,7 @@ export class CarrierTrackingService {
   private async recordIntegrationError(integrationId: string, orgId: string, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     await this.prisma.carrierTrackingIntegration.update({
-      where: { id: integrationId },
+      where: { id: integrationId, carrier: { orgId } },
       data: {
         lastErrorMessage: message,
         lastErrorAt: new Date(),

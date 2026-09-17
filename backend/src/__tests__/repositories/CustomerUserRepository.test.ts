@@ -40,13 +40,14 @@ describe('CustomerUserRepository', () => {
       const prisma = buildPrisma();
       const repo = new CustomerUserRepository(prisma);
 
-      await repo.findById('cu-1');
+      await repo.findById('cu-1', 'org-1');
       await repo.findByEmail('jane@acme.com');
 
       const idCall = prisma.customerUser.findUnique.mock.calls[0][0];
       const emailCall = prisma.customerUser.findUnique.mock.calls[1][0];
+      expect(idCall.where).toEqual({ id: 'cu-1', customer: { orgId: 'org-1' } });
       expect(idCall.include.customer.select).toEqual({ id: true, name: true });
-      expect(emailCall.include.customer.select).toEqual({ id: true, name: true });
+      expect(emailCall.include.customer.select).toEqual({ id: true, orgId: true, name: true });
     });
   });
 
@@ -55,10 +56,10 @@ describe('CustomerUserRepository', () => {
       const prisma = buildPrisma();
       const repo = new CustomerUserRepository(prisma);
 
-      await repo.findByCustomerId('cust-1');
+      await repo.findByCustomerId('cust-1', 'org-1');
 
       expect(prisma.customerUser.findMany).toHaveBeenCalledWith({
-        where: { customerId: 'cust-1' },
+        where: { customerId: 'cust-1', customer: { orgId: 'org-1' } },
         orderBy: { name: 'asc' },
       });
     });
@@ -69,7 +70,7 @@ describe('CustomerUserRepository', () => {
       const prisma = buildPrisma();
       const repo = new CustomerUserRepository(prisma);
 
-      await repo.updateLastLogin('cu-1');
+      await repo.updateLastLogin('cu-1', 'org-1');
 
       const data = prisma.customerUser.update.mock.calls[0][0].data;
       expect(data.lastLoginAt).toBeInstanceOf(Date);
@@ -84,10 +85,10 @@ describe('CustomerUserRepository', () => {
       const repo = new CustomerUserRepository(prisma);
 
       const future = new Date('2026-06-01T12:00:00Z');
-      await repo.applyFailedAttempt('cu-1', 5, future);
+      await repo.applyFailedAttempt('cu-1', 'org-1', 5, future);
 
       expect(prisma.customerUser.update).toHaveBeenCalledWith({
-        where: { id: 'cu-1' },
+        where: { id: 'cu-1', customer: { orgId: 'org-1' } },
         data: { failedLoginAttempts: 5, lockedUntil: future },
       });
     });
@@ -96,7 +97,7 @@ describe('CustomerUserRepository', () => {
       const prisma = buildPrisma();
       const repo = new CustomerUserRepository(prisma);
 
-      await repo.applyFailedAttempt('cu-1', 2, null);
+      await repo.applyFailedAttempt('cu-1', 'org-1', 2, null);
 
       const data = prisma.customerUser.update.mock.calls[0][0].data;
       expect(data.lockedUntil).toBeNull();
@@ -108,10 +109,10 @@ describe('CustomerUserRepository', () => {
       const prisma = buildPrisma();
       const repo = new CustomerUserRepository(prisma);
 
-      await repo.clearLockout('cu-1');
+      await repo.clearLockout('cu-1', 'org-1');
 
       expect(prisma.customerUser.update).toHaveBeenCalledWith({
-        where: { id: 'cu-1' },
+        where: { id: 'cu-1', customer: { orgId: 'org-1' } },
         data: { failedLoginAttempts: 0, lockedUntil: null },
       });
     });

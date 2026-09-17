@@ -52,7 +52,7 @@ export class UpdateWaveTemplateCommandHandler extends BaseCommandHandler<
     }
 
     const template = await tx.waveTemplate.update({
-      where: { id: templateId },
+      where: { id: templateId, orgId: command.orgId },
       data: updates as any,
     });
 

@@ -25,9 +25,14 @@ const baseLabel = { id: 'lbl-1', orgId: 'test-org', name: 'cold-chain', color: '
 
 function buildPrisma(overrides: any = {}) {
   const labelResult = 'label' in overrides ? overrides.label : baseLabel;
+  const issueResult = 'issue' in overrides ? overrides.issue : { id: 'issue-1' };
   const tx = {
+    issue: {
+      findFirst: jest.fn().mockResolvedValue(issueResult),
+    },
     issueLabel: {
       findUnique: jest.fn().mockResolvedValue(labelResult),
+      findFirst: jest.fn().mockResolvedValue(labelResult),
       create: jest.fn().mockResolvedValue(overrides.created ?? baseLabel),
       update: jest.fn().mockResolvedValue(overrides.updated ?? baseLabel),
       delete: jest.fn().mockResolvedValue(baseLabel),
@@ -99,6 +104,23 @@ describe('Issue label assignment commands', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/not found/i);
+    });
+
+    it('refuses to label an issue that belongs to another org', async () => {
+      const { prisma, tx } = buildPrisma({ issue: null });
+      const { bus } = mockEventBus();
+      const handler = new AddIssueLabelCommandHandler(prisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(ADD_ISSUE_LABEL, { issueId: 'issue-1', labelId: 'lbl-1' }, { orgId: 'other-org' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/issue not found/i);
+      expect(tx.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'issue-1', orgId: 'other-org' } })
+      );
+      expect(tx.issueLabelAssignment.create).not.toHaveBeenCalled();
     });
   });
 
@@ -178,7 +200,7 @@ describe('Issue label catalogue commands', () => {
 
       expect(result.success).toBe(true);
       expect(tx.issueLabel.update).toHaveBeenCalledWith({
-        where: { id: 'lbl-1' },
+        where: { id: 'lbl-1', orgId: 'test-org' },
         data: { name: 'cold-chain-renamed' },
       });
       expect(result.events[0].type).toBe(EVENT_TYPES.ISSUE_LABEL_UPDATED);
@@ -203,7 +225,7 @@ describe('Issue label catalogue commands', () => {
 
       expect(result.success).toBe(true);
       expect(tx.issueLabelAssignment.deleteMany).toHaveBeenCalledWith({ where: { labelId: 'lbl-1' } });
-      expect(tx.issueLabel.delete).toHaveBeenCalledWith({ where: { id: 'lbl-1' } });
+      expect(tx.issueLabel.delete).toHaveBeenCalledWith({ where: { id: 'lbl-1', orgId: 'test-org' } });
 
       // 1 ISSUE_LABEL_DELETED + 2 ISSUE_LABEL_REMOVED (deduped)
       const deletedEvents = result.events.filter((e) => e.type === EVENT_TYPES.ISSUE_LABEL_DELETED);
@@ -225,6 +247,24 @@ describe('Issue label catalogue commands', () => {
       expect(result.success).toBe(true);
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.ISSUE_LABEL_DELETED);
+    });
+
+    it('treats a label from another org as missing and touches nothing', async () => {
+      const { prisma, tx } = buildPrisma({ label: null });
+      const { bus } = mockEventBus();
+      const handler = new DeleteIssueLabelCommandHandler(prisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(DELETE_ISSUE_LABEL, { id: 'lbl-1' }, { orgId: 'other-org' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/not found/i);
+      expect(tx.issueLabel.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'lbl-1', orgId: 'other-org' } })
+      );
+      expect(tx.issueLabelAssignment.deleteMany).not.toHaveBeenCalled();
+      expect(tx.issueLabel.delete).not.toHaveBeenCalled();
     });
   });
 });

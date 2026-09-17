@@ -72,7 +72,7 @@ export interface IShipmentEtaMonitorService {
   /** Run a full ETA check cycle across all in-transit shipments */
   runEtaCheck(): Promise<EtaMonitorRunResult>;
   /** Check ETA for a single shipment (manual trigger) */
-  checkSingleShipment(shipmentId: string): Promise<EtaCheckResult>;
+  checkSingleShipment(orgId: string, shipmentId: string): Promise<EtaCheckResult>;
 }
 
 export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
@@ -157,9 +157,9 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     };
   }
 
-  async checkSingleShipment(shipmentId: string): Promise<EtaCheckResult> {
+  async checkSingleShipment(orgId: string, shipmentId: string): Promise<EtaCheckResult> {
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       include: {
         origin: true,
         destination: true,
@@ -179,7 +179,7 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
 
     // Get latest GPS position from read model
     const readModel = await this.prisma.shipmentReadModel.findFirst({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
     });
 
     const enriched = {
@@ -348,7 +348,7 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     // Update the stop's estimated arrival with the routing-based ETA
     if (nextStop) {
       await this.prisma.shipmentStop.update({
-        where: { id: nextStop.id },
+        where: { id: nextStop.id, shipment: { orgId: shipment.orgId } },
         data: { estimatedArrival: new Date(newEta) },
       });
     }
@@ -383,13 +383,13 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     if (isDelayed) {
       if (shipment.lastEtaDelaySeverity !== severity) {
         await this.prisma.shipment.update({
-          where: { id: shipment.id },
+          where: { id: shipment.id, orgId: shipment.orgId },
           data: { lastEtaDelaySeverity: severity },
         });
       }
     } else if (shipment.lastEtaDelaySeverity) {
       await this.prisma.shipment.update({
-        where: { id: shipment.id },
+        where: { id: shipment.id, orgId: shipment.orgId },
         data: { lastEtaDelaySeverity: null },
       });
       await this.publishEtaRecoveredEvent(shipment, {
@@ -490,7 +490,7 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
 
     try {
       const laneRoute = await this.prisma.laneRoute.findUnique({
-        where: { laneId: shipment.laneId },
+        where: { laneId: shipment.laneId, orgId: shipment.orgId },
       });
 
       if (!laneRoute) return; // No planned route for this lane
@@ -504,7 +504,7 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
       if (result.isDeviated) {
         // Get lane name for the event
         const lane = await this.prisma.lane.findUnique({
-          where: { id: shipment.laneId },
+          where: { id: shipment.laneId, orgId: shipment.orgId },
           select: { name: true },
         });
 

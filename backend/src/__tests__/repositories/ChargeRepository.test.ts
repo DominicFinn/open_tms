@@ -108,16 +108,32 @@ describe('ChargeRepository', () => {
     });
   });
 
+  describe('update and delete', () => {
+    it('scope the write to the caller org so another tenant id cannot match', async () => {
+      const prisma = buildPrisma();
+      const repo = new ChargeRepository(prisma);
+
+      await repo.update('c1', 'org-1', { status: 'approved' });
+      await repo.delete('c1', 'org-1');
+
+      expect(prisma.charge.update).toHaveBeenCalledWith({
+        where: { id: 'c1', orgId: 'org-1' },
+        data: { status: 'approved' },
+      });
+      expect(prisma.charge.delete).toHaveBeenCalledWith({ where: { id: 'c1', orgId: 'org-1' } });
+    });
+  });
+
   describe('updateMany', () => {
     it('issues a single bulk update with the in: filter', async () => {
       const prisma = buildPrisma();
       prisma.charge.updateMany.mockResolvedValue({ count: 3 });
       const repo = new ChargeRepository(prisma);
 
-      const result = await repo.updateMany(['c1', 'c2', 'c3'], { status: 'invoiced' });
+      const result = await repo.updateMany(['c1', 'c2', 'c3'], 'org-1', { status: 'invoiced' });
 
       expect(prisma.charge.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['c1', 'c2', 'c3'] } },
+        where: { id: { in: ['c1', 'c2', 'c3'] }, orgId: 'org-1' },
         data: { status: 'invoiced' },
       });
       expect(result).toEqual({ count: 3 });
@@ -127,7 +143,7 @@ describe('ChargeRepository', () => {
       const prisma = buildPrisma();
       const repo = new ChargeRepository(prisma);
 
-      const result = await repo.updateMany([], { status: 'invoiced' });
+      const result = await repo.updateMany([], 'org-1', { status: 'invoiced' });
 
       expect(prisma.charge.updateMany).not.toHaveBeenCalled();
       expect(result).toEqual({ count: 0 });

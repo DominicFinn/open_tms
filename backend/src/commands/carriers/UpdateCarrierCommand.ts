@@ -24,7 +24,7 @@ export class UpdateCarrierCommandHandler extends BaseCommandHandler<UpdateCarrie
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
-    const updated = await tx.carrier.update({ where: { id }, data: data as any });
+    const updated = await tx.carrier.update({ where: { id, orgId: command.orgId }, data: data as any });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_UPDATED,

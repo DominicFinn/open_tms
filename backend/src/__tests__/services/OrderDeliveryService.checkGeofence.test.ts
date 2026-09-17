@@ -19,7 +19,7 @@ function mockPrisma(stop: { status: string }) {
       ]),
       findUnique: jest.fn().mockResolvedValue({
         id: 'stop-1', status: stop.status, actualArrival: null, actualDeparture: null,
-        shipmentId: 'ship-1', orders: [],
+        shipmentId: 'ship-1', orders: [], shipment: { orgId: 'org-1' },
       }),
       update: jest.fn().mockResolvedValue({}),
     },
@@ -32,10 +32,13 @@ describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idem
     const prisma = mockPrisma({ status: 'pending' });
     const service = new OrderDeliveryService(prisma);
 
-    await service.checkGeofenceAndUpdateOrders('ship-1', 40.0, -74.0);
+    await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
     expect(prisma.shipmentStop.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'stop-1' }, data: expect.objectContaining({ status: 'arrived' }) })
+      expect.objectContaining({ where: { id: 'stop-1', shipment: { orgId: 'org-1' } }, data: expect.objectContaining({ status: 'arrived' }) })
+    );
+    expect(prisma.shipmentStop.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ shipmentId: 'ship-1', shipment: { orgId: 'org-1' } }) })
     );
   });
 
@@ -43,7 +46,7 @@ describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idem
     const prisma = mockPrisma({ status: 'arrived' });
     const service = new OrderDeliveryService(prisma);
 
-    await service.checkGeofenceAndUpdateOrders('ship-1', 40.0, -74.0);
+    await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
     expect(prisma.shipmentStop.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -56,7 +59,7 @@ describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idem
     const prisma = mockPrisma({ status: 'completed' });
     const service = new OrderDeliveryService(prisma);
 
-    await service.checkGeofenceAndUpdateOrders('ship-1', 40.0, -74.0);
+    await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
     expect(prisma.shipmentStop.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();

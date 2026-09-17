@@ -37,6 +37,17 @@ describe('CarrierArchivalNotificationHandler', () => {
     }));
   });
 
+  it('looks the carrier up within the event org and stays silent for another tenant\'s carrier', async () => {
+    const { handler, prisma, published } = makeHandler([{ id: 'u1', email: 'a@c.demo', name: 'A' }]);
+    prisma.carrier.findUnique.mockResolvedValue(null);
+    await handler.handle(archivedEvent);
+    expect(prisma.carrier.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'car-1', orgId: 'org-1' },
+    }));
+    expect(prisma.carrierUser.findMany).not.toHaveBeenCalled();
+    expect(published).toHaveLength(0);
+  });
+
   it('does nothing when the carrier has no users', async () => {
     const { handler, published } = makeHandler([]);
     await handler.handle(archivedEvent);

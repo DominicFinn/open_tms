@@ -22,7 +22,7 @@ export async function customerUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const { customerId } = req.params as { customerId: string };
-    const users = await userRepo.findByCustomerId(customerId);
+    const users = await userRepo.findByCustomerId(customerId, req.orgId!);
     const enriched = users.map((u: any) => ({
       ...u,
       lockoutStatus: computeLockoutStatus(u),
@@ -83,7 +83,7 @@ export async function customerUserRoutes(server: FastifyInstance) {
     const body = (req as any).body || {};
 
     try {
-      const updated = await userRepo.update(id, body);
+      const updated = await userRepo.update(id, req.orgId!, body);
       return { data: updated, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -106,7 +106,7 @@ export async function customerUserRoutes(server: FastifyInstance) {
     const { newPassword } = (req as any).body;
 
     try {
-      await authService.adminResetPassword(id, newPassword);
+      await authService.adminResetPassword(id, req.orgId!, newPassword);
       return { data: { success: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -119,7 +119,7 @@ export async function customerUserRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Users'] },
   }, async (req: FastifyRequest) => {
     const { id } = req.params as { id: string };
-    await userRepo.update(id, { active: false });
+    await userRepo.update(id, req.orgId!, { active: false });
     return { data: { deactivated: true }, error: null };
   });
 
@@ -131,12 +131,12 @@ export async function customerUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const user = await userRepo.findById(id);
+    const user = await userRepo.findById(id, req.orgId!);
     if (!user) {
       reply.code(404);
       return { data: null, error: 'User not found' };
     }
-    await authService.unlockAccount(user.id);
+    await authService.unlockAccount(user.id, req.orgId!);
     return { data: { unlocked: true }, error: null };
   });
 }

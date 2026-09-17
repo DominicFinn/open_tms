@@ -70,7 +70,7 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
 
     // Move the trackable unit to the staging bin
     await tx.trackableUnit.update({
-      where: { id: p.trackableUnitId },
+      where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
       data: {
         currentBinId: p.stagingBinId,
         currentZoneId: bin.zoneId,

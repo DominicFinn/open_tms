@@ -39,7 +39,7 @@ export class UpdateAutomationRuleCommandHandler extends BaseCommandHandler<Updat
   ): Promise<UpdateAutomationRuleResult> {
     const { id, data } = command.payload;
 
-    const previous = await tx.automationRule.findUnique({ where: { id } });
+    const previous = await tx.automationRule.findUnique({ where: { id, orgId: command.orgId } });
     if (!previous) throw new Error('Rule not found');
 
     const updateData: Prisma.AutomationRuleUpdateInput = {};
@@ -52,7 +52,7 @@ export class UpdateAutomationRuleCommandHandler extends BaseCommandHandler<Updat
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (data.enabled !== undefined) updateData.enabled = data.enabled;
 
-    const updated = await tx.automationRule.update({ where: { id }, data: updateData });
+    const updated = await tx.automationRule.update({ where: { id, orgId: command.orgId }, data: updateData });
 
     // Surface a dedicated TOGGLED event when this update is purely a
     // pause/resume — operations dashboards and audit logs care about that

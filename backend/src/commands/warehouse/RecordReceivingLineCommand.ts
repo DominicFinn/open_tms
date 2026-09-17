@@ -38,7 +38,7 @@ export class RecordReceivingLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     // Verify task exists and is in-progress
-    const task = await tx.receivingTask.findUnique({ where: { id: p.taskId } });
+    const task = await tx.receivingTask.findUnique({ where: { id: p.taskId, orgId: command.orgId } });
     if (!task) throw new Error(`Receiving task ${p.taskId} not found`);
     if (task.status !== 'in_progress' && task.status !== 'pending') {
       throw new Error(`Task is ${task.status}, cannot record lines`);
@@ -47,7 +47,7 @@ export class RecordReceivingLineCommandHandler extends BaseCommandHandler<
     // Auto-start the task if still pending
     if (task.status === 'pending') {
       await tx.receivingTask.update({
-        where: { id: p.taskId },
+        where: { id: p.taskId, orgId: command.orgId },
         data: { status: 'in_progress' },
       });
 
@@ -64,7 +64,7 @@ export class RecordReceivingLineCommandHandler extends BaseCommandHandler<
     if (p.lineId) {
       // Update existing line (ASN mode - recording against expected)
       line = await tx.receivingLine.update({
-        where: { id: p.lineId },
+        where: { id: p.lineId, receivingTaskId: p.taskId, receivingTask: { orgId: command.orgId } },
         data: {
           receivedQuantity: p.receivedQuantity,
           damagedQuantity: p.damagedQuantity ?? 0,

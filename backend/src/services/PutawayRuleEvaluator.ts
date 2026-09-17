@@ -95,7 +95,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
   private async resolveTarget(rule: PutawayRule, unit?: UnitAttributes): Promise<WarehouseBin | null> {
     if (rule.targetType === 'specific_bin' && rule.targetBinId) {
       return this.prisma.warehouseBin.findFirst({
-        where: { id: rule.targetBinId, active: true },
+        where: { id: rule.targetBinId, orgId: rule.orgId, active: true },
       });
     }
 

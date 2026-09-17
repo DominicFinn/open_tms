@@ -42,7 +42,7 @@ export class ContactDriverSkill implements ISkill {
     try {
       // Look up driver via shipment loads
       const loads = await this.prisma.load.findMany({
-        where: { shipmentId },
+        where: { shipmentId, shipment: { orgId: params.orgId } },
         include: {
           driver: { select: { id: true, name: true, phone: true, email: true } },
           vehicle: { select: { plate: true, type: true } },
@@ -86,7 +86,7 @@ export class ContactDriverSkill implements ISkill {
 
       // Update comment count
       await this.prisma.issueReadModel.update({
-        where: { id: issueId },
+        where: { id: issueId, orgId: params.orgId },
         data: { commentCount: { increment: 1 }, updatedAt: new Date() },
       }).catch(() => {});
 

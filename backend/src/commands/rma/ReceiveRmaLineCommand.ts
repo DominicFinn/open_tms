@@ -35,7 +35,7 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const line = await tx.rmaLine.findUnique({
-      where: { id: p.rmaLineId },
+      where: { id: p.rmaLineId, rma: { orgId: command.orgId } },
       include: { rma: true },
     });
     if (!line) throw new Error(`RMA line ${p.rmaLineId} not found`);
@@ -49,9 +49,24 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Cannot receive RMA line when RMA is in status ${rma.status}`);
     }
 
+    if (p.trackableUnitId) {
+      const unit = await tx.trackableUnit.findFirst({
+        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
+        select: { id: true },
+      });
+      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+    }
+    const bin = p.quarantineBinId
+      ? await tx.warehouseBin.findUnique({
+          where: { id: p.quarantineBinId, orgId: command.orgId },
+          select: { zoneId: true },
+        })
+      : null;
+    if (p.quarantineBinId && !bin) throw new Error(`Bin ${p.quarantineBinId} not found`);
+
     // Update the line
     await tx.rmaLine.update({
-      where: { id: line.id },
+      where: { id: line.id, rma: { orgId: command.orgId } },
       data: {
         receivedQuantity: p.receivedQuantity,
         currentBinId: p.quarantineBinId ?? line.currentBinId,
@@ -61,12 +76,8 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
 
     // Move the trackable unit if provided
     if (p.trackableUnitId && p.quarantineBinId) {
-      const bin = await tx.warehouseBin.findUnique({
-        where: { id: p.quarantineBinId },
-        select: { zoneId: true },
-      });
       await tx.trackableUnit.update({
-        where: { id: p.trackableUnitId },
+        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
         data: {
           currentBinId: p.quarantineBinId,
           currentZoneId: bin?.zoneId ?? null,
@@ -78,7 +89,7 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
     // If RMA was authorized, bump to received
     if (rma.status === 'authorized') {
       await tx.rma.update({
-        where: { id: rma.id },
+        where: { id: rma.id, orgId: command.orgId },
         data: { status: 'received', receivedAt: new Date() },
       });
     }

@@ -47,9 +47,9 @@ export interface ICarrierTrackingIntegrationRepository {
   findRecentEvents(integrationId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]>;
   findEventsByShipment(shipmentId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]>;
   create(data: CreateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration>;
-  update(id: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration>;
-  delete(id: string): Promise<void>;
-  incrementRateLimitCounter(id: string): Promise<void>;
+  update(id: string, orgId: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration>;
+  delete(id: string, orgId: string): Promise<void>;
+  incrementRateLimitCounter(id: string, orgId: string): Promise<void>;
   resetAllRateLimitCounters(): Promise<void>;
 }
 
@@ -131,24 +131,24 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
     });
   }
 
-  async update(id: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration> {
+  async update(id: string, orgId: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration> {
     const dataToWrite: Record<string, unknown> = { ...data };
     if (data.credentials !== undefined) {
       dataToWrite.credentials = sealCredentials(data.credentials) ?? Prisma.JsonNull;
     }
     return this.prisma.carrierTrackingIntegration.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: dataToWrite,
     });
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.carrierTrackingIntegration.delete({ where: { id } });
+  async delete(id: string, orgId: string): Promise<void> {
+    await this.prisma.carrierTrackingIntegration.delete({ where: { id, carrier: { orgId } } });
   }
 
-  async incrementRateLimitCounter(id: string): Promise<void> {
+  async incrementRateLimitCounter(id: string, orgId: string): Promise<void> {
     await this.prisma.carrierTrackingIntegration.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: { rateLimitCallsToday: { increment: 1 } },
     });
   }

@@ -41,7 +41,7 @@ export async function linkOrdersToShipment(
   const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
   const newItems = buildItemsPayload(orders);
   await tx.shipment.update({
-    where: { id: shipment.id },
+    where: { id: shipment.id, orgId: ctx.orgId },
     data: { items: [...existingItems, ...newItems] },
   });
 
@@ -74,7 +74,7 @@ export async function linkOrdersToShipment(
     });
 
     await tx.order.update({
-      where: { id: order.id },
+      where: { id: order.id, orgId: ctx.orgId },
       data: {
         status: 'assigned',
         deliveryStopId: stop.id,

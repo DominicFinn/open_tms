@@ -31,7 +31,7 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const plan = await tx.loadPlan.findUnique({
-      where: { id: p.loadPlanId },
+      where: { id: p.loadPlanId, orgId: command.orgId },
       include: { lines: true },
     });
     if (!plan) throw new Error(`Load plan ${p.loadPlanId} not found`);
@@ -66,7 +66,7 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
 
     // Complete the load plan
     await tx.loadPlan.update({
-      where: { id: plan.id },
+      where: { id: plan.id, orgId: command.orgId },
       data: {
         status: 'completed',
         sealNumber: p.sealNumber ?? plan.sealNumber,

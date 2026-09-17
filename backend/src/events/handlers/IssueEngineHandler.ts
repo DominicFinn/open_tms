@@ -102,7 +102,7 @@ export class IssueEngineHandler implements IEventHandler {
     // 2. If an issue is already open for this (type, entity), attach + escalate.
     const open = await this.findOpenIssue(orgId, type.key, entityId);
     if (open) {
-      await this.prisma.issueSignal.update({ where: { id: signal.id }, data: { issueId: open.id } });
+      await this.prisma.issueSignal.update({ where: { id: signal.id, orgId }, data: { issueId: open.id } });
 
       // Corroboration: each additional signal raises confidence, which can lift
       // an issue back out of noise. Recomputed from the ledger rather than

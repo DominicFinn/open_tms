@@ -40,7 +40,7 @@ export class RecordCalibrationCommandHandler extends BaseCommandHandler<RecordCa
     const { deviceId, calibratedAt, calibratedBy, certificateNumber, expiresAt, calibrationMethod, accuracy, notes, documentStorageKey } = command.payload;
 
     const device = await tx.device.findUniqueOrThrow({
-      where: { id: deviceId },
+      where: { id: deviceId, orgId: command.orgId },
       select: { id: true, name: true },
     });
 

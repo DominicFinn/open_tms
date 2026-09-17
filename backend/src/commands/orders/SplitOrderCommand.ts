@@ -56,7 +56,7 @@ export class SplitOrderCommandHandler extends BaseCommandHandler<SplitOrderPaylo
     }
 
     const order = await tx.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId: command.orgId },
       include: {
         customer: { select: { id: true, name: true } },
         trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
@@ -186,7 +186,7 @@ export class SplitOrderCommandHandler extends BaseCommandHandler<SplitOrderPaylo
     }
 
     await tx.order.update({
-      where: { id: orderId },
+      where: { id: orderId, orgId: command.orgId },
       data: { status: 'assigned' },
     });
 

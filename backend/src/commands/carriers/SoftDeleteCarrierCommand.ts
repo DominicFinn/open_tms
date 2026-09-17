@@ -26,7 +26,7 @@ export class SoftDeleteCarrierCommandHandler extends BaseCommandHandler<{ id: st
   ): Promise<{ id: string; alreadyDeleted?: boolean }> {
     const { id } = command.payload;
 
-    const existing = await tx.carrier.findFirstOrThrow({ where: { id } });
+    const existing = await tx.carrier.findFirstOrThrow({ where: { id, orgId: command.orgId } });
     if (existing.deletedAt) {
       return { id, alreadyDeleted: true };
     }
@@ -38,7 +38,7 @@ export class SoftDeleteCarrierCommandHandler extends BaseCommandHandler<{ id: st
     }
 
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { deletedAt: new Date(), deletedBy: command.actorId ?? null },
     });
 

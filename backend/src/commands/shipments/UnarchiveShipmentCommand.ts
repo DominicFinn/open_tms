@@ -33,14 +33,15 @@ export class UnarchiveShipmentCommandHandler extends BaseCommandHandler<Unarchiv
     emit: EmitFn
   ): Promise<{ id: string; notArchived?: boolean }> {
     const { id } = command.payload;
+    const { orgId } = command;
 
-    const existing = await tx.shipment.findFirstOrThrow({ where: { id, deletedAt: null } });
+    const existing = await tx.shipment.findFirstOrThrow({ where: { id, orgId, deletedAt: null } });
     if (!existing.archived) {
       return { id, notArchived: true };
     }
 
     const shipment = await tx.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: false,
         archivedAt: null,

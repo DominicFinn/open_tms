@@ -258,3 +258,33 @@ describe('IssueRepository.updateLabelsCache', () => {
     });
   });
 });
+
+describe('IssueRepository.updateKanbanView', () => {
+  function kanbanPrisma(existing: unknown) {
+    const tx = {
+      kanbanView: {
+        findFirst: jest.fn().mockResolvedValue(existing),
+        updateMany: jest.fn(),
+        update: jest.fn().mockResolvedValue({ id: 'kv-1' }),
+      },
+    };
+    return { tx, prisma: { $transaction: jest.fn((fn: any) => fn(tx)) } as any };
+  }
+
+  it('writes with the caller org in the where', async () => {
+    const { tx, prisma } = kanbanPrisma({ id: 'kv-1', orgId: 'org-1' });
+    await new IssueRepository(prisma).updateKanbanView('kv-1', 'org-1', { name: 'Mine' });
+    expect(tx.kanbanView.update).toHaveBeenCalledWith({
+      where: { id: 'kv-1', orgId: 'org-1' },
+      data: { name: 'Mine' },
+    });
+  });
+
+  it('returns null for a view in another org without writing', async () => {
+    const { tx, prisma } = kanbanPrisma(null);
+    const result = await new IssueRepository(prisma).updateKanbanView('kv-1', 'org-2', { name: 'Mine' });
+    expect(result).toBeNull();
+    expect(tx.kanbanView.findFirst).toHaveBeenCalledWith({ where: { id: 'kv-1', orgId: 'org-2' } });
+    expect(tx.kanbanView.update).not.toHaveBeenCalled();
+  });
+});

@@ -34,7 +34,7 @@ export class ApproveCarrierInvoiceCommandHandler extends BaseCommandHandler<Appr
     const approvedCents = payload.approvedCents ?? invoice.totalCents;
 
     await tx.carrierInvoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: {
         status: 'approved',
         approvedCents,

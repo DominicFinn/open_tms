@@ -10,7 +10,7 @@ function buildMockRepo(overrides: any = {}) {
     active: true,
     failedLoginAttempts: 0,
     lockedUntil: null,
-    customer: { id: 'cust-1', name: 'Acme Corp' },
+    customer: { id: 'cust-1', orgId: 'org-1', name: 'Acme Corp' },
     ...overrides.user,
   };
 
@@ -163,7 +163,7 @@ describe('CustomerAuthService', () => {
       const service = new CustomerAuthService(repo as any);
 
       await expect(service.login('john@acme.com', 'WrongPass1')).rejects.toThrow();
-      expect(repo.applyFailedAttempt).toHaveBeenCalledWith('cu-1', 2, null);
+      expect(repo.applyFailedAttempt).toHaveBeenCalledWith('cu-1', 'org-1', 2, null);
     });
 
     it('locks the account after exceeding max attempts', async () => {
@@ -178,9 +178,10 @@ describe('CustomerAuthService', () => {
       await expect(service.login('john@acme.com', 'WrongPass1')).rejects.toThrow(/temporarily locked/);
       const call = repo.applyFailedAttempt.mock.calls[0];
       expect(call[0]).toBe('cu-1');
-      expect(call[1]).toBe(5);
-      expect(call[2]).toBeInstanceOf(Date);
-      expect((call[2] as Date).getTime()).toBeGreaterThan(Date.now());
+      expect(call[1]).toBe('org-1');
+      expect(call[2]).toBe(5);
+      expect(call[3]).toBeInstanceOf(Date);
+      expect((call[3] as Date).getTime()).toBeGreaterThan(Date.now());
     });
 
     it('rejects login when DB row indicates active lockout', async () => {
@@ -210,7 +211,7 @@ describe('CustomerAuthService', () => {
       });
       await service.login('login@acme.com', 'SecurePass1');
       // updateLastLogin resets failedLoginAttempts and lockedUntil at the repo layer
-      expect(repo.updateLastLogin).toHaveBeenCalledWith('cu-1');
+      expect(repo.updateLastLogin).toHaveBeenCalledWith('cu-1', 'org-1');
       expect(repo.applyFailedAttempt).not.toHaveBeenCalled();
     });
   });
@@ -219,8 +220,8 @@ describe('CustomerAuthService', () => {
     it('clears lockout via repository by user id', async () => {
       const repo = buildMockRepo();
       const service = new CustomerAuthService(repo as any);
-      await service.unlockAccount('cu-1');
-      expect(repo.clearLockout).toHaveBeenCalledWith('cu-1');
+      await service.unlockAccount('cu-1', 'org-1');
+      expect(repo.clearLockout).toHaveBeenCalledWith('cu-1', 'org-1');
     });
   });
 
@@ -228,9 +229,10 @@ describe('CustomerAuthService', () => {
     it('reports unlocked when DB row has no lockout', async () => {
       const repo = buildMockRepo();
       const service = new CustomerAuthService(repo as any);
-      const status = await service.getLockoutStatus('cu-1');
+      const status = await service.getLockoutStatus('cu-1', 'org-1');
       expect(status.isLocked).toBe(false);
       expect(status.failedAttempts).toBe(0);
+      expect(repo.findById).toHaveBeenCalledWith('cu-1', 'org-1');
     });
 
     it('reports locked when lockedUntil is in the future', async () => {
@@ -238,7 +240,7 @@ describe('CustomerAuthService', () => {
       const future = new Date(Date.now() + 10 * 60 * 1000);
       repo.findById.mockResolvedValue({ ...repo._mockUser, failedLoginAttempts: 5, lockedUntil: future });
       const service = new CustomerAuthService(repo as any);
-      const status = await service.getLockoutStatus('cu-1');
+      const status = await service.getLockoutStatus('cu-1', 'org-1');
       expect(status.isLocked).toBe(true);
       expect(status.failedAttempts).toBe(5);
       expect(status.lockedUntil).toEqual(future);

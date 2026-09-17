@@ -21,6 +21,7 @@ import { RECORD_JOURNEY_CHECKPOINT } from '../commands/tracking/RecordJourneyChe
 import { locateOnRoute, checkpointIndexForFraction } from './routing/RouteProgressService.js';
 
 export interface DeviceEventContext {
+  orgId: string;
   shipmentId: string;
   deviceId?: string;
   lat?: number;
@@ -165,6 +166,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     const stops = await this.prisma.shipmentStop.findMany({
       where: {
         shipmentId: ctx.shipmentId,
+        shipment: { orgId: ctx.orgId },
         status: { in: ['pending', 'arrived'] },
       },
       include: {
@@ -182,7 +184,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     // Also check origin/destination directly (shipments without explicit stops),
     // and load everything needed for departure/checkpoint detection below.
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: ctx.shipmentId },
+      where: { id: ctx.shipmentId, orgId: ctx.orgId },
       select: {
         orgId: true,
         originId: true,
@@ -275,7 +277,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
               // ShipmentCompletionHandler completes the *shipment* on the same
               // event; without this, the order's own status never follows it.
               await this.deliveryService.updateOrdersForStop(
-                entry.stopId, entry.isDestination ? 'completed' : 'arrived', method,
+                shipment.orgId, entry.stopId, entry.isDestination ? 'completed' : 'arrived', method,
               );
             }
           }
@@ -294,7 +296,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
             shipment.orgId, ctx.shipmentId, entry.stopId, locationId, ctx.lat, ctx.lng, eventTime,
           );
           if (departed) {
-            await this.deliveryService.updateOrdersForStop(entry.stopId, 'completed', 'geofence');
+            await this.deliveryService.updateOrdersForStop(shipment.orgId, entry.stopId, 'completed', 'geofence');
           }
         }
       }

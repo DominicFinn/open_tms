@@ -72,7 +72,7 @@ export class BillingTriggerHandler implements IEventHandler {
 
       // Check if the customer has auto-invoice enabled and per_shipment consolidation
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId: event.orgId },
         select: {
           id: true,
           reference: true,

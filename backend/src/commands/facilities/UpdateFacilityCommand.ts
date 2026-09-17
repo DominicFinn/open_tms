@@ -46,7 +46,7 @@ export class UpdateFacilityCommandHandler extends BaseCommandHandler<
 
     // sourceLocationId is deliberately not updatable: re-pointing a facility at a different
     // Location would silently move every zone and bin under it.
-    const facility = await tx.facility.update({ where: { id: facilityId }, data: updates });
+    const facility = await tx.facility.update({ where: { id: facilityId, orgId: command.orgId }, data: updates });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.FACILITY_UPDATED,

@@ -34,7 +34,7 @@ export class RecordCarrierPaymentCommandHandler extends BaseCommandHandler<Recor
     }
 
     await tx.carrierInvoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: {
         status: 'paid',
         paidCents: payload.amountCents,

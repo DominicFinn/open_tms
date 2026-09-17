@@ -86,7 +86,7 @@ export class ChargeService implements IChargeService {
       throw new Error(`Cannot approve charge in status "${charge.status}"`);
     }
 
-    const updated = await this.chargeRepo.update(chargeId, {
+    const updated = await this.chargeRepo.update(chargeId, orgId, {
       status: 'approved',
       approvedBy,
       approvedAt: new Date(),

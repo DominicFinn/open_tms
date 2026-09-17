@@ -86,6 +86,35 @@ describe('Tender Command Handlers', () => {
         expect.objectContaining({ bidId: 'bid-1', carrierId: 'carrier-1', rate: 1500 })
       );
     });
+
+    it('scopes the bid and the tender to the command org', async () => {
+      const { bus } = mockEventBus();
+      const handler = new AwardTenderCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(AWARD_TENDER, { tenderId: 'tender-1', bidId: 'bid-1' }, { orgId: 'org-b' })
+      );
+
+      expect(mockTx.tenderBid.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { id: 'bid-1', tenderId: 'tender-1', tender: { shipment: { orgId: 'org-b' } } },
+      });
+      expect(mockTx.tender.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'tender-1', shipment: { orgId: 'org-b' } },
+      }));
+    });
+
+    it('treats a bid from another tenant as not found', async () => {
+      mockTx.tenderBid.findUniqueOrThrow.mockRejectedValueOnce(new Error('No TenderBid found'));
+      const { bus } = mockEventBus();
+      const handler = new AwardTenderCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(AWARD_TENDER, { tenderId: 'tender-1', bidId: 'bid-1' }, { orgId: 'org-b' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(mockTx.tender.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('CancelTenderCommandHandler', () => {

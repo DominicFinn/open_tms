@@ -36,8 +36,8 @@ export interface IShipmentsRepository {
   all(orgId?: string | null): Promise<ShipmentWithRelations[]>;
   findById(id: string, orgId?: string | null): Promise<ShipmentWithFullRelations | null>;
   create(data: CreateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
-  update(id: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
-  archive(id: string): Promise<any>;
+  update(id: string, orgId: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
+  archive(id: string, orgId: string): Promise<any>;
   createMany(data: CreateShipmentDTO[]): Promise<void>;
   deleteMany(): Promise<void>;
 }
@@ -113,9 +113,9 @@ export class ShipmentsRepository implements IShipmentsRepository {
     }) as Promise<ShipmentWithRelations>;
   }
 
-  async update(id: string, data: UpdateShipmentDTO, includeLane: boolean = false): Promise<ShipmentWithRelations> {
+  async update(id: string, orgId: string, data: UpdateShipmentDTO, includeLane: boolean = false): Promise<ShipmentWithRelations> {
     return this.prisma.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data,
       include: {
         customer: true,
@@ -126,9 +126,9 @@ export class ShipmentsRepository implements IShipmentsRepository {
     }) as Promise<ShipmentWithRelations>;
   }
 
-  async archive(id: string): Promise<any> {
+  async archive(id: string, orgId: string): Promise<any> {
     return this.prisma.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()

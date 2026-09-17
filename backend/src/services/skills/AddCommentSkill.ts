@@ -40,7 +40,7 @@ export class AddCommentSkill implements ISkill {
       // Update comment count on IssueReadModel if entity is an issue
       if (params.fields.entityType === 'issue') {
         await this.prisma.issueReadModel.update({
-          where: { id: String(params.fields.entityId) },
+          where: { id: String(params.fields.entityId), orgId: params.orgId },
           data: { commentCount: { increment: 1 }, updatedAt: new Date() },
         }).catch(() => {}); // Non-critical
       }

@@ -17,7 +17,7 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { carrierId } = req.params as { carrierId: string };
-    const users = await carrierUserRepo.findByCarrierId(carrierId);
+    const users = await carrierUserRepo.findByCarrierId(carrierId, req.orgId!);
     const safeUsers = users.map(({ passwordHash, ...rest }) => ({
       ...rest,
       lockoutStatus: computeLockoutStatus(rest),
@@ -84,7 +84,7 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const user = await carrierUserRepo.update(id, body);
+      const user = await carrierUserRepo.update(id, req.orgId!, body);
       const { passwordHash, ...safeUser } = user;
       return { data: safeUser, error: null };
     } catch (err: any) {
@@ -113,7 +113,7 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      await authService.adminResetPassword(id, newPassword);
+      await authService.adminResetPassword(id, req.orgId!, newPassword);
       return { data: { reset: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -130,7 +130,7 @@ export async function carrierUserRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { carrierId: string; id: string };
     try {
-      const user = await carrierUserRepo.update(id, { active: false });
+      const user = await carrierUserRepo.update(id, req.orgId!, { active: false });
       const { passwordHash, ...safeUser } = user;
       return { data: safeUser, error: null };
     } catch (err: any) {
@@ -147,12 +147,12 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { carrierId: string; id: string };
-    const user = await carrierUserRepo.findById(id);
+    const user = await carrierUserRepo.findById(id, req.orgId!);
     if (!user) {
       reply.code(404);
       return { data: null, error: 'User not found' };
     }
-    await authService.unlockAccount(user.id);
+    await authService.unlockAccount(user.id, req.orgId!);
     return { data: { unlocked: true }, error: null };
   });
 }

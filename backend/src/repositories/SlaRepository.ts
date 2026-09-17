@@ -7,11 +7,11 @@ import { PrismaClient } from '@prisma/client';
 export interface ISlaRepository {
   // Policy CRUD
   findPolicies(orgId: string, customerId?: string): Promise<any[]>;
-  findPolicyById(id: string): Promise<any | null>;
+  findPolicyById(id: string, orgId: string): Promise<any | null>;
   findPolicyForEntity(orgId: string, customerId?: string): Promise<any | null>;
   createPolicy(data: any): Promise<any>;
-  updatePolicy(id: string, data: any): Promise<any>;
-  deactivatePolicy(id: string): Promise<any>;
+  updatePolicy(id: string, orgId: string, data: any): Promise<any>;
+  deactivatePolicy(id: string, orgId: string): Promise<any>;
 
   // Rule CRUD (managed through policy)
   findRulesByPolicyId(policyId: string): Promise<any[]>;
@@ -23,7 +23,7 @@ export interface ISlaRepository {
   findActiveEvaluationsDueBefore(dueDate: Date): Promise<any[]>;
   findActiveEvaluationsWarningBefore(warningDate: Date): Promise<any[]>;
   createEvaluation(data: any): Promise<any>;
-  updateEvaluationStatus(id: string, currentStatus: string, update: any): Promise<any | null>;
+  updateEvaluationStatus(id: string, orgId: string, currentStatus: string, update: any): Promise<any | null>;
   getEvaluationSummary(orgId: string): Promise<EvaluationSummary>;
 }
 
@@ -60,9 +60,9 @@ export class SlaRepository implements ISlaRepository {
     });
   }
 
-  async findPolicyById(id: string): Promise<any | null> {
+  async findPolicyById(id: string, orgId: string): Promise<any | null> {
     return this.prisma.slaPolicy.findUnique({
-      where: { id },
+      where: { id, orgId },
       include: { rules: true, customer: { select: { id: true, name: true } } },
     });
   }
@@ -100,13 +100,13 @@ export class SlaRepository implements ISlaRepository {
     });
   }
 
-  async updatePolicy(id: string, data: any): Promise<any> {
+  async updatePolicy(id: string, orgId: string, data: any): Promise<any> {
     const { rules, ...policyData } = data;
 
     return this.prisma.$transaction(async (tx) => {
       // Update the policy itself
       await tx.slaPolicy.update({
-        where: { id },
+        where: { id, orgId },
         data: policyData,
       });
 
@@ -121,15 +121,15 @@ export class SlaRepository implements ISlaRepository {
       }
 
       return tx.slaPolicy.findUnique({
-        where: { id },
+        where: { id, orgId },
         include: { rules: true },
       });
     });
   }
 
-  async deactivatePolicy(id: string): Promise<any> {
+  async deactivatePolicy(id: string, orgId: string): Promise<any> {
     return this.prisma.slaPolicy.update({
-      where: { id },
+      where: { id, orgId },
       data: { active: false },
     });
   }
@@ -208,10 +208,10 @@ export class SlaRepository implements ISlaRepository {
    * transitioned (e.g., another handler or the cron worker got there first),
    * this returns null instead of making a stale update.
    */
-  async updateEvaluationStatus(id: string, currentStatus: string, update: any): Promise<any | null> {
+  async updateEvaluationStatus(id: string, orgId: string, currentStatus: string, update: any): Promise<any | null> {
     try {
       return await this.prisma.slaEvaluation.update({
-        where: { id, status: currentStatus },
+        where: { id, orgId, status: currentStatus },
         data: update,
       });
     } catch (err: any) {

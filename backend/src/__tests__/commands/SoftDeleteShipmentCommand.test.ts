@@ -18,7 +18,7 @@ function makePrisma(shipment: any) {
     $transaction: jest.fn((fn: Function) => fn(mockTx)),
     domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
   } as any;
-  return { mockPrisma, update };
+  return { mockPrisma, mockTx, update };
 }
 
 const baseShipment = { id: 'ship-1', reference: 'REF-1', deletedAt: null };
@@ -37,7 +37,7 @@ describe('SoftDeleteShipmentCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'ship-1' },
+      where: { id: 'ship-1', orgId: 'test-org' },
       data: expect.objectContaining({ deletedBy: 'admin-7' }),
     }));
     expect(update.mock.calls[0][0].data.deletedAt).toBeInstanceOf(Date);
@@ -61,6 +61,21 @@ describe('SoftDeleteShipmentCommandHandler', () => {
     expect((result.data as any).alreadyDeleted).toBe(true);
     expect(update).not.toHaveBeenCalled();
     expect(result.events).toHaveLength(0);
+  });
+
+  it('treats another tenant\'s shipment as not found', async () => {
+    const { mockPrisma, mockTx, update } = makePrisma({ ...baseShipment });
+    mockTx.shipment.findFirstOrThrow.mockRejectedValue(new Error('No Shipment found'));
+    const { bus } = mockEventBus();
+    const handler = new SoftDeleteShipmentCommandHandler(mockPrisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(SOFT_DELETE_SHIPMENT, { id: 'ship-1' }, { orgId: 'org-other' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(mockTx.shipment.findFirstOrThrow).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'org-other' } });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('propagates actor/org metadata onto the emitted event', async () => {

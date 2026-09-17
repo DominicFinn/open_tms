@@ -657,20 +657,12 @@ export async function warehouseRoutes(server: FastifyInstance) {
       carrierId: z.string().uuid().optional(),
     }).parse(req.body);
 
-    // Multi-tenancy: shipment is scoped to the customer's tenant. We
-    // also guard against cross-tenant creation: a warehouse operative
-    // in tenant A cannot create a shipment under tenant B's customer.
-    // (Today the warehouse PWA is single-tenant, so req.orgId always
-    // matches; the guard catches regressions once per-tenant auth lands.)
+    // A warehouse operative in tenant A cannot create a shipment under tenant B's customer.
     const cust = await prisma.customer.findUnique({
-      where: { id: body.customerId },
+      where: { id: body.customerId, orgId: req.orgId! },
       select: { orgId: true },
     });
     if (!cust) {
-      reply.code(404);
-      return { data: null, error: 'Customer not found' };
-    }
-    if (req.orgId && cust.orgId !== req.orgId) {
       reply.code(404);
       return { data: null, error: 'Customer not found' };
     }

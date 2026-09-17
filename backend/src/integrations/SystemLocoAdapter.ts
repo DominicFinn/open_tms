@@ -93,10 +93,10 @@ export class SystemLocoAdapter {
    * door-open / tamper event. Emits shipment.tamper_light so the deterministic
    * Issue Engine can raise the `shipment_tamper_light` issue (latched).
    */
-  private async emitTamperLightIfBeforeArrival(shipmentId: string, sensorReadingId: string | null): Promise<void> {
+  private async emitTamperLightIfBeforeArrival(orgId: string, shipmentId: string, sensorReadingId: string | null): Promise<void> {
     if (!this.eventBus) return;
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       select: { id: true, orgId: true, reference: true, status: true },
     });
     if (!shipment) return;
@@ -301,7 +301,7 @@ export class SystemLocoAdapter {
 
       // Light detected in transit → possible tamper/door-open before arrival.
       if (eventType === 'lightInTransit' && shipmentId) {
-        await this.emitTamperLightIfBeforeArrival(shipmentId, sensorReadingId);
+        await this.emitTamperLightIfBeforeArrival(orgId, shipmentId, sensorReadingId);
       }
     }
 
@@ -366,7 +366,7 @@ export class SystemLocoAdapter {
 
     if (existing) {
       return this.prisma.device.update({
-        where: { id: existing.id },
+        where: { id: existing.id, orgId },
         data: {
           lastSeenAt: new Date(),
           firmware: deviceInfo.firmware || existing.firmware,

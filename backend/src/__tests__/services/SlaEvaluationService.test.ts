@@ -162,7 +162,7 @@ describe('SlaEvaluationService', () => {
 
       expect(count).toBe(1);
       expect(mockSlaRepo.updateEvaluationStatus).toHaveBeenCalledWith(
-        'eval-1', 'active', expect.objectContaining({ status: 'met' })
+        'eval-1', 'org-1', 'active', expect.objectContaining({ status: 'met' })
       );
     });
 
@@ -202,7 +202,7 @@ describe('SlaEvaluationService', () => {
 
       expect(result.warningsIssued).toBe(1);
       expect(mockSlaRepo.updateEvaluationStatus).toHaveBeenCalledWith(
-        'eval-1', 'active', expect.objectContaining({ status: 'warning' })
+        'eval-1', 'org-1', 'active', expect.objectContaining({ status: 'warning' })
       );
     });
 

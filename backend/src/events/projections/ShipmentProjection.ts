@@ -66,7 +66,7 @@ export class ShipmentProjection implements IEventHandler {
   private async onShipmentCreated(event: DomainEvent): Promise<void> {
     // Fetch full shipment with relations to denormalize
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         customer: { select: { id: true, name: true } },
         origin: { select: { name: true, city: true, state: true } },
@@ -90,12 +90,12 @@ export class ShipmentProjection implements IEventHandler {
     // row, so the upsert below naturally keeps them visible as just another
     // filterable status.
     if (shipment.deletedAt) {
-      await this.prisma.shipmentReadModel.delete({ where: { id: shipment.id } }).catch(() => {});
+      await this.prisma.shipmentReadModel.delete({ where: { id: shipment.id, orgId: event.orgId } }).catch(() => {});
       return;
     }
 
     await this.prisma.shipmentReadModel.upsert({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: event.orgId },
       create: {
         id: shipment.id,
         orgId: event.orgId,
@@ -133,7 +133,7 @@ export class ShipmentProjection implements IEventHandler {
 
   private async onShipmentUpdated(event: DomainEvent): Promise<void> {
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         customer: { select: { name: true } },
         origin: { select: { name: true, city: true, state: true } },
@@ -148,7 +148,7 @@ export class ShipmentProjection implements IEventHandler {
     if (!shipment) return;
 
     await this.prisma.shipmentReadModel.update({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: event.orgId },
       data: {
         reference: shipment.reference,
         status: shipment.status,
@@ -179,7 +179,7 @@ export class ShipmentProjection implements IEventHandler {
   private async onStatusChanged(event: DomainEvent): Promise<void> {
     const payload = event.payload as { newStatus: string };
     await this.prisma.shipmentReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: payload.newStatus, updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
@@ -192,14 +192,14 @@ export class ShipmentProjection implements IEventHandler {
     let carrierName = payload.carrierName;
     if (!carrierName && payload.carrierId) {
       const carrier = await this.prisma.carrier.findUnique({
-        where: { id: payload.carrierId },
+        where: { id: payload.carrierId, orgId: event.orgId },
         select: { name: true },
       });
       carrierName = carrier?.name ?? undefined;
     }
 
     await this.prisma.shipmentReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         carrierId: payload.carrierId,
         carrierName: carrierName ?? undefined,
@@ -212,7 +212,7 @@ export class ShipmentProjection implements IEventHandler {
 
   private async onShipmentDelivered(event: DomainEvent): Promise<void> {
     await this.prisma.shipmentReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'complete', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
@@ -224,7 +224,7 @@ export class ShipmentProjection implements IEventHandler {
     // 'archived' so they remain visible in list views as a filterable status,
     // mirroring CarrierProjection.onCarrierArchived.
     await this.prisma.shipmentReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
@@ -234,7 +234,7 @@ export class ShipmentProjection implements IEventHandler {
   private async onShipmentDeleted(event: DomainEvent): Promise<void> {
     // Soft-deleted shipments are hidden from every view — drop them from the read model.
     await this.prisma.shipmentReadModel.delete({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to remove soft-deleted shipment ${event.entityId}: ${err.message}`);
     });
@@ -244,7 +244,7 @@ export class ShipmentProjection implements IEventHandler {
     // Exceptions are orthogonal to the lifecycle status — set the flag,
     // never overwrite draft/ready/in_progress/complete.
     await this.prisma.shipmentReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { hasException: true, updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update exception flag for ${event.entityId}: ${err.message}`);
@@ -258,7 +258,7 @@ export class ShipmentProjection implements IEventHandler {
       where: { shipmentId },
     });
     await this.prisma.shipmentReadModel.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       data: { stopCount, updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
@@ -278,7 +278,7 @@ export class ShipmentProjection implements IEventHandler {
     if (!summary) return;
 
     await this.prisma.shipmentReadModel.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       data: {
         expectedRevenueCents: summary.expectedRevenueCents,
         expectedCostCents: summary.expectedCostCents,

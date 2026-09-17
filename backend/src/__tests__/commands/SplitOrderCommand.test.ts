@@ -73,7 +73,10 @@ describe('SplitOrderCommandHandler', () => {
     expect(shipmentCreatedEvents).toHaveLength(2);
     expect(shipmentCreatedEvents.map((e) => e.entityId)).toEqual(['ship-1', 'ship-2']);
 
-    expect(tx.order.update).toHaveBeenCalledWith({ where: { id: 'order-1' }, data: { status: 'assigned' } });
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: { id: 'order-1', orgId: 'test-org' },
+      data: { status: 'assigned' },
+    });
     expect(tx.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

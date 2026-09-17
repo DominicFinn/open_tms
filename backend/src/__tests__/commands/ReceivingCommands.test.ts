@@ -119,7 +119,7 @@ describe('CreateReceivingTaskCommandHandler', () => {
     );
 
     expect(tx.receivingAppointment.update).toHaveBeenCalledWith({
-      where: { id: 'appt-1' },
+      where: { id: 'appt-1', orgId: 'test-org' },
       data: { status: 'receiving' },
     });
   });

@@ -4,6 +4,12 @@ function buildPrisma() {
   return {
     tradingPartner: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn(),
+    },
+    tradingPartnerTransaction: {
+      update: jest.fn(),
+      delete: jest.fn(),
     },
     ediTransactionLog: {
       create: jest.fn().mockResolvedValue({ id: 'log-1' }),
@@ -104,5 +110,61 @@ describe('TradingPartnerRepository — EDI logs', () => {
       }
       expect(prisma.ediTransactionLog.aggregate.mock.calls[0][0].where.orgId).toBe('org-1');
     });
+  });
+});
+
+describe('TradingPartnerRepository — org scoping', () => {
+  it('keys partner reads and writes on the caller org', async () => {
+    const prisma = buildPrisma();
+    const repo = new TradingPartnerRepository(prisma);
+
+    await repo.findById('p-1', 'org-1');
+    await repo.update('p-1', 'org-1', { name: 'X' });
+    await repo.softDelete('p-1', 'org-1', null);
+    await repo.updateLastPolled('p-1', 'org-1');
+
+    expect(prisma.tradingPartner.findUnique.mock.calls[0][0].where).toEqual({ id: 'p-1', orgId: 'org-1' });
+    for (const call of prisma.tradingPartner.update.mock.calls) {
+      expect(call[0].where).toEqual({ id: 'p-1', orgId: 'org-1' });
+    }
+  });
+
+  it('returns null for a partner id that belongs to another org', async () => {
+    const prisma = buildPrisma();
+    prisma.tradingPartner.findUnique.mockResolvedValue(null);
+    const repo = new TradingPartnerRepository(prisma);
+
+    await expect(repo.findById('p-other-org', 'org-1')).resolves.toBeNull();
+  });
+
+  it('always filters the partner list by org', async () => {
+    const prisma = buildPrisma();
+    const repo = new TradingPartnerRepository(prisma);
+
+    await repo.findAll({ orgId: 'org-1' });
+
+    expect(prisma.tradingPartner.findMany.mock.calls[0][0].where).toEqual({ orgId: 'org-1', deletedAt: null });
+  });
+
+  it('scopes transaction config writes through the partner org', async () => {
+    const prisma = buildPrisma();
+    const repo = new TradingPartnerRepository(prisma);
+
+    await repo.updateTransaction('t-1', 'org-1', { enabled: false });
+    await repo.removeTransaction('t-1', 'org-1');
+
+    expect(prisma.tradingPartnerTransaction.update.mock.calls[0][0].where).toEqual({ id: 't-1', partner: { orgId: 'org-1' } });
+    expect(prisma.tradingPartnerTransaction.delete.mock.calls[0][0].where).toEqual({ id: 't-1', partner: { orgId: 'org-1' } });
+  });
+
+  it('keys log reads and writes on the caller org', async () => {
+    const prisma = buildPrisma();
+    const repo = new TradingPartnerRepository(prisma);
+
+    await repo.findLogById('log-1', 'org-1');
+    await repo.updateLog('log-1', 'org-1', { status: 'success' });
+
+    expect(prisma.ediTransactionLog.findUnique.mock.calls[0][0].where).toEqual({ id: 'log-1', orgId: 'org-1' });
+    expect(prisma.ediTransactionLog.update).toHaveBeenCalledWith({ where: { id: 'log-1', orgId: 'org-1' }, data: { status: 'success' } });
   });
 });

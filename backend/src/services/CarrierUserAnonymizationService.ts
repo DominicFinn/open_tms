@@ -35,7 +35,7 @@ export class CarrierUserAnonymizationService {
           ],
         },
       },
-      select: { id: true },
+      select: { id: true, carrier: { select: { orgId: true } } },
       take: 500,
     });
 
@@ -45,7 +45,7 @@ export class CarrierUserAnonymizationService {
     for (const user of candidates) {
       try {
         await this.prisma.carrierUser.update({
-          where: { id: user.id },
+          where: { id: user.id, carrier: { orgId: user.carrier.orgId } },
           data: {
             // email is @unique — keep it unique but non-identifying.
             email: `anonymized-${user.id}@removed.invalid`,
