@@ -90,6 +90,11 @@ export const EVENT_TYPES = {
   LOCATION_ARRIVAL_CRITERIA_UPDATED: 'location.arrival_criteria_updated',
   LOCATION_ARRIVAL_CRITERIA_REMOVED: 'location.arrival_criteria_removed',
 
+  // Geofences (polymorphic — not the arrival-detection ArrivalCriteria geofence type above)
+  GEOFENCE_CREATED: 'geofence.created',
+  GEOFENCE_UPDATED: 'geofence.updated',
+  GEOFENCE_ARCHIVED: 'geofence.archived',
+
   // Lanes
   LANE_CREATED: 'lane.created',
   LANE_UPDATED: 'lane.updated',
@@ -465,6 +470,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_TYPE_ARCHIVED]: 1,
   [EVENT_TYPES.LOCATION_CREATED]: 1,
   [EVENT_TYPES.LOCATION_UPDATED]: 1,
+  [EVENT_TYPES.GEOFENCE_CREATED]: 1,
+  [EVENT_TYPES.GEOFENCE_UPDATED]: 1,
+  [EVENT_TYPES.GEOFENCE_ARCHIVED]: 1,
   [EVENT_TYPES.LANE_CREATED]: 1,
   [EVENT_TYPES.LANE_UPDATED]: 1,
   [EVENT_TYPES.LANE_ARCHIVED]: 1,
