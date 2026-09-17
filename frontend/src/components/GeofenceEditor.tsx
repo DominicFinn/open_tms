@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Info, Trash2, Undo2 } from 'lucide-react';
+import { Crosshair, Info, Trash2, Undo2 } from 'lucide-react';
 import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, addBaseTileLayer } from '../lib/leafletMap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,7 +144,10 @@ export default function GeofenceEditor({
   }, []);
 
   // The location's own lat/lng — a fixed reference marker, independent of the geofence shape and
-  // never cleared by the shape-redraw effect below.
+  // never cleared by the shape-redraw effect below. Also keeps the map panned there as the
+  // coordinates change, as long as nothing has been drawn yet — once a shape exists, further
+  // coordinate edits move the marker but leave the view alone rather than yanking it away from
+  // an in-progress edit (use the "Center on location" button for that).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -160,8 +163,20 @@ export default function GeofenceEditor({
       })
         .bindTooltip('Location', { direction: 'top', offset: [0, -10] })
         .addTo(map);
+
+      const hasShape = shapeType === 'radial' ? !!center : points.length > 0;
+      if (!hasShape) {
+        map.setView([centerLat, centerLng], Math.max(map.getZoom(), LOCATION_ZOOM));
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerLat, centerLng]);
+
+  const handleCenterOnLocation = () => {
+    const map = mapRef.current;
+    if (!map || centerLat == null || centerLng == null) return;
+    map.setView([centerLat, centerLng], Math.max(map.getZoom(), LOCATION_ZOOM));
+  };
 
   const emitChange = (
     nextShapeType: 'radial' | 'polygon',
@@ -344,6 +359,12 @@ export default function GeofenceEditor({
           </TabsList>
         </Tabs>
         <div className="flex gap-2">
+          {centerLat != null && centerLng != null && (
+            <Button variant="outline" size="sm" onClick={handleCenterOnLocation}>
+              <Crosshair className="h-4 w-4" />
+              Center on location
+            </Button>
+          )}
           {shapeType === 'polygon' && (
             <Button variant="outline" size="sm" onClick={handleUndoPoint} disabled={points.length === 0}>
               <Undo2 className="h-4 w-4" />

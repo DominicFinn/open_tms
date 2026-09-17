@@ -104,6 +104,12 @@ export default function VNextCreateLocation() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // Reset on every id change (including switching to the create route) — otherwise a
+    // location with no saved geofence would keep showing whichever one was last loaded.
+    setGeofenceValue(null);
+    setExistingGeofenceId(null);
+    setGeofenceDirty(false);
+
     if (!id) return;
     setLoading(true);
     fetch(`${API_URL}/api/v1/locations/${id}`)
@@ -434,6 +440,7 @@ export default function VNextCreateLocation() {
         </CardHeader>
         <CardContent>
           <GeofenceEditor
+            key={id ?? 'new'}
             value={geofenceValue}
             onChange={(next) => { setGeofenceValue(next); setGeofenceDirty(true); }}
             centerLat={latitude ? parseFloat(latitude) : null}
