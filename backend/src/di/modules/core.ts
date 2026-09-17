@@ -18,6 +18,7 @@ import { DatabaseFileStorage } from '../../storage/DatabaseFileStorage.js';
 import { DatabaseBinaryStorage } from '../../storage/DatabaseBinaryStorage.js';
 import { S3FileStorage } from '../../storage/S3FileStorage.js';
 import { AttachmentRepository } from '../../repositories/AttachmentRepository.js';
+import { WebhookLogRepository } from '../../repositories/WebhookLogRepository.js';
 import { CustomFieldService } from '../../services/CustomFieldService.js';
 import { PgBossQueueAdapter } from '../../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
@@ -114,6 +115,10 @@ export function registerCoreDependencies(prisma: PrismaClient): void {
   // Attachment repository
   container.singleton(TOKENS.IAttachmentRepository).toFactory(() => {
     return new AttachmentRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IWebhookLogRepository).toFactory(() => {
+    return new WebhookLogRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   // Custom fields

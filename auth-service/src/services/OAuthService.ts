@@ -160,7 +160,13 @@ export class OAuthService implements IOAuthService {
         return { success: false, error: 'Account does not exist. Contact an administrator.' };
       }
 
+      const organizationId = await this.userRepo.soleOrganizationId();
+      if (!organizationId) {
+        return { success: false, error: 'Account does not exist. Contact an administrator.' };
+      }
+
       const newUser = await this.userRepo.create({
+        organizationId,
         email: userInfo.email,
         passwordHash: '', // No password for OAuth users
         firstName: userInfo.firstName,

@@ -1,7 +1,12 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { container } from '../di/container.js';
+import { TOKENS } from '../di/tokens.js';
+import { IWebhookLogRepository, WebhookLogFilters } from '../repositories/WebhookLogRepository.js';
 
 export async function webhookLogRoutes(server: FastifyInstance) {
+  const webhookLogRepo = container.resolve<IWebhookLogRepository>(TOKENS.IWebhookLogRepository);
+
   // Get webhook logs with filtering and pagination
   server.get('/api/v1/webhook-logs', async (req: FastifyRequest, reply: FastifyReply) => {
     const query = z.object({
@@ -15,35 +20,15 @@ export async function webhookLogRoutes(server: FastifyInstance) {
       endDate: z.string().datetime().optional()
     }).parse(req.query);
 
-    const where: any = {};
-    if (query.status) where.status = query.status;
-    if (query.apiKeyId) where.apiKeyId = query.apiKeyId;
-    if (query.shipmentId) where.shipmentId = query.shipmentId;
-    if (query.deviceName) where.deviceName = { contains: query.deviceName, mode: 'insensitive' };
-    if (query.startDate || query.endDate) {
-      where.receivedAt = {};
-      if (query.startDate) where.receivedAt.gte = new Date(query.startDate);
-      if (query.endDate) where.receivedAt.lte = new Date(query.endDate);
-    }
-
-    const [logs, total] = await Promise.all([
-      server.prisma.webhookLog.findMany({
-        where,
-        include: {
-          apiKey: {
-            select: {
-              id: true,
-              name: true,
-              keyPrefix: true
-            }
-          }
-        },
-        orderBy: { receivedAt: 'desc' },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit
-      }),
-      server.prisma.webhookLog.count({ where })
-    ]);
+    const filters: WebhookLogFilters = {
+      status: query.status,
+      apiKeyId: query.apiKeyId,
+      shipmentId: query.shipmentId,
+      deviceName: query.deviceName,
+      receivedFrom: query.startDate ? new Date(query.startDate) : undefined,
+      receivedTo: query.endDate ? new Date(query.endDate) : undefined,
+    };
+    const { logs, total } = await webhookLogRepo.list(req.orgId!, filters, query.page, query.limit);
 
     return {
       data: logs,
@@ -65,49 +50,25 @@ export async function webhookLogRoutes(server: FastifyInstance) {
       groupBy: z.enum(['hour', 'day', 'week']).default('hour')
     }).parse(req.query);
 
-    const where: any = {};
-    if (query.startDate || query.endDate) {
-      where.receivedAt = {};
-      if (query.startDate) where.receivedAt.gte = new Date(query.startDate);
-      if (query.endDate) where.receivedAt.lte = new Date(query.endDate);
-    }
-
-    // Default to last 7 days if no dates provided
+    // Default to the last 7 days if no dates are provided
+    const filters: WebhookLogFilters = {
+      receivedFrom: query.startDate ? new Date(query.startDate) : undefined,
+      receivedTo: query.endDate ? new Date(query.endDate) : undefined,
+    };
     if (!query.startDate && !query.endDate) {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
-      where.receivedAt = {
-        gte: startDate,
-        lte: endDate
-      };
+      filters.receivedTo = new Date();
+      filters.receivedFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     }
 
-    // Get overall counts
-    const [total, success, errors, skipped, notFound, updates] = await Promise.all([
-      server.prisma.webhookLog.count({ where }),
-      server.prisma.webhookLog.count({ where: { ...where, status: 'success' } }),
-      server.prisma.webhookLog.count({ where: { ...where, status: 'error' } }),
-      server.prisma.webhookLog.count({ where: { ...where, status: 'skipped' } }),
-      server.prisma.webhookLog.count({ where: { ...where, status: 'not_found' } }),
-      server.prisma.webhookLog.count({ where: { ...where, shipmentUpdated: true } })
+    const [{ total, success, errors, skipped, notFound, updates }, logs] = await Promise.all([
+      webhookLogRepo.totals(req.orgId!, filters),
+      webhookLogRepo.activity(req.orgId!, filters),
     ]);
-
-    // Get time series data
-    const logs = await server.prisma.webhookLog.findMany({
-      where,
-      select: {
-        receivedAt: true,
-        status: true,
-        shipmentUpdated: true
-      },
-      orderBy: { receivedAt: 'asc' }
-    });
 
     // Group by time period
     const timeSeries: Record<string, { success: number; error: number; updates: number }> = {};
     
-    logs.forEach((log: any) => {
+    logs.forEach((log) => {
       const date = new Date(log.receivedAt);
       let key: string;
       
@@ -164,18 +125,7 @@ export async function webhookLogRoutes(server: FastifyInstance) {
   server.get('/api/v1/webhook-logs/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const log = await server.prisma.webhookLog.findUnique({
-      where: { id },
-      include: {
-        apiKey: {
-          select: {
-            id: true,
-            name: true,
-            keyPrefix: true
-          }
-        }
-      }
-    });
+    const log = await webhookLogRepo.findById(id, req.orgId!);
 
     if (!log) {
       reply.code(404);

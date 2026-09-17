@@ -96,7 +96,7 @@ export const PATH_RULES: readonly PathRule[] = [
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*(issue|triage)/i, module: 'core', note: 'the issue engine is core; modules contribute issue types through the registry (#133)' },
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*customer/i, module: 'core', note: 'customers are the 3PL client too, so a standalone FinnWMS needs them' },
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*location/i, module: 'core', note: 'Location is conflated (TMS node + WMS facility root); Phase 2 moves the warehouse half onto Facility in wms' },
-  { pattern: /^(routes|services|events\/handlers)\/.*webhook/i, module: 'core' },
+  { pattern: /^(routes|services|repositories|events\/handlers)\/.*webhook/i, module: 'core' },
   { pattern: /^events\/handlers\/AuditHandler\.ts$/, module: 'core' },
 
   // --- finance ---

@@ -5,7 +5,7 @@ export interface CreateUserDTO {
   passwordHash?: string; // Null for OAuth-only users
   firstName: string;
   lastName: string;
-  organizationId?: string;
+  organizationId: string;
   customerId?: string;
   phone?: string;
   timezone?: string;
@@ -28,6 +28,7 @@ export interface IUserRepository {
   findByIdWithRoles(id: string): Promise<(User & { roles: { role: { id: string; name: string; permissions: any } }[] }) | null>;
   findByEmailWithRoles(email: string): Promise<(User & { roles: { role: { id: string; name: string; permissions: any } }[] }) | null>;
   all(organizationId?: string): Promise<User[]>;
+  soleOrganizationId(): Promise<string | null>;
   create(data: CreateUserDTO): Promise<User>;
   update(id: string, data: UpdateUserDTO): Promise<User>;
   updatePassword(id: string, passwordHash: string): Promise<void>;
@@ -72,6 +73,13 @@ export class UserRepository implements IUserRepository {
       include: { roles: { include: { role: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // Every user belongs to an org. When the caller doesn't name one, the only safe default is the
+  // deployment's single org; with several, guessing would put the user in the wrong tenant.
+  async soleOrganizationId(): Promise<string | null> {
+    const orgs = await this.prisma.organization.findMany({ select: { id: true }, take: 2 });
+    return orgs.length === 1 ? orgs[0].id : null;
   }
 
   async create(data: CreateUserDTO) {

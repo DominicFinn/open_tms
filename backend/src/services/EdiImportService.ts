@@ -106,6 +106,7 @@ export class EdiImportService implements IEdiImportService {
     let customerId = options.customerId;
     let fieldMapping = options.fieldMapping;
     let tradingPartnerId: string | null = null;
+    let logOrgId = options.orgId;
 
     if (options.partnerId) {
       const tp = this.tradingPartnerRepo
@@ -113,6 +114,7 @@ export class EdiImportService implements IEdiImportService {
         : null;
       if (tp) {
         tradingPartnerId = tp.id;
+        logOrgId = logOrgId ?? tp.orgId;
         if (!customerId) customerId = tp.customerId || undefined;
         const txn = tp.transactions?.find(
           (t: any) => t.transactionType === '850' && t.direction === 'inbound'
@@ -123,9 +125,11 @@ export class EdiImportService implements IEdiImportService {
       }
     }
 
-    // Create EdiTransactionLog entry
-    const logEntry = this.tradingPartnerRepo
+    // Create EdiTransactionLog entry. The log is tenant data, so it needs an org from the caller
+    // or the trading partner; without one the import runs unlogged rather than under a guess.
+    const logEntry = this.tradingPartnerRepo && logOrgId
       ? await this.tradingPartnerRepo.createLog({
+          orgId: logOrgId,
           partnerId: tradingPartnerId,
           transactionType: '850',
           direction: 'inbound',

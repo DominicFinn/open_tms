@@ -2,10 +2,10 @@ import { FastifyInstance } from 'fastify';
 import { randomUUID } from 'crypto';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
-import { IAttachmentRepository } from '../repositories/AttachmentRepository.js';
+import { ATTACHABLE_ENTITY_TYPES, AttachableEntityType, IAttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
-const VALID_ENTITY_TYPES = ['shipment', 'order', 'carrier', 'customer', 'location', 'sop_audit'];
+const VALID_ENTITY_TYPES: readonly string[] = ATTACHABLE_ENTITY_TYPES;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 const attachmentObject = {
@@ -77,7 +77,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
       return { data: null, error: `entityType must be one of: ${VALID_ENTITY_TYPES.join(', ')}` };
     }
 
-    const attachments = await attachmentRepo.findByEntity(entityType, entityId);
+    const attachments = await attachmentRepo.findByEntity(req.orgId!, entityType, entityId);
     return { data: attachments, error: null };
   });
 
@@ -97,6 +97,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
           },
         },
         400: errorResponse,
+        404: errorResponse,
       },
     },
   }, async (req, reply) => {
@@ -118,6 +119,11 @@ export async function attachmentRoutes(server: FastifyInstance) {
     if (!VALID_ENTITY_TYPES.includes(entityType)) {
       reply.code(400);
       return { data: null, error: `entityType must be one of: ${VALID_ENTITY_TYPES.join(', ')}` };
+    }
+
+    if (!(await attachmentRepo.entityExists(req.orgId!, entityType as AttachableEntityType, entityId))) {
+      reply.code(404);
+      return { data: null, error: 'Entity not found' };
     }
 
     // Read file buffer
@@ -145,6 +151,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
 
     // Create attachment record
     const attachment = await attachmentRepo.create({
+      orgId: req.orgId!,
       entityType,
       entityId,
       fileName,
@@ -177,7 +184,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const attachment = await attachmentRepo.findById(id);
+    const attachment = await attachmentRepo.findById(id, req.orgId!);
     if (!attachment) {
       reply.code(404);
       return { data: null, error: 'Attachment not found' };
@@ -215,7 +222,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const attachment = await attachmentRepo.findById(id);
+    const attachment = await attachmentRepo.findById(id, req.orgId!);
     if (!attachment) {
       reply.code(404);
       return { data: null, error: 'Attachment not found' };
@@ -229,7 +236,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
     }
 
     // Delete DB record
-    await attachmentRepo.delete(id);
+    await attachmentRepo.delete(id, req.orgId!);
     return { data: { message: 'Attachment deleted' }, error: null };
   });
 }

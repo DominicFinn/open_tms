@@ -43,6 +43,7 @@ export const TOKENS = {
 
   // Attachment tokens
   IAttachmentRepository: Symbol.for('IAttachmentRepository'),
+  IWebhookLogRepository: Symbol.for('IWebhookLogRepository'),
 
   // Custom fields tokens
   ICustomFieldService: Symbol.for('ICustomFieldService'),

@@ -118,6 +118,7 @@ export class EmailHandler implements IEventHandler {
     const eventCategory = event.type.split('.')[0]; // "shipment", "order", etc.
     const preferences = await this.prisma.userNotificationPreference.findMany({
       where: {
+        orgId: event.orgId,
         userId: { in: users.map((u) => u.id) },
         eventCategory,
       },

@@ -11,22 +11,24 @@ import { QUEUES } from '../queue/events.js';
  * in the X-LocoAware-Signature header, timing-safe. The secret comes from the
  * org's IoT vendor config (falling back to LOCOAWARE_WEBHOOK_SECRET). Webhooks
  * carry no tenant context, so we use the fallback (first) organization.
+ * Returns the org the signature was verified for, or null.
  */
-async function verifyLocoSignature(server: FastifyInstance, req: FastifyRequest, signature: string): Promise<boolean> {
+async function verifyLocoSignature(server: FastifyInstance, req: FastifyRequest, signature: string): Promise<string | null> {
   const raw = (req as any).rawBody as Buffer | undefined;
-  if (!raw) return false;
+  if (!raw) return null;
   const org = await server.prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return false;
+  if (!org) return null;
   const vendor = await server.prisma.iotVendor.findUnique({
     where: { orgId_vendorKey: { orgId: org.id, vendorKey: 'system_loco' } },
     select: { webhookSecret: true },
   });
   const secret = vendor?.webhookSecret || process.env.LOCOAWARE_WEBHOOK_SECRET;
-  if (!secret) return false; // signature sent but no secret configured — cannot verify
+  if (!secret) return null; // signature sent but no secret configured — cannot verify
   const expected = createHmac('sha256', secret).update(raw).digest();
   let received: Buffer;
-  try { received = Buffer.from(signature, 'base64'); } catch { return false; }
-  return received.length === expected.length && timingSafeEqual(received, expected);
+  try { received = Buffer.from(signature, 'base64'); } catch { return null; }
+  const valid = received.length === expected.length && timingSafeEqual(received, expected);
+  return valid ? org.id : null;
 }
 
 export async function webhookRoutes(server: FastifyInstance) {
@@ -56,33 +58,19 @@ export async function webhookRoutes(server: FastifyInstance) {
     const timestamp = new Date();
     let webhookLogId: string | null = null;
     let apiKeyId: string | null = null;
+    // A WebhookLog row is tenant data, so it is only written once the request has proved which
+    // org it belongs to. Requests that fail authentication go to the structured log instead.
+    let orgId: string | null = null;
 
     try {
       // Authenticate: prefer the System Loco HMAC signature; fall back to the
       // API key for existing/manual integrations that don't sign.
       const signature = req.headers['x-locoaware-signature'] as string | undefined;
       if (signature) {
-        const valid = await verifyLocoSignature(server, req, signature);
-        if (!valid) {
+        orgId = await verifyLocoSignature(server, req, signature);
+        if (!orgId) {
           reply.code(401);
-          await server.prisma.webhookLog.create({
-            data: {
-              apiKeyId: null,
-              method: req.method,
-              path: req.url,
-              ipAddress: req.ip,
-              userAgent: req.headers['user-agent'] || undefined,
-              headers: redactApiKey(req.headers),
-              status: 'error',
-              shipmentFound: false,
-              shipmentUpdated: false,
-              errorMessage: 'Invalid webhook signature',
-              responseCode: 401,
-              rawPayload: (req.body as any) || {},
-              receivedAt: timestamp,
-              processedAt: new Date(),
-            },
-          });
+          server.log.warn({ ip: req.ip, path: req.url }, 'Webhook rejected: invalid signature');
           return { error: 'Invalid webhook signature', timestamp: timestamp.toISOString() };
         }
         // Authenticated via signature; apiKeyId stays null.
@@ -90,38 +78,21 @@ export async function webhookRoutes(server: FastifyInstance) {
         // Authenticate API key
         const authResult = await authenticateApiKey(server, req, reply);
         if (authResult.error) {
-          // Create log entry for failed auth
-          const logEntry = await server.prisma.webhookLog.create({
-            data: {
-              apiKeyId: null,
-              method: req.method,
-              path: req.url,
-              ipAddress: req.ip,
-              userAgent: req.headers['user-agent'] || undefined,
-              headers: redactApiKey(req.headers),
-              status: 'error',
-              shipmentFound: false,
-              shipmentUpdated: false,
-              errorMessage: authResult.error,
-              responseCode: reply.statusCode,
-              rawPayload: (req.body as any) || {},
-              receivedAt: timestamp,
-              processedAt: new Date()
-            }
-          });
-
+          server.log.warn({ ip: req.ip, path: req.url, status: reply.statusCode }, 'Webhook rejected: API key authentication failed');
           return {
             error: authResult.error,
             timestamp: timestamp.toISOString()
           };
         }
         apiKeyId = authResult.apiKeyId!;
+        orgId = authResult.orgId!;
       }
 
       // Validate request body
       if (!req.body || Object.keys(req.body as any).length === 0) {
         const logEntry = await server.prisma.webhookLog.create({
           data: {
+            orgId: orgId!,
             apiKeyId,
             method: req.method,
             path: req.url,
@@ -153,6 +124,7 @@ export async function webhookRoutes(server: FastifyInstance) {
       if (!event || !event.device || !event.device.name) {
         const logEntry = await server.prisma.webhookLog.create({
           data: {
+            orgId: orgId!,
             apiKeyId,
             method: req.method,
             path: req.url,
@@ -194,6 +166,7 @@ export async function webhookRoutes(server: FastifyInstance) {
       // Create log entry with 'queued' status
       const logEntry = await server.prisma.webhookLog.create({
         data: {
+          orgId: orgId!,
           apiKeyId: apiKeyId ?? null,
           method: req.method,
           path: req.url ?? null,
@@ -274,10 +247,11 @@ export async function webhookRoutes(server: FastifyInstance) {
             processedAt: new Date()
           }
         });
-      } else {
+      } else if (orgId) {
         // Create log entry for unhandled errors
         await server.prisma.webhookLog.create({
           data: {
+            orgId,
             apiKeyId,
             method: req.method,
             path: req.url,

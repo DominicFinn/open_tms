@@ -1300,7 +1300,7 @@ model EdiTransactionLog {
   id        String          @id @default(uuid())
   partner   TradingPartner? @relation(fields: [partnerId], references: [id])
   partnerId String?
-  orgId     String? // Multi-tenancy scope. Nullable so older rows that pre-date this column can be backfilled lazily; new writes should always set it.
+  orgId     String
 
   // What was exchanged
   transactionType String // "850", "856", "204", "990", "997", "214", "210", "810", "820"
@@ -1361,7 +1361,6 @@ model EdiTransactionLog {
   @@index([source])
   @@index([partnerId, status])
   @@index([direction, status, createdAt])
-  @@index([orgId])
   @@index([orgId, createdAt])
   @@index([orgId, status])
   @@index([orgId, direction, status])
@@ -1915,6 +1914,7 @@ model ShipmentFlag {
 
 model ConnectivityLog {
   id         String   @id @default(uuid())
+  orgId      String
   userId     String?
   deviceInfo String? // User agent / device model
   eventType  String // "wifi_lost", "wifi_restored", "slow_connection"
@@ -2543,6 +2543,7 @@ model RmaLine {
 // so users can spin up repeatable shipment patterns (Cold Chain, Hazmat, etc.)
 model ShipmentType {
   id          String  @id @default(uuid())
+  orgId       String
   name        String // "Cold Chain", "Hazmat", "Standard Parcel"
   icon        String  @default("local_shipping") // Material Icons name
   color       String  @default("#6366F1") // Accent color for chip/badge
@@ -2568,8 +2569,7 @@ model ShipmentType {
 
   shipments Shipment[]
 
-  @@unique([name])
-  @@index([archived])
+  @@unique([orgId, name])
 }
 
 // Org-scoped packaging type catalogue. Covers pallets, cartons, crates, drums,

@@ -39,6 +39,10 @@ export class UpdateShipmentTypeCommandHandler extends BaseCommandHandler<UpdateS
     if (data.defaults !== undefined) updateData.defaults = data.defaults as any;
     if (data.requiredFields !== undefined) updateData.requiredFields = data.requiredFields;
 
+    const existing = await tx.shipmentType.findFirst({ where: { id, orgId: command.orgId }, select: { id: true } });
+    if (!existing) {
+      throw new Error('Shipment type not found');
+    }
     const updated = await tx.shipmentType.update({ where: { id }, data: updateData });
 
     emit(this.createEvent(command, {

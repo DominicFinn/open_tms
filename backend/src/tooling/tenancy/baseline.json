@@ -1,25 +1,5 @@
 [
   {
-    "rule": "model-nullable-org",
-    "target": "EdiTransactionLog",
-    "reason": "Nullable org column. Backfill and make it NOT NULL."
-  },
-  {
-    "rule": "model-nullable-org",
-    "target": "User",
-    "reason": "Users without organizationId are what the sole-org fallback (#239) serves. Backfill and make it NOT NULL."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "Attachment",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "AuditLog",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
     "rule": "model-without-org",
     "target": "CargoDiscrepancy",
     "reason": "Fixed by #295 (PR #300). Delete when it merges."
@@ -31,26 +11,6 @@
   },
   {
     "rule": "model-without-org",
-    "target": "ConnectivityLog",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "CustomFieldAudit",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "CustomFieldDefinition",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "CustomFieldVersion",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
     "target": "DocumentTemplate",
     "reason": "Fixed by #294 (PR #304). Delete when it merges."
   },
@@ -58,21 +18,6 @@
     "rule": "model-without-org",
     "target": "GeneratedDocument",
     "reason": "Fixed by #294 (PR #304). Delete when it merges."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "ShipmentType",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "UserNotificationPreference",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "WebhookLog",
-    "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
   },
   {
     "rule": "org-fallback",
