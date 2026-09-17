@@ -237,7 +237,8 @@ export class OrderDeliveryService implements IOrderDeliveryService {
             ],
           }
         },
-        location: true
+        location: true,
+        shipment: { select: { orgId: true } },
       }
     });
 
@@ -341,8 +342,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     // Cargo reconciliation runs outside the transaction (non-blocking side effect)
     if (status === 'completed' && this.cargoReconciliation) {
       try {
-        await this.cargoReconciliation.autoReconcileStop(shipmentStopId, method);
-        await this.cargoReconciliation.reconcileStopCompletion(shipmentStopId);
+        await this.cargoReconciliation.reconcileCompletedStop(stop.shipment.orgId, shipmentStopId, method);
 
         // If this was the last stop, check for cargo left on vehicle
         const allStops = await this.prisma.shipmentStop.findMany({
@@ -352,7 +352,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
           (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
         );
         if (allCompleted) {
-          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipmentId);
+          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipment.orgId, stop.shipmentId);
         }
       } catch (err) {
         console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);

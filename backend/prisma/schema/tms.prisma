@@ -1688,6 +1688,8 @@ model DeviceEvent {
 // Records physical confirmation of a trackable unit at a specific stop
 model CargoScan {
   id              String        @id @default(uuid())
+  orgId           String
+  organization    Organization  @relation(fields: [orgId], references: [id])
   trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
   trackableUnitId String
   shipmentStop    ShipmentStop  @relation(fields: [shipmentStopId], references: [id], onDelete: Cascade)
@@ -1743,6 +1745,8 @@ model ShipmentJourneyCheckpoint {
 // Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries
 model CargoDiscrepancy {
   id              String        @id @default(uuid())
+  orgId           String
+  organization    Organization  @relation(fields: [orgId], references: [id])
   shipment        Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   shipmentId      String
   trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
@@ -1775,7 +1779,8 @@ model CargoDiscrepancy {
 
   @@index([shipmentId])
   @@index([trackableUnitId])
-  @@index([status])
+  // Widened from [status]: the open-discrepancies list is always per org.
+  @@index([orgId, status])
   @@index([discrepancyType])
   @@index([detectedAt])
 }

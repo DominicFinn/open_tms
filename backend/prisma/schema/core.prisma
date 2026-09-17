@@ -237,6 +237,8 @@ model Organization {
   documentTemplates  DocumentTemplate[]
   generatedDocuments GeneratedDocument[]
   issueSignals       IssueSignal[]
+  cargoScans         CargoScan[]
+  cargoDiscrepancies CargoDiscrepancy[]
   carrierReadModels  CarrierReadModel[]
   customerReadModels CustomerReadModel[]
   issueReadModels    IssueReadModel[]
