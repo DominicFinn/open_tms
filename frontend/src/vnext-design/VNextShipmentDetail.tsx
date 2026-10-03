@@ -1592,6 +1592,7 @@ function eventTone(eventType: string): string {
       return 'border-info/30 bg-info/10 text-info';
     case 'exception':
       return 'border-destructive/30 bg-destructive/10 text-destructive';
+    case 'arrives_origin':
     case 'leaves_origin':
     case 'entered_waypoint':
     case 'exited_waypoint':

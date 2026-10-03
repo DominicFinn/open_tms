@@ -61,6 +61,31 @@ export function locateOnRoute(position: LatLng, encodedPolyline: string): RouteP
   };
 }
 
+/**
+ * The part of the route checkpoints are measured over: everything between leaving the origin's
+ * geofence and entering the destination's (#307). Without it, a checkpoint can fall inside a
+ * geofence, where the vehicle is arriving or departing rather than travelling. If the radii would
+ * swallow the whole route, the full route is used.
+ */
+export interface RouteSpan {
+  startOffsetMeters: number;
+  endOffsetMeters: number;
+}
+
+const FULL_ROUTE: RouteSpan = { startOffsetMeters: 0, endOffsetMeters: 0 };
+
+function usableSpan(totalRouteMeters: number, span: RouteSpan): RouteSpan {
+  const usable = totalRouteMeters - span.startOffsetMeters - span.endOffsetMeters;
+  return usable > 0 ? span : FULL_ROUTE;
+}
+
+/** Fraction of the usable span covered, 0 at the origin geofence edge, 1 at the destination's. */
+export function fractionOfSpan(progress: RouteProgress, span: RouteSpan = FULL_ROUTE): number {
+  const { startOffsetMeters, endOffsetMeters } = usableSpan(progress.totalRouteMeters, span);
+  const usable = progress.totalRouteMeters - startOffsetMeters - endOffsetMeters;
+  return Math.min(1, Math.max(0, (progress.distanceAlongRouteMeters - startOffsetMeters) / usable));
+}
+
 /** Bucket a route fraction into a checkpoint index 1-9 (10 is reserved for arrival). */
 export function checkpointIndexForFraction(fraction: number): number {
   return Math.min(JOURNEY_CHECKPOINT_SEGMENTS - 1, Math.max(1, Math.floor(fraction * JOURNEY_CHECKPOINT_SEGMENTS)));
@@ -79,7 +104,7 @@ export interface PassedCheckpoint {
  * Planned-route positions of checkpoints 1..(upToIndex - 1). Used to fill in the checkpoints a
  * shipment passed between sparse pings: the ping proves it got past them, the route says where.
  */
-export function passedCheckpoints(encodedPolyline: string, upToIndex: number): PassedCheckpoint[] {
+export function passedCheckpoints(encodedPolyline: string, upToIndex: number, span: RouteSpan = FULL_ROUTE): PassedCheckpoint[] {
   const routePoints = decodePolyline(encodedPolyline);
   if (routePoints.length < 2) return [];
 
@@ -87,10 +112,12 @@ export function passedCheckpoints(encodedPolyline: string, upToIndex: number): P
   const totalRouteMeters = segmentLengths.reduce((sum, len) => sum + len, 0);
   if (totalRouteMeters === 0) return [];
 
+  const { startOffsetMeters, endOffsetMeters } = usableSpan(totalRouteMeters, span);
+  const usable = totalRouteMeters - startOffsetMeters - endOffsetMeters;
   const result: PassedCheckpoint[] = [];
   for (let index = 1; index < upToIndex; index++) {
     const fractionComplete = index / JOURNEY_CHECKPOINT_SEGMENTS;
-    const target = totalRouteMeters * fractionComplete;
+    const target = startOffsetMeters + usable * fractionComplete;
     const point = pointAtDistance(routePoints, segmentLengths, target);
     result.push({
       checkpointIndex: index,

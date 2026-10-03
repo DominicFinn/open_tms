@@ -19,10 +19,13 @@ import { EVENT_TYPES } from '../eventTypes.js';
 import { createEvent } from '../createEvent.js';
 import { IEventBus } from '../IEventBus.js';
 
+const DONE_STATUSES = new Set(['completed', 'skipped']);
+
 export class ShipmentCompletionHandler implements IEventHandler {
   readonly name = 'shipment.completion';
   readonly eventPatterns = [
     EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+    EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
     EVENT_TYPES.TRACKING_GEOFENCE_ENTERED,
   ];
   readonly options = { concurrency: 3, retryLimit: 3, expireInSeconds: 60 };
@@ -36,6 +39,8 @@ export class ShipmentCompletionHandler implements IEventHandler {
     try {
       if (event.type === EVENT_TYPES.SHIPMENT_STOP_ARRIVED) {
         await this.handleStopArrived(event);
+      } else if (event.type === EVENT_TYPES.SHIPMENT_STOP_COMPLETED) {
+        await this.handleStopCompleted(event);
       } else if (event.type === EVENT_TYPES.TRACKING_GEOFENCE_ENTERED) {
         await this.handleGeofenceEntered(event);
       }
@@ -56,6 +61,50 @@ export class ShipmentCompletionHandler implements IEventHandler {
     await this.checkAndCompleteShipment(shipmentId, event.orgId, arrivedAt(event));
   }
 
+  /**
+   * A completed stop can finish the shipment. When it is the final stop and earlier stops are still
+   * open, nothing completes: an exception is raised instead, so someone visits or skips them, or
+   * completes the shipment by hand.
+   */
+  private async handleStopCompleted(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { stopId?: string; shipmentId?: string };
+    const shipmentId = payload.shipmentId ?? event.entityId;
+    if (!shipmentId) return;
+
+    const completed = await this.checkAndCompleteShipment(shipmentId, event.orgId, arrivedAt(event));
+    if (!completed && payload.stopId) {
+      await this.flagUnvisitedStops(shipmentId, event.orgId, payload.stopId);
+    }
+  }
+
+  private async flagUnvisitedStops(shipmentId: string, orgId: string, completedStopId: string): Promise<void> {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId, orgId },
+      select: { reference: true, status: true, stops: { select: { id: true, sequenceNumber: true, status: true }, orderBy: { sequenceNumber: 'desc' } } },
+    });
+    if (!shipment || shipment.status !== 'in_progress') return;
+    const [finalStop] = shipment.stops;
+    if (finalStop?.id !== completedStopId) return;
+
+    const unvisited = shipment.stops.filter((s) => !DONE_STATUSES.has(s.status)).map((s) => s.id);
+    if (unvisited.length === 0) return;
+
+    await this.eventBus.publish(createEvent({
+      type: EVENT_TYPES.SHIPMENT_EXCEPTION,
+      orgId,
+      actorId: 'system',
+      entityType: 'shipment',
+      entityId: shipmentId,
+      payload: {
+        shipmentReference: shipment.reference,
+        exceptionType: 'stops_not_visited',
+        description: `Reached the final stop with ${unvisited.length} stop(s) not visited`,
+        stopIds: unvisited,
+      },
+      source: 'completion_handler',
+    }));
+  }
+
   private async handleGeofenceEntered(event: DomainEvent): Promise<void> {
     // Geofence entered events have the shipmentId as the entity
     const shipmentId = event.entityId;
@@ -64,7 +113,8 @@ export class ShipmentCompletionHandler implements IEventHandler {
     await this.checkAndCompleteShipment(shipmentId, event.orgId, arrivedAt(event));
   }
 
-  private async checkAndCompleteShipment(shipmentId: string, orgId: string, deliveredAt: Date): Promise<void> {
+  /** Returns true when this call moved the shipment to complete. */
+  private async checkAndCompleteShipment(shipmentId: string, orgId: string, deliveredAt: Date): Promise<boolean> {
     // Load the shipment with its stops
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId, orgId },
@@ -86,20 +136,17 @@ export class ShipmentCompletionHandler implements IEventHandler {
       },
     });
 
-    if (!shipment) return;
+    if (!shipment) return false;
 
     // Only process shipments that are actively in progress
-    if (!['in_progress'].includes(shipment.status)) return;
+    if (!['in_progress'].includes(shipment.status)) return false;
 
-    // Check if the final stop (destination) has been arrived at
-    // Final stop = highest sequence number, or the stop at the destination location
-    const finalStop = shipment.stops.find((s) => s.locationId === shipment.destinationId)
-      || shipment.stops[0]; // Highest sequence number (sorted desc)
+    // BUSINESS RULE (#324): a shipment is delivered once every stop is completed or skipped, not
+    // when the destination alone is reached. Stop order isn't enforced, so this holds whichever
+    // stop happens to be the last one done.
+    if (shipment.stops.length === 0 || !shipment.stops.every((s) => DONE_STATUSES.has(s.status))) return false;
 
-    if (!finalStop) return;
-
-    // If the final stop is arrived or completed, mark shipment as delivered
-    if (['arrived', 'in_progress', 'completed'].includes(finalStop.status)) {
+    {
       // Transition shipment to delivered. Conditioned on still being
       // in_progress: this handler is subscribed to both
       // shipment.stop_arrived and tracking.geofence_entered, and a single
@@ -114,7 +161,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
           deliveryDate: deliveredAt,
         },
       });
-      if (count === 0) return;
+      if (count === 0) return false;
 
       // Publish shipment.delivered event
       const deliveredEvent = createEvent({
@@ -151,7 +198,8 @@ export class ShipmentCompletionHandler implements IEventHandler {
 
       await this.eventBus.publish(statusEvent);
 
-      console.log(`[ShipmentCompletionHandler] Auto-completed shipment ${shipment.reference} — destination arrival criteria met`);
+      console.log('[ShipmentCompletionHandler] Auto-completed shipment: every stop done', { shipmentId, orgId });
+      return true;
     }
   }
 }

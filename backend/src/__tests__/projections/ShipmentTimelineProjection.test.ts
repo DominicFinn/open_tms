@@ -112,9 +112,9 @@ describe('buildTimelineRow', () => {
       expect(row).toMatchObject({ eventType: 'entered_waypoint', address: 'Chicago, IL' });
     });
 
-    it('arrival at the first stop (origin) is not timelined', async () => {
+    it('arrival at the first stop (origin) is arrives_origin (#307)', async () => {
       const row = await buildTimelineRow(stopPrisma(1, 1, 3), createTestEvent('shipment.stop_arrived', 'shipment', 'ship-1', { stopId: 's1' }));
-      expect(row).toBeNull();
+      expect(row).toMatchObject({ eventType: 'arrives_origin', description: 'Arrived at origin' });
     });
 
     it('departure from the first stop is leaves_origin', async () => {

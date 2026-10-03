@@ -99,12 +99,13 @@ export async function buildTimelineRow(
       const kind = await classifyStop(prisma, event.orgId, event.entityId, payload.stopId);
       if (kind === 'destination') return { ...base, eventType: 'enters_destination', description: 'Arrived at destination' };
       if (kind === 'waypoint') return { ...base, eventType: 'entered_waypoint', description: `Entered waypoint${base.address ? ` (${base.address})` : ''}` };
-      return null; // arrival at origin is not part of the curated timeline
+      return { ...base, eventType: 'arrives_origin', description: 'Arrived at origin' };
     }
     case 'shipment.stop_completed': {
       const kind = await classifyStop(prisma, event.orgId, event.entityId, payload.stopId);
       if (kind === 'origin') return { ...base, eventType: 'leaves_origin', description: 'Departed origin' };
-      if (kind === 'waypoint') return { ...base, eventType: 'exited_waypoint', description: `Exited waypoint${base.address ? ` (${base.address})` : ''}` };
+      // A middle stop completes on entry (#324), so this marks the drop being done, not the exit.
+      if (kind === 'waypoint') return { ...base, eventType: 'exited_waypoint', description: `Completed waypoint${base.address ? ` (${base.address})` : ''}` };
       return null; // departure from destination is not meaningful
     }
     case 'tracking.journey_checkpoint':

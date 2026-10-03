@@ -18,6 +18,7 @@ export interface RecordJourneyCheckpointPayload {
   fractionComplete: number;
   /** Planned-route positions of the checkpoints before this one, for filling in any skipped. */
   passed?: PassedCheckpoint[];
+  deviceId?: string;
 }
 
 export const RECORD_JOURNEY_CHECKPOINT = 'tracking.record_journey_checkpoint';
@@ -70,7 +71,7 @@ export class RecordJourneyCheckpointCommandHandler extends BaseCommandHandler<Re
       });
 
       const payload: JourneyLocationEventPayload = {
-        shipmentId, stopId, locationId,
+        shipmentId, stopId, locationId, deviceId: command.payload.deviceId,
         lat: row.lat, lng: row.lng, eventTime: row.eventTime.toISOString(),
         checkpointIndex: row.checkpointIndex, totalCheckpoints: JOURNEY_CHECKPOINT_SEGMENTS,
         ...(row.inferred ? { inferred: true } : {}),

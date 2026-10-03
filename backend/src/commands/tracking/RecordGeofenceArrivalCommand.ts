@@ -12,34 +12,39 @@ export interface RecordGeofenceArrivalPayload {
   lat?: number;
   lng?: number;
   eventTime: string;
-  /** Whether this stop is the shipment's destination (drives SHIPMENT_STOP_ARRIVED). */
-  isDestination: boolean;
+  /**
+   * True for every stop except the origin pickup. BUSINESS RULE (#324): entering a delivery stop's
+   * geofence completes it (middle stops and destination alike); the origin only arrives here and
+   * completes on departure. A refusal afterwards is raised as an exception, not undone here.
+   */
+  completesStop: boolean;
+  /** External id of the device whose ping matched. */
+  deviceId?: string;
 }
 
 export const RECORD_GEOFENCE_ARRIVAL = 'tracking.record_geofence_arrival';
 
 /**
- * Records a device entering a stop's geofence. Replaces the direct-write
- * ArrivalCriteriaEvaluationService.markStopArrived — this is the leg of the
- * "full journey" proof that reuses the previously-unpublished
- * TRACKING_GEOFENCE_ENTERED event type.
+ * Records a device entering a stop's geofence: the origin becomes `arrived`, any other stop
+ * `completed`. Only a `pending` stop is touched, so a repeat ping inside the same geofence is a
+ * no-op, and a later visit to the same location is a different stop.
  */
 export class RecordGeofenceArrivalCommandHandler extends BaseCommandHandler<RecordGeofenceArrivalPayload, { arrived: boolean }> {
   readonly commandType = RECORD_GEOFENCE_ARRIVAL;
   constructor(prisma: PrismaClient, eventBus: PgBossEventBus) { super(prisma, eventBus); }
 
   protected async handle(command: Command<RecordGeofenceArrivalPayload>, tx: TransactionClient, emit: EmitFn) {
-    const { shipmentId, stopId, locationId, lat, lng, eventTime, isDestination } = command.payload;
+    const { shipmentId, stopId, locationId, lat, lng, eventTime, completesStop, deviceId } = command.payload;
 
     const stop = await tx.shipmentStop.findUnique({ where: { id: stopId, shipment: { orgId: command.orgId } } });
     if (!stop || stop.status !== 'pending') return { arrived: false };
 
     await tx.shipmentStop.update({
       where: { id: stopId, shipment: { orgId: command.orgId } },
-      data: { status: 'arrived', actualArrival: new Date(eventTime) },
+      data: { status: completesStop ? 'completed' : 'arrived', actualArrival: new Date(eventTime) },
     });
 
-    const payload: JourneyLocationEventPayload = { shipmentId, stopId, locationId, lat, lng, eventTime };
+    const payload: JourneyLocationEventPayload = { shipmentId, stopId, locationId, lat, lng, eventTime, deviceId };
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.TRACKING_GEOFENCE_ENTERED,
@@ -48,11 +53,17 @@ export class RecordGeofenceArrivalCommandHandler extends BaseCommandHandler<Reco
       payload,
     }));
 
-    // Only the destination arrival is part of the curated shipment timeline /
-    // completion flow — arrival at an origin or waypoint stop is not.
-    if (isDestination) {
+    // Arrive-then-complete, the same pair EDI 214 sends: SLA evaluation opens stop-level SLAs on
+    // arrival and meets them on completion, and the timeline labels each by the stop's position.
+    emit(this.createEvent(command, {
+      type: EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+      entityType: 'shipment',
+      entityId: shipmentId,
+      payload: { stopId, shipmentId, eventTime },
+    }));
+    if (completesStop) {
       emit(this.createEvent(command, {
-        type: EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+        type: EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
         entityType: 'shipment',
         entityId: shipmentId,
         payload: { stopId, shipmentId, eventTime },

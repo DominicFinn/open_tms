@@ -9,7 +9,7 @@ function mockShipment(overrides: any = {}) {
     status: 'in_progress',
     destinationId: 'loc-dest',
     stops: [
-      { id: 'stop-dest', locationId: 'loc-dest', sequenceNumber: 2, status: 'arrived', stopType: 'delivery' },
+      { id: 'stop-dest', locationId: 'loc-dest', sequenceNumber: 2, status: 'completed', stopType: 'delivery' },
       { id: 'stop-origin', locationId: 'loc-origin', sequenceNumber: 1, status: 'completed', stopType: 'pickup' },
     ],
     ...overrides,
@@ -17,7 +17,7 @@ function mockShipment(overrides: any = {}) {
 }
 
 describe('ShipmentCompletionHandler', () => {
-  it('completes an in_progress shipment whose destination stop has arrived', async () => {
+  it('completes an in_progress shipment once every stop is completed', async () => {
     const prisma = {
       shipment: {
         findUnique: jest.fn().mockResolvedValue(mockShipment()),
@@ -91,4 +91,57 @@ describe('ShipmentCompletionHandler', () => {
     expect(prisma.shipment.updateMany).not.toHaveBeenCalled();
     expect(eventBus.publish).not.toHaveBeenCalled();
   });
+
+  describe('multi-stop (#324)', () => {
+    const threeStops = (middle: string) => mockShipment({
+      stops: [
+        { id: 'stop-dest', locationId: 'loc-dest', sequenceNumber: 3, status: 'completed', stopType: 'delivery' },
+        { id: 'stop-mid', locationId: 'loc-mid', sequenceNumber: 2, status: middle, stopType: 'delivery' },
+        { id: 'stop-origin', locationId: 'loc-origin', sequenceNumber: 1, status: 'completed', stopType: 'pickup' },
+      ],
+    });
+
+    function setup(shipment: any) {
+      const prisma = {
+        shipment: {
+          findUnique: jest.fn().mockResolvedValue(shipment),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      } as any;
+      const eventBus = { publish: jest.fn().mockResolvedValue(undefined) } as any;
+      return { prisma, eventBus, handler: new ShipmentCompletionHandler(prisma, eventBus) };
+    }
+
+    it('does not complete when the destination is done but a middle stop is still pending', async () => {
+      const { prisma, handler } = setup(threeStops('pending'));
+      await handler.handle(createTestEvent(EVENT_TYPES.SHIPMENT_STOP_ARRIVED, 'shipment', 'ship-1', { stopId: 'stop-dest', shipmentId: 'ship-1' }));
+      expect(prisma.shipment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('raises a stops_not_visited exception when the final stop completes with others open', async () => {
+      const { eventBus, handler } = setup(threeStops('pending'));
+      await handler.handle(createTestEvent(EVENT_TYPES.SHIPMENT_STOP_COMPLETED, 'shipment', 'ship-1', { stopId: 'stop-dest', shipmentId: 'ship-1' }));
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      expect(eventBus.publish.mock.calls[0][0]).toMatchObject({
+        type: EVENT_TYPES.SHIPMENT_EXCEPTION,
+        payload: { exceptionType: 'stops_not_visited', stopIds: ['stop-mid'] },
+      });
+    });
+
+    it('does not flag when a middle stop (not the final one) completes', async () => {
+      const shipment = threeStops('completed');
+      shipment.stops[0].status = 'pending';
+      const { eventBus, handler } = setup(shipment);
+      await handler.handle(createTestEvent(EVENT_TYPES.SHIPMENT_STOP_COMPLETED, 'shipment', 'ship-1', { stopId: 'stop-mid', shipmentId: 'ship-1' }));
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('completes when the last open stop is done, in any order, counting skipped stops as done', async () => {
+      const { prisma, eventBus, handler } = setup(threeStops('skipped'));
+      await handler.handle(createTestEvent(EVENT_TYPES.SHIPMENT_STOP_COMPLETED, 'shipment', 'ship-1', { stopId: 'stop-dest', shipmentId: 'ship-1' }));
+      expect(prisma.shipment.updateMany).toHaveBeenCalled();
+      expect(eventBus.publish.mock.calls.map((c: any) => c[0].type)).toEqual([EVENT_TYPES.SHIPMENT_DELIVERED, EVENT_TYPES.SHIPMENT_STATUS_CHANGED]);
+    });
+  });
 });
+

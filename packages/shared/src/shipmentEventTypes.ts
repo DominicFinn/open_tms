@@ -17,6 +17,7 @@ export const SHIPMENT_EVENT_TYPES: ShipmentEventTypeDef[] = [
   { type: 'updated', label: 'Updated' },
   { type: 'status_changed', label: 'Status changed' },
   { type: 'carrier_assigned', label: 'Carrier assigned' },
+  { type: 'arrives_origin', label: 'Arrives at origin' },
   { type: 'leaves_origin', label: 'Leaves origin' },
   { type: 'entered_waypoint', label: 'Entered waypoint' },
   { type: 'exited_waypoint', label: 'Exited waypoint' },

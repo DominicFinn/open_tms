@@ -344,8 +344,8 @@ the access ledger.
 | Event | Source | Side Effects |
 |-------|--------|-------------|
 | `tracking.location_received` | Inbound webhook worker | ShipmentReadModel.currentLat/Lng updated, geofence check |
-| `tracking.geofence_entered` | `RecordGeofenceArrivalCommand` | ShipmentStop marked arrived, orders updated; also emits `shipment.stop_arrived` for the destination stop |
-| `tracking.geofence_exited` | `RecordGeofenceDepartureCommand` | Origin ShipmentStop marked completed; also emits `shipment.stop_completed` ("Departed origin" on the timeline) |
+| `tracking.geofence_entered` | `RecordGeofenceArrivalCommand` | Origin stop marked arrived; any other stop marked completed (#324), orders at it delivered. Also emits `shipment.stop_arrived` for every stop, plus `shipment.stop_completed` for non-origin stops |
+| `tracking.geofence_exited` | `RecordGeofenceDepartureCommand` | Origin ShipmentStop marked completed; a `ready` shipment moves to `in_progress` (`shipment.status_changed`); also emits `shipment.stop_completed` ("Departed origin"). `inferred: true` when implied by reaching a later stop |
 | `tracking.journey_checkpoint` | `RecordJourneyCheckpointCommand` | Writes a `ShipmentJourneyCheckpoint` row per checkpoint, including any filled in between pings (`inferred: true`); no shipment/stop side effect |
 | `tracking.eta_updated` | ETA recalculation | — |
 
@@ -357,8 +357,27 @@ only, v1) dispatches `RecordGeofenceDepartureCommand`; otherwise, if the shipmen
 has a `LaneRoute`, and hasn't yet arrived at its destination, its position is located along the route
 (`RouteProgressService.locateOnRoute`) and bucketed into one of 10 segments — a new segment dispatches
 `RecordJourneyCheckpointCommand`. A checkpoint never fires on the same ping as an arrival. Query a
-shipment's full journey via `GET /api/v1/shipments/:id/journey`. v1 scope: origin/destination only (no
-waypoints), location only (no sensor data), no GPS-jitter hysteresis on the geofence boundary.
+shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are covered by #324 below;
+there is still no GPS-jitter hysteresis on the geofence boundary.
+
+**Multi-stop shipments (#324).** Stops are matched one at a time, not by location
+(`services/tracking/journeyStops.ts`). For each location, a ping can only act on that location's
+lowest-sequence open stop, and a repeat visit (the same location later in the route) only becomes
+eligible once another location has been completed since the earlier visit, so a truck parked after
+its first drop doesn't complete the second. Entering the origin's geofence marks it `arrived`;
+leaving it completes it and moves a `ready` shipment to `in_progress` (#307). Entering any other
+stop's geofence **completes** it: middle stops and destination alike, stop order not enforced, and its
+orders are marked delivered. Reaching a later stop when no origin departure was ever seen records an
+inferred departure first (no departure time). `ShipmentCompletionHandler` completes the shipment only
+once **every** stop is `completed` or `skipped`; if the final stop completes while others are still
+open, it publishes `shipment.exception` with `exceptionType: 'stops_not_visited'` and the open stop
+ids, and the shipment stays `in_progress` until they're visited or it's completed by hand. Journey
+checkpoints are measured over the route between the origin and destination geofence edges, so none
+falls inside a geofence. Geofence and checkpoint events carry the matching `deviceId`. On the timeline,
+origin arrival is "Arrived at origin" (`arrives_origin`) and a middle stop's completion is
+"Completed waypoint". Known gap: the legacy `checkGeofenceAndUpdateOrders` (#288) can still mark a
+repeat-visit stop `arrived` while the truck sits at the first visit, if that stop has the legacy
+`geofenceEnabled` flag.
 
 **Tracking pings (#323).** Every vendor payload is parsed into one internal `TrackingPing`
 (`integrations/tracking/TrackingPing.ts`): device, **device timestamp**, optional position, a
