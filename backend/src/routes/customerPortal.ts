@@ -1040,7 +1040,14 @@ export async function customerPortalRoutes(server: FastifyInstance) {
         origin: true,
         destination: true,
         carrier: { select: { name: true } },
-        stops: { include: { location: true }, orderBy: { sequenceNumber: 'asc' } },
+        // A mixed-customer LTL shipment (#325) also drops other customers' freight; their stops
+        // are their consignees' names and addresses, so only the pickup, this customer's drops and
+        // stops with no orders on them are shown.
+        stops: {
+          where: { OR: [{ stopType: 'pickup' }, { orders: { none: {} } }, { orders: { some: { customerId } } }] },
+          include: { location: true },
+          orderBy: { sequenceNumber: 'asc' },
+        },
         events: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });

@@ -138,6 +138,14 @@ checks first only to report per order. `scripts/backfill-shipment-service-level.
 `--apply`) sets the service level on existing shipments whose orders agree and lists mixed or empty
 ones for review.
 
+**Orders on a shipment (#325).** `GET /api/v1/shipments/:id` returns, per linked order, its status,
+delivery status, `deliveredAt`, service level, customer and drop stop; the shipment's Orders tab shows
+them, with the shipment's service level and, for a mixed-customer LTL shipment, a customer count and
+the orders grouped by customer. In the customer portal, a shipment's detail only shows the pickup,
+that customer's own drops and stops with no orders, never another customer's drop locations. Known
+gap: shipments are listed in the portal only for the customer they're filed under, so the other
+customers on a mixed LTL shipment can't see it there yet.
+
 **Order delivery events (#325).** Every delivery status write goes through a command, so it runs in
 a transaction and emits after commit: `order.delivered` (carrying `deliveredAt`, the device time
 for tracking), `order.exception` (with `exceptionType`), `order.exception_resolved`, or
