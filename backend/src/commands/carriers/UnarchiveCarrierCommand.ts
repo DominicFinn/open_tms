@@ -24,18 +24,18 @@ export class UnarchiveCarrierCommandHandler extends BaseCommandHandler<{ id: str
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
-    const existing = await tx.carrier.findFirstOrThrow({ where: { id, deletedAt: null } });
+    const existing = await tx.carrier.findFirstOrThrow({ where: { id, orgId: command.orgId, deletedAt: null } });
     if (!existing.archived) {
       return { id };
     }
 
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: false, archivedAt: null },
     });
 
     // Reactivate the carrier's portal users.
-    await tx.carrierUser.updateMany({ where: { carrierId: id, anonymizedAt: null }, data: { active: true } });
+    await tx.carrierUser.updateMany({ where: { carrierId: id, anonymizedAt: null, carrier: { orgId: command.orgId } }, data: { active: true } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_UNARCHIVED,

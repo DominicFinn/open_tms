@@ -11,10 +11,16 @@ export class AwardTenderCommandHandler extends BaseCommandHandler<{ tenderId: st
   constructor(prisma: PrismaClient, eventBus: PgBossEventBus) { super(prisma, eventBus); }
 
   protected async handle(command: Command<{ tenderId: string; bidId: string }>, tx: TransactionClient, emit: EmitFn) {
-    const bid = await tx.tenderBid.findUniqueOrThrow({ where: { id: command.payload.bidId } });
+    const bid = await tx.tenderBid.findUniqueOrThrow({
+      where: {
+        id: command.payload.bidId,
+        tenderId: command.payload.tenderId,
+        tender: { shipment: { orgId: command.orgId } },
+      },
+    });
 
     const tender = await tx.tender.update({
-      where: { id: command.payload.tenderId },
+      where: { id: command.payload.tenderId, shipment: { orgId: command.orgId } },
       data: { status: 'awarded', awardedAt: new Date() },
     });
 

@@ -117,6 +117,7 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
     // Trackable units currently at stops at this location
     const unitsHere = await server.prisma.trackableUnit.findMany({
       where: {
+        order: { orgId },
         currentStop: { locationId: id },
       },
       select: {

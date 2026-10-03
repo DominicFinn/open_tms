@@ -67,7 +67,7 @@ export class ShipmentTypesRepository implements IShipmentTypesRepository {
   async update(id: string, orgId: string, data: UpdateShipmentTypeDTO): Promise<ShipmentType | null> {
     if (!(await this.findById(id, orgId))) return null;
     return this.prisma.shipmentType.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         name: data.name,
         icon: data.icon,
@@ -82,7 +82,7 @@ export class ShipmentTypesRepository implements IShipmentTypesRepository {
   async archive(id: string, orgId: string): Promise<ShipmentType | null> {
     if (!(await this.findById(id, orgId))) return null;
     return this.prisma.shipmentType.update({
-      where: { id },
+      where: { id, orgId },
       data: { archived: true, archivedAt: new Date() },
     });
   }

@@ -49,12 +49,12 @@ export class InvoiceProjection implements IEventHandler {
     };
 
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id: payload.invoiceId },
+      where: { id: payload.invoiceId, orgId: event.orgId },
     });
     if (!invoice) return;
 
     await this.prisma.invoiceReadModel.upsert({
-      where: { id: payload.invoiceId },
+      where: { id: payload.invoiceId, orgId: event.orgId },
       create: {
         id: payload.invoiceId,
         orgId: event.orgId,
@@ -85,7 +85,7 @@ export class InvoiceProjection implements IEventHandler {
 
   private async handleUpdated(event: DomainEvent): Promise<void> {
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     });
     if (!invoice) return;
 
@@ -95,7 +95,7 @@ export class InvoiceProjection implements IEventHandler {
       : 0;
 
     await this.prisma.invoiceReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         status: invoice.status,
         paidCents: invoice.paidCents,

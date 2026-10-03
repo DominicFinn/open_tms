@@ -33,12 +33,12 @@ export class UpdateCommentCommandHandler extends BaseCommandHandler<UpdateCommen
   ): Promise<UpdateCommentResult> {
     const { id, body } = command.payload;
 
-    const existing = await tx.comment.findUnique({ where: { id } });
+    const existing = await tx.comment.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing) throw new Error('Comment not found');
     if (existing.deletedAt) throw new Error('Comment has been deleted');
 
     const updated = await tx.comment.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { body },
     });
 

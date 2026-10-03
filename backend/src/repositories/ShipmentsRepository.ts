@@ -33,21 +33,20 @@ export interface UpdateShipmentDTO {
 }
 
 export interface IShipmentsRepository {
-  all(orgId?: string | null): Promise<ShipmentWithRelations[]>;
-  findById(id: string, orgId?: string | null): Promise<ShipmentWithFullRelations | null>;
+  all(orgId: string): Promise<ShipmentWithRelations[]>;
+  findById(id: string, orgId: string): Promise<ShipmentWithFullRelations | null>;
   create(data: CreateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
-  update(id: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
-  archive(id: string): Promise<any>;
+  update(id: string, orgId: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
+  archive(id: string, orgId: string): Promise<any>;
   createMany(data: CreateShipmentDTO[]): Promise<void>;
-  deleteMany(): Promise<void>;
+  deleteMany(orgId: string): Promise<void>;
 }
 
 export class ShipmentsRepository implements IShipmentsRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null): Promise<ShipmentWithRelations[]> {
-    const where: any = { archived: false };
-    if (orgId) where.orgId = orgId;
+  async all(orgId: string): Promise<ShipmentWithRelations[]> {
+    const where: any = { archived: false, orgId };
     return this.prisma.shipment.findMany({
       where,
       include: {
@@ -65,9 +64,8 @@ export class ShipmentsRepository implements IShipmentsRepository {
     });
   }
 
-  async findById(id: string, orgId?: string | null): Promise<ShipmentWithFullRelations | null> {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findById(id: string, orgId: string): Promise<ShipmentWithFullRelations | null> {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.shipment.findFirst({
       where,
       include: {
@@ -113,9 +111,9 @@ export class ShipmentsRepository implements IShipmentsRepository {
     }) as Promise<ShipmentWithRelations>;
   }
 
-  async update(id: string, data: UpdateShipmentDTO, includeLane: boolean = false): Promise<ShipmentWithRelations> {
+  async update(id: string, orgId: string, data: UpdateShipmentDTO, includeLane: boolean = false): Promise<ShipmentWithRelations> {
     return this.prisma.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data,
       include: {
         customer: true,
@@ -126,9 +124,9 @@ export class ShipmentsRepository implements IShipmentsRepository {
     }) as Promise<ShipmentWithRelations>;
   }
 
-  async archive(id: string): Promise<any> {
+  async archive(id: string, orgId: string): Promise<any> {
     return this.prisma.shipment.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()
@@ -140,7 +138,7 @@ export class ShipmentsRepository implements IShipmentsRepository {
     await this.prisma.shipment.createMany({ data });
   }
 
-  async deleteMany(): Promise<void> {
-    await this.prisma.shipment.deleteMany();
+  async deleteMany(orgId: string): Promise<void> {
+    await this.prisma.shipment.deleteMany({ where: { orgId } });
   }
 }

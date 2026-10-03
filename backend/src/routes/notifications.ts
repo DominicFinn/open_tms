@@ -43,16 +43,13 @@ export async function notificationRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (request, reply) => {
+  }, async (request) => {
     const { read, category, limit = 20, offset = 0 } = request.query as any;
 
-    // TODO: Get userId from auth context. For now use a query param or default.
-    const userId = (request.query as any).userId;
-    if (!userId) {
-      return reply.status(400).send({ data: null, error: 'userId query parameter required (until auth is wired)' });
-    }
-
-    const where: any = { userId };
+    // The inbox belongs to the signed-in user, never to a user named in the request.
+    const userId = request.user!.sub;
+    const orgId = request.orgId!;
+    const where: any = { userId, orgId };
     if (read === 'true') where.read = true;
     if (read === 'false') where.read = false;
     if (category) where.category = category;
@@ -65,7 +62,7 @@ export async function notificationRoutes(server: FastifyInstance) {
         skip: Number(offset),
       }),
       server.prisma.notification.count({ where }),
-      server.prisma.notification.count({ where: { userId, read: false } }),
+      server.prisma.notification.count({ where: { userId, orgId, read: false } }),
     ]);
 
     return { data: { notifications, total, unreadCount }, error: null };
@@ -76,12 +73,6 @@ export async function notificationRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Notifications'],
       summary: 'Get unread notification count',
-      querystring: {
-        type: 'object',
-        properties: {
-          userId: { type: 'string' },
-        },
-      },
       response: {
         200: {
           type: 'object',
@@ -92,14 +83,9 @@ export async function notificationRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (request, reply) => {
-    const userId = (request.query as any).userId;
-    if (!userId) {
-      return reply.status(400).send({ data: null, error: 'userId required' });
-    }
-
+  }, async (request) => {
     const count = await server.prisma.notification.count({
-      where: { userId, read: false },
+      where: { userId: request.user!.sub, orgId: request.orgId!, read: false },
     });
 
     return { data: { count }, error: null };
@@ -132,7 +118,7 @@ export async function notificationRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (request) => {
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const body = request.body as any;
 
@@ -145,12 +131,14 @@ export async function notificationRoutes(server: FastifyInstance) {
       updateData.dismissed = body.dismissed;
     }
 
-    const notification = await server.prisma.notification.update({
-      where: { id },
-      data: updateData,
-    });
+    const where = { id, userId: request.user!.sub, orgId: request.orgId! };
+    const { count } = await server.prisma.notification.updateMany({ where, data: updateData });
+    if (count === 0) {
+      reply.code(404);
+      return { data: null, error: 'Notification not found' };
+    }
 
-    return { data: notification, error: null };
+    return { data: await server.prisma.notification.findFirst({ where }), error: null };
   });
 
   // Mark all as read
@@ -158,13 +146,6 @@ export async function notificationRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Notifications'],
       summary: 'Mark all notifications as read',
-      body: {
-        type: 'object',
-        properties: {
-          userId: { type: 'string' },
-        },
-        required: ['userId'],
-      },
       response: {
         200: {
           type: 'object',
@@ -176,10 +157,8 @@ export async function notificationRoutes(server: FastifyInstance) {
       },
     },
   }, async (request) => {
-    const { userId } = request.body as any;
-
     const result = await server.prisma.notification.updateMany({
-      where: { userId, read: false },
+      where: { userId: request.user!.sub, orgId: request.orgId!, read: false },
       data: { read: true, readAt: new Date() },
     });
 

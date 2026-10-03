@@ -32,6 +32,7 @@ export class WaveAutoReleaseService {
   ) {}
 
   async runOnce(now: Date = new Date()): Promise<AutoReleaseResult> {
+    // tenancy-exempt: auto-release cron sweeps every org on purpose; each command and update uses the org of the template it found.
     const templates = await this.prisma.waveTemplate.findMany({
       where: { autoRelease: true, active: true },
     });
@@ -55,7 +56,7 @@ export class WaveAutoReleaseService {
 
       if (cmdResult.success) {
         await this.prisma.waveTemplate.update({
-          where: { id: t.id },
+          where: { id: t.id, orgId: t.orgId },
           data: { lastAutoReleasedAt: now },
         });
         result.templatesTriggered++;

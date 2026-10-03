@@ -41,7 +41,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const template = await prisma.manifestTemplate.findFirst({ where: { id, orgId: req.orgId! }, select: { id: true } });
     if (!template) { reply.code(404); return { data: null, error: 'Template not found' }; }
-    await prisma.manifestTemplate.delete({ where: { id: template.id } });
+    await prisma.manifestTemplate.delete({ where: { id: template.id, orgId: req.orgId! } });
     return { data: { deleted: true }, error: null };
   });
 
@@ -110,7 +110,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
     // If template matched, increment usage count
     if (matchedTemplate) {
       await prisma.manifestTemplate.update({
-        where: { id: matchedTemplate.id },
+        where: { id: matchedTemplate.id, orgId },
         data: { usageCount: { increment: 1 } },
       });
     }
@@ -183,7 +183,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
 
     if (result.processedRows === 0) {
       await prisma.manifestUpload.update({
-        where: { id: upload.id },
+        where: { id: upload.id, orgId },
         data: { status: 'failed', errors: result.errors as unknown as Prisma.InputJsonValue, errorRows: result.errorRows },
       });
       reply.code(400);
@@ -207,10 +207,10 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
             orgId,
           },
         });
-        await prisma.manifestUpload.update({ where: { id: upload.id }, data: { templateId: template.id } });
+        await prisma.manifestUpload.update({ where: { id: upload.id, orgId }, data: { templateId: template.id } });
       } else {
         await prisma.manifestTemplate.update({
-          where: { id: existing.id },
+          where: { id: existing.id, orgId },
           data: { columnMapping: body.columnMapping as unknown as Prisma.InputJsonValue, usageCount: { increment: 1 } },
         });
       }
@@ -231,7 +231,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
 
     if (!taskResult.success) {
       await prisma.manifestUpload.update({
-        where: { id: upload.id },
+        where: { id: upload.id, orgId },
         data: { status: 'failed', errors: [{ row: 0, field: 'system', message: taskResult.error }] as unknown as Prisma.InputJsonValue },
       });
       reply.code(400);
@@ -240,7 +240,7 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
 
     // Update upload status
     await prisma.manifestUpload.update({
-      where: { id: upload.id },
+      where: { id: upload.id, orgId },
       data: {
         status: 'completed',
         receivingTaskId: (taskResult.data as any)?.id,

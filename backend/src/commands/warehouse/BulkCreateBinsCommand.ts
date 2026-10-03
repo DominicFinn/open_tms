@@ -104,7 +104,7 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
 
     // Check for label conflicts
     const existingLabels = await tx.warehouseBin.findMany({
-      where: { locationId: facility.sourceLocationId, label: { in: labels } },
+      where: { locationId: facility.sourceLocationId, label: { in: labels }, orgId: command.orgId },
       select: { label: true },
     });
     if (existingLabels.length > 0) {

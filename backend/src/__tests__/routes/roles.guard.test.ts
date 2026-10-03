@@ -42,6 +42,7 @@ async function buildApp(permissions: string[]) {
   app.decorate('prisma', buildPrisma());
   app.addHook('preHandler', async (req) => {
     (req as any).user = { sub: 'u-1', email: 'u@test.com', roles: ['x'], permissions };
+    (req as any).orgId = 'org-a';
   });
   await app.register(roleRoutes);
   return app;
@@ -118,6 +119,41 @@ describe('role route guards', () => {
       payload: { permissions: ['wms:read'] },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('assigning a role only finds users in the caller org', async () => {
+    const app = await buildApp(['roles:write']);
+    (app as any).prisma.user.findUnique.mockResolvedValueOnce(null);
+    const res = await app.inject({ method: 'POST', url: '/api/v1/roles/r-custom/users/u-other-org' });
+    expect(res.statusCode).toBe(404);
+    expect((app as any).prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'u-other-org', organizationId: 'org-a' },
+    });
+    expect((app as any).prisma.userRole.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('removing a role scopes the assignment to the caller org', async () => {
+    const app = await buildApp(['roles:write']);
+    (app as any).prisma.userRole.findUnique.mockResolvedValueOnce({ id: 'ur-1' });
+    const res = await app.inject({ method: 'DELETE', url: '/api/v1/roles/r-custom/users/u-1' });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.userRole.findUnique).toHaveBeenCalledWith({
+      where: { userId_roleId: { userId: 'u-1', roleId: 'r-custom' }, user: { organizationId: 'org-a' } },
+    });
+    expect((app as any).prisma.userRole.delete).toHaveBeenCalledWith({
+      where: { id: 'ur-1', user: { organizationId: 'org-a' } },
+    });
+    await app.close();
+  });
+
+  it('a role detail lists only the caller org assignments', async () => {
+    const app = await buildApp(['roles:read']);
+    const res = await app.inject({ method: 'GET', url: '/api/v1/roles/r-custom' });
+    expect(res.statusCode).toBe(200);
+    const call = (app as any).prisma.role.findUnique.mock.calls[0][0];
+    expect(call.include.users.where).toEqual({ user: { organizationId: 'org-a' } });
     await app.close();
   });
 });

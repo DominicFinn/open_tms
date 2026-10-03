@@ -192,7 +192,7 @@ describe('TransferInventoryCommandHandler', () => {
     // Source deducted
     expect(tx.inventoryRecord.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'inv-1' },
+        where: { id: 'inv-1', orgId: 'test-org' },
         data: expect.objectContaining({ quantityOnHand: 30 }),
       })
     );
@@ -224,7 +224,7 @@ describe('TransferInventoryCommandHandler', () => {
     // Should update existing, not create
     expect(tx.inventoryRecord.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'inv-target' },
+        where: { id: 'inv-target', orgId: 'test-org' },
         data: expect.objectContaining({ quantityOnHand: { increment: 5 } }),
       })
     );
@@ -305,7 +305,7 @@ describe('TransferInventoryCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(tx.inventoryRecord.delete).toHaveBeenCalledWith({ where: { id: 'inv-1' } });
+    expect(tx.inventoryRecord.delete).toHaveBeenCalledWith({ where: { id: 'inv-1', orgId: 'test-org' } });
   });
 });
 

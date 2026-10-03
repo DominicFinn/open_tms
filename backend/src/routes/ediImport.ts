@@ -34,6 +34,7 @@ export async function ediImportRoutes(server: FastifyInstance) {
 
     try {
       const result = await ediImportService.importEdi(body.ediContent, {
+        orgId: req.orgId!,
         partnerId: body.partnerId,
         customerId: body.customerId,
         fileName: body.fileName,
@@ -63,6 +64,7 @@ export async function ediImportRoutes(server: FastifyInstance) {
 
     try {
       const result = await ediImportService.previewEdi(body.ediContent, {
+        orgId: req.orgId!,
         partnerId: body.partnerId
       });
 
@@ -99,7 +101,7 @@ export async function ediImportRoutes(server: FastifyInstance) {
 
     // Load order with customer and line items
     const order = await prisma.order.findUnique({
-      where: { id: body.orderId },
+      where: { id: body.orderId, orgId: req.orgId! },
       include: {
         customer: true,
         trackableUnits: { include: { lineItems: true } },

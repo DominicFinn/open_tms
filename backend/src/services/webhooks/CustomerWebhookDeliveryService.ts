@@ -110,11 +110,11 @@ export class CustomerWebhookDeliveryService {
 
     const [updatedDelivery] = await this.prisma.$transaction([
       this.prisma.customerWebhookDelivery.update({
-        where: { id: delivery.id },
+        where: { id: delivery.id, webhook: { orgId: webhook.orgId } },
         data: { status, statusCode, responseBody, errorMessage, deliveredAt },
       }),
       this.prisma.customerWebhook.update({
-        where: { id: webhook.id },
+        where: { id: webhook.id, orgId: webhook.orgId },
         data: {
           lastDeliveryAt: new Date(),
           lastStatusCode: statusCode,
@@ -138,9 +138,9 @@ export class CustomerWebhookDeliveryService {
    * fresh signature (new timestamp). Increments attemptCount. Updates the
    * webhook's failureCount if this retry also fails.
    */
-  async retry(deliveryId: string): Promise<{ status: string; statusCode: number | null }> {
+  async retry(orgId: string, deliveryId: string): Promise<{ status: string; statusCode: number | null }> {
     const delivery = await this.prisma.customerWebhookDelivery.findUnique({
-      where: { id: deliveryId },
+      where: { id: deliveryId, webhook: { orgId } },
       include: { webhook: true },
     });
     if (!delivery) throw new Error(`Delivery ${deliveryId} not found`);
@@ -193,7 +193,7 @@ export class CustomerWebhookDeliveryService {
 
     await this.prisma.$transaction([
       this.prisma.customerWebhookDelivery.update({
-        where: { id: delivery.id },
+        where: { id: delivery.id, webhook: { orgId } },
         data: {
           status,
           statusCode,
@@ -204,7 +204,7 @@ export class CustomerWebhookDeliveryService {
         },
       }),
       this.prisma.customerWebhook.update({
-        where: { id: webhook.id },
+        where: { id: webhook.id, orgId: webhook.orgId },
         data: {
           lastDeliveryAt: new Date(),
           lastStatusCode: statusCode,
@@ -226,13 +226,17 @@ export class CustomerWebhookDeliveryService {
    * Backoff: 2^attemptCount minutes, capped at 30 minutes.
    * Example: attempt 1 → wait 2min before retry, attempt 2 → 4min, attempt 3 → 8min, attempt 4 → 16min, attempt 5+ → 30min.
    */
-  async findEligibleForRetry(maxAttempts = 5, now: Date = new Date()): Promise<Array<{ id: string; attemptCount: number }>> {
+  async findEligibleForRetry(
+    maxAttempts = 5,
+    now: Date = new Date(),
+  ): Promise<Array<{ id: string; orgId: string; attemptCount: number }>> {
+    // tenancy-exempt: retry queue sweep over every org on purpose; each retry runs under the org of the delivery's own webhook.
     const rows = await this.prisma.customerWebhookDelivery.findMany({
       where: {
         status: 'failed',
         attemptCount: { lt: maxAttempts },
       },
-      select: { id: true, attemptCount: true, createdAt: true },
+      select: { id: true, attemptCount: true, createdAt: true, webhook: { select: { orgId: true } } },
       orderBy: { createdAt: 'asc' },
       take: 100,
     });
@@ -241,7 +245,7 @@ export class CustomerWebhookDeliveryService {
       const backoffMinutes = Math.min(30, Math.pow(2, r.attemptCount));
       const earliestRetryAt = r.createdAt.getTime() + backoffMinutes * 60_000;
       return now.getTime() >= earliestRetryAt;
-    }).map(r => ({ id: r.id, attemptCount: r.attemptCount }));
+    }).map(r => ({ id: r.id, orgId: r.webhook.orgId, attemptCount: r.attemptCount }));
   }
 
   /**

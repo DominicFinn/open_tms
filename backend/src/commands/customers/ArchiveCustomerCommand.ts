@@ -20,7 +20,7 @@ export class ArchiveCustomerCommandHandler extends BaseCommandHandler<{ id: stri
   ): Promise<{ id: string }> {
     const { id } = command.payload;
     const customer = await tx.customer.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date() },
     });
 

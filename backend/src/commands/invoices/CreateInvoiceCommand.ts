@@ -113,7 +113,7 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
     // Update shipment billing status
     const shipmentIds = [...new Set(charges.map((c: any) => c.shipmentId).filter(Boolean) as string[])];
     await tx.shipmentFinancialSummary.updateMany({
-      where: { shipmentId: { in: shipmentIds } },
+      where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
       data: { billingStatus: 'invoiced' },
     });
 

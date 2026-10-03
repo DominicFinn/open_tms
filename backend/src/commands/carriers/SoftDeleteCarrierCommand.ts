@@ -26,24 +26,24 @@ export class SoftDeleteCarrierCommandHandler extends BaseCommandHandler<{ id: st
   ): Promise<{ id: string; alreadyDeleted?: boolean }> {
     const { id } = command.payload;
 
-    const existing = await tx.carrier.findFirstOrThrow({ where: { id } });
+    const existing = await tx.carrier.findFirstOrThrow({ where: { id, orgId: command.orgId } });
     if (existing.deletedAt) {
       return { id, alreadyDeleted: true };
     }
 
     // Guard: a carrier tied to any lane cannot be deleted — archive instead.
-    const laneCount = await tx.laneCarrier.count({ where: { carrierId: id } });
+    const laneCount = await tx.laneCarrier.count({ where: { carrierId: id, lane: { orgId: command.orgId } } });
     if (laneCount > 0) {
       throw new Error('Carrier is assigned to one or more lanes and cannot be deleted. Archive it instead.');
     }
 
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { deletedAt: new Date(), deletedBy: command.actorId ?? null },
     });
 
     // Deactivate the carrier's portal users so they can no longer log in.
-    await tx.carrierUser.updateMany({ where: { carrierId: id }, data: { active: false } });
+    await tx.carrierUser.updateMany({ where: { carrierId: id, carrier: { orgId: command.orgId } }, data: { active: false } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_DELETED,

@@ -43,10 +43,11 @@ export class ProcessInbound214CommandHandler extends BaseCommandHandler<
       reasonCode, city, state, country, statusDate,
       rawEdiContent, tradingPartnerId,
     } = command.payload;
+    const { orgId } = command;
 
     // 1. Find shipment, ensure it exists and is not archived
     const shipment = await tx.shipment.findFirstOrThrow({
-      where: { id: shipmentId, archived: false },
+      where: { id: shipmentId, orgId, archived: false },
       include: {
         stops: {
           include: { location: true },
@@ -72,7 +73,7 @@ export class ProcessInbound214CommandHandler extends BaseCommandHandler<
     }
 
     if (Object.keys(updateData).length > 0) {
-      await tx.shipment.update({ where: { id: shipmentId }, data: updateData });
+      await tx.shipment.update({ where: { id: shipmentId, orgId }, data: updateData });
     }
 
     // 4. Update matching ShipmentStop if the mapping calls for it
@@ -102,7 +103,7 @@ export class ProcessInbound214CommandHandler extends BaseCommandHandler<
           stopUpdate.status = 'completed';
         }
 
-        await tx.shipmentStop.update({ where: { id: matchedStop.id }, data: stopUpdate });
+        await tx.shipmentStop.update({ where: { id: matchedStop.id, shipment: { orgId } }, data: stopUpdate });
       }
     }
 

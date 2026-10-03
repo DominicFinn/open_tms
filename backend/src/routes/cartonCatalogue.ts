@@ -108,7 +108,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
 
     const existing = await prisma.cartonCatalogue.findFirst({ where: { id, orgId: req.orgId! } });
     if (!existing) { reply.code(404); return { data: null, error: 'Not found' }; }
-    const updated = await prisma.cartonCatalogue.update({ where: { id: existing.id }, data: body });
+    const updated = await prisma.cartonCatalogue.update({ where: { id: existing.id, orgId: req.orgId! }, data: body });
     return { data: updated, error: null };
   });
 
@@ -126,11 +126,11 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
 
     const referencedCount = await prisma.packAudit.count({ where: { cartonCatalogueId: id, orgId } });
     if (referencedCount > 0) {
-      await prisma.cartonCatalogue.update({ where: { id: existing.id }, data: { active: false } });
+      await prisma.cartonCatalogue.update({ where: { id: existing.id, orgId }, data: { active: false } });
       return { data: { archived: true, referencedCount }, error: null };
     }
 
-    await prisma.cartonCatalogue.delete({ where: { id: existing.id } });
+    await prisma.cartonCatalogue.delete({ where: { id: existing.id, orgId } });
     return { data: { deleted: true }, error: null };
   });
 }

@@ -104,7 +104,7 @@ export class SkillChainExecutor {
     let config: Record<string, unknown> = {};
     if (step.skillConfigId) {
       const skillConfig = await this.prisma.skillConfig.findUnique({
-        where: { id: step.skillConfigId },
+        where: { id: step.skillConfigId, orgId },
       });
       if (skillConfig) {
         config = skillConfig.config as Record<string, unknown>;

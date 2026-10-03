@@ -25,7 +25,7 @@ function makeOrgScopedPrisma(rows: Array<Record<string, any>>) {
     return Promise.resolve(
       rows.find((r) =>
         (!where.id || r.id === where.id) &&
-        (!where.orgId || r.orgId === where.orgId) &&
+        (!('orgId' in where) || r.orgId === where.orgId) &&
         (!where.archived || r.archived === where.archived) &&
         (!where.orderNumber || r.orderNumber === where.orderNumber) &&
         (!where.customerId || r.customerId === where.customerId)
@@ -35,7 +35,7 @@ function makeOrgScopedPrisma(rows: Array<Record<string, any>>) {
   const findMany = jest.fn().mockImplementation(({ where }: any) => {
     return Promise.resolve(
       rows.filter((r) =>
-        (!where.orgId || r.orgId === where.orgId) &&
+        (!('orgId' in where) || r.orgId === where.orgId) &&
         (where.archived === undefined || r.archived === where.archived) &&
         (!where.customerId || r.customerId === where.customerId) &&
         (!where.status || r.status === where.status)
@@ -169,32 +169,13 @@ describe('Cross-tenant isolation — Shipment', () => {
     expect(results.map((s) => s.id)).toEqual(['s-a1']);
   });
 
-  it('passing no orgId reverts to legacy/admin behaviour (returns everything not archived)', async () => {
-    const repo = new ShipmentsRepository(prismaFor());
-    const results = await repo.all();
-    expect(results.map((s) => s.id).sort()).toEqual(['s-a1', 's-b1']);
-  });
 });
 
-describe('orgId omission behaviour — defence in depth', () => {
-  // The repos accept `undefined` orgId so seed scripts and admin tools
-  // can fetch across tenants. This batch of tests pins that contract so
-  // a future refactor can't silently change it.
-  const rows = [
-    { id: 's-a1', orgId: 'org-a', archived: false, status: 'draft' },
-    { id: 's-b1', orgId: 'org-b', archived: false, status: 'draft' },
-  ];
+describe('orgId is always applied — defence in depth', () => {
+  // The repos require an orgId and always put it in the where, so a blank
+  // one matches nothing rather than widening the read to every tenant.
 
-  it('Shipment.findById with no orgId reaches both tenants', async () => {
-    const { findFirst } = makeOrgScopedPrisma(rows);
-    const prisma = { shipment: { findFirst, findMany: jest.fn(), create: jest.fn(), update: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() } } as any;
-    const repo = new ShipmentsRepository(prisma);
-
-    expect((await repo.findById('s-a1'))?.id).toBe('s-a1');
-    expect((await repo.findById('s-b1'))?.id).toBe('s-b1');
-  });
-
-  it('Customer.findById with empty-string orgId behaves like omitted (does NOT scope)', async () => {
+  it('Customer.findById with an empty-string orgId matches nothing', async () => {
     const { findFirst, findMany } = makeOrgScopedPrisma([
       { id: 'c-a1', orgId: 'org-a', name: 'Acme', archived: false },
       { id: 'c-b1', orgId: 'org-b', name: 'X', archived: false },
@@ -202,8 +183,6 @@ describe('orgId omission behaviour — defence in depth', () => {
     const prisma = { customer: { findFirst, findMany, create: jest.fn(), update: jest.fn() } } as any;
     const repo = new CustomersRepository(prisma);
 
-    // Empty-string orgId is treated as "not supplied" because the repo
-    // uses truthy check (`if (orgId)`), so cross-tenant rows are reachable.
-    expect((await repo.findById('c-b1', ''))?.id).toBe('c-b1');
+    expect(await repo.findById('c-b1', '')).toBeNull();
   });
 });

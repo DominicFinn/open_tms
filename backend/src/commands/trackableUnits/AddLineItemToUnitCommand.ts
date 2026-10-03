@@ -38,7 +38,7 @@ export class AddLineItemToUnitCommandHandler extends BaseCommandHandler<AddLineI
     const { unitId, item } = command.payload;
 
     const unit = await tx.trackableUnit.findUniqueOrThrow({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId: command.orgId } },
       select: { id: true, orderId: true, identifier: true },
     });
 

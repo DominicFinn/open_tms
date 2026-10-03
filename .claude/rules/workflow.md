@@ -22,6 +22,9 @@ e.g. `TMS: cutoff risk issues don't auto-resolve on recovery`, `WMS: pack audit 
   we reconstruct why a change exists a year later.
 - **Read the issue before implementing.** Acceptance criteria and comments routinely carry
   constraints that never made the title.
+- **Every open issue sits on the [Open TMS board](https://github.com/users/DominicFinn/projects/3)**
+  with a *Theme* and a *Horizon* (Now, Next, Later), and a `TMS` or `WMS` label. The themes match
+  the sections of `roadmap.md`.
 - **Move the issue as you go**: put it *In Progress* when you start, and move it to *Done* when the
   work is merged. Leave a closing comment describing what actually changed, especially where the
   implementation diverged from the description.

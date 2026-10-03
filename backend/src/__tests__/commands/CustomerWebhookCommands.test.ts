@@ -110,7 +110,7 @@ describe('UpdateCustomerWebhookCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(tx.customerWebhook.update).toHaveBeenCalledWith({
-      where: { id: 'hook-1' },
+      where: { id: 'hook-1', orgId: 'test-org' },
       data: { url: 'https://new-url.example.com', enabled: false },
     });
     expect(result.events[0].type).toBe(EVENT_TYPES.CUSTOMER_WEBHOOK_UPDATED);
@@ -166,7 +166,7 @@ describe('DeleteCustomerWebhookCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(tx.customerWebhook.delete).toHaveBeenCalledWith({ where: { id: 'hook-1' } });
+    expect(tx.customerWebhook.delete).toHaveBeenCalledWith({ where: { id: 'hook-1', orgId: 'test-org' } });
     expect(result.events[0].type).toBe(EVENT_TYPES.CUSTOMER_WEBHOOK_DELETED);
   });
 
@@ -205,7 +205,7 @@ describe('RotateWebhookSecretCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(tx.customerWebhook.update).toHaveBeenCalledWith({
-      where: { id: 'hook-1' },
+      where: { id: 'hook-1', orgId: 'test-org' },
       data: { secret: 'whsec_new' },
     });
     expect(result.data?.secret).toBe('whsec_new');

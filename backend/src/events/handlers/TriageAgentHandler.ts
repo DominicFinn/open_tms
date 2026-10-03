@@ -225,13 +225,13 @@ export class TriageAgentHandler implements IEventHandler {
   // AgentDecision for compliance/audit, same as a triage decision.
 
   private async enrichIssue(event: DomainEvent, config: LoadedConfig): Promise<void> {
-    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId, orgId: event.orgId } });
     // Only enrich engine-raised issues (deterministic). Manual issues (issueType
     // null) and already-enriched ones are left alone.
     if (!issue || !issue.issueType) return;
 
     const already = await this.prisma.agentDecision.findFirst({
-      where: { agentType: 'triage_enrich', entityType: 'issue', entityId: issue.id },
+      where: { orgId: event.orgId, agentType: 'triage_enrich', entityType: 'issue', entityId: issue.id },
       select: { id: true },
     });
     if (already) return;
@@ -313,20 +313,20 @@ export class TriageAgentHandler implements IEventHandler {
     console.log(`[TriageAgent] Enriched issue ${issue.id} (${issue.issueType}) — recommended ${rec ?? 'no change'}`);
   }
 
-  private async gatherIssueContext(issue: { sourceEntityType: string | null; sourceEntityId: string | null; issueType: string | null; priority: string }): Promise<Record<string, unknown>> {
+  private async gatherIssueContext(issue: { orgId: string; sourceEntityType: string | null; sourceEntityId: string | null; issueType: string | null; priority: string }): Promise<Record<string, unknown>> {
     const ctx: Record<string, unknown> = {
       issueType: issue.issueType,
       currentPriority: issue.priority,
     };
     if (issue.sourceEntityType === 'shipment' && issue.sourceEntityId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: issue.sourceEntityId },
+        where: { id: issue.sourceEntityId, orgId: issue.orgId },
         select: { id: true, reference: true, status: true, customerId: true, hasException: true },
       });
       if (shipment) {
         ctx.shipment = shipment;
         ctx.openIssueCount = await this.prisma.issue.count({
-          where: { sourceEntityType: 'shipment', sourceEntityId: shipment.id, status: { in: ['open', 'in_progress'] } },
+          where: { orgId: issue.orgId, sourceEntityType: 'shipment', sourceEntityId: shipment.id, status: { in: ['open', 'in_progress'] } },
         });
       }
     }
@@ -335,7 +335,7 @@ export class TriageAgentHandler implements IEventHandler {
     // one-off scale drift vs a repeating mis-pack.
     if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId) {
       const packTask = await this.prisma.packTask.findUnique({
-        where: { id: issue.sourceEntityId },
+        where: { id: issue.sourceEntityId, orgId: issue.orgId },
         select: {
           id: true,
           orderId: true,
@@ -346,7 +346,7 @@ export class TriageAgentHandler implements IEventHandler {
       if (packTask) {
         ctx.packTask = packTask;
         ctx.recentAudits = await this.prisma.packAudit.findMany({
-          where: { packTaskId: packTask.id },
+          where: { packTaskId: packTask.id, orgId: issue.orgId },
           select: { verdict: true, weightVariancePercent: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
           take: 5,
@@ -429,7 +429,7 @@ ${JSON.stringify(context, null, 2)}`;
 
       if (activeVersionId) {
         const version = await this.prisma.agentConfigVersion.findUnique({
-          where: { id: activeVersionId },
+          where: { id: activeVersionId, config: { orgId } },
           select: { systemPrompt: true },
         });
         if (version) systemPrompt = version.systemPrompt;
@@ -487,7 +487,7 @@ ${JSON.stringify(context, null, 2)}`;
 
     if (entityType === 'shipment' && entityId) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: entityId },
+        where: { id: entityId, orgId: event.orgId },
         include: {
           customer: { select: { id: true, name: true } },
           origin: { select: { id: true, name: true, city: true, state: true } },
@@ -502,7 +502,7 @@ ${JSON.stringify(context, null, 2)}`;
       if (shipment) {
         // Fetch loads with driver and vehicle info
         const loads = await this.prisma.load.findMany({
-          where: { shipmentId: entityId },
+          where: { shipmentId: entityId, shipment: { orgId: event.orgId } },
           include: {
             driver: { select: { id: true, name: true, phone: true, email: true } },
             vehicle: { select: { id: true, plate: true, type: true } },
@@ -556,6 +556,7 @@ ${JSON.stringify(context, null, 2)}`;
 
       const openIssues = await this.prisma.issue.findMany({
         where: {
+          orgId: event.orgId,
           sourceEntityType: 'shipment',
           sourceEntityId: entityId,
           status: { in: ['open', 'in_progress'] },
@@ -568,6 +569,7 @@ ${JSON.stringify(context, null, 2)}`;
 
       const slaEvaluations = await this.prisma.slaEvaluation.findMany({
         where: {
+          orgId: event.orgId,
           entityType: 'shipment',
           entityId,
           status: { in: ['active', 'warning', 'breached'] },
@@ -604,6 +606,7 @@ ${JSON.stringify(context, null, 2)}`;
 
     return this.prisma.agentDecision.findFirst({
       where: {
+        orgId: event.orgId,
         agentType: 'triage',
         triggerEventType: event.type,
         entityType: event.entityType,
@@ -712,6 +715,7 @@ Based on this event and context, what action should be taken?`;
       // the engine issue is the system of record (the agent enriches it instead).
       const engineIssue = await this.prisma.issue.findFirst({
         where: {
+          orgId: event.orgId,
           sourceEntityType: event.entityType,
           sourceEntityId: event.entityId,
           issueType: { not: null },
@@ -767,6 +771,7 @@ Based on this event and context, what action should be taken?`;
       // First, create an issue if needed
       const existingIssue = await this.prisma.issue.findFirst({
         where: {
+          orgId: event.orgId,
           sourceEntityType: event.entityType,
           sourceEntityId: event.entityId,
           status: { in: ['open', 'in_progress'] },
@@ -800,7 +805,7 @@ Based on this event and context, what action should be taken?`;
       // Now fetch driver info from shipment loads
       if (issueId) {
         const loads = await this.prisma.load.findMany({
-          where: { shipmentId: event.entityId },
+          where: { shipmentId: event.entityId, shipment: { orgId: event.orgId } },
           include: { driver: true, vehicle: true },
           take: 1,
         });

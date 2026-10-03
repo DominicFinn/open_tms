@@ -25,7 +25,6 @@ export async function eventRoutes(server: FastifyInstance) {
           type: { type: 'string', description: 'Event type filter, supports .* wildcard (e.g. "shipment.*")' },
           entityType: { type: 'string' },
           entityId: { type: 'string' },
-          orgId: { type: 'string' },
           since: { type: 'string', description: 'ISO-8601 timestamp — events after this time' },
           afterId: { type: 'string', description: 'Cursor — events after this event ID (for warehouse pulls)' },
           limit: { type: 'integer', default: 50, maximum: 1000 },
@@ -34,9 +33,11 @@ export async function eventRoutes(server: FastifyInstance) {
       },
     },
   }, async (request) => {
-    const { type, entityType, entityId, orgId, since, afterId, limit = 50, offset = 0 } = request.query as any;
+    const { type, entityType, entityId, since, afterId, limit = 50, offset = 0 } = request.query as any;
+    const orgId = request.orgId!;
 
-    const where: any = {};
+    // The tenant always comes from the caller's token, never from the query string.
+    const where: any = { orgId };
 
     // Wildcard type filter: "shipment.*" matches all shipment events
     if (type) {
@@ -49,13 +50,12 @@ export async function eventRoutes(server: FastifyInstance) {
 
     if (entityType) where.entityType = entityType;
     if (entityId) where.entityId = entityId;
-    if (orgId) where.orgId = orgId;
     if (since) where.timestamp = { gte: since };
 
     // Cursor-based pagination for warehouse incremental pulls
     if (afterId) {
       const cursor = await server.prisma.domainEventLog.findUnique({
-        where: { id: afterId },
+        where: { id: afterId, orgId },
         select: { createdAt: true },
       });
       if (cursor) {
@@ -106,7 +106,7 @@ export async function eventRoutes(server: FastifyInstance) {
     const { entityType, entityId } = request.params as any;
 
     const events = await server.prisma.domainEventLog.findMany({
-      where: { entityType, entityId },
+      where: { entityType, entityId, orgId: request.orgId! },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -122,16 +122,14 @@ export async function eventRoutes(server: FastifyInstance) {
         type: 'object',
         properties: {
           since: { type: 'string', description: 'ISO-8601 timestamp — count events after this time' },
-          orgId: { type: 'string' },
         },
       },
     },
   }, async (request) => {
-    const { since, orgId } = request.query as any;
+    const { since } = request.query as any;
 
-    const where: any = {};
+    const where: any = { orgId: request.orgId! };
     if (since) where.timestamp = { gte: since };
-    if (orgId) where.orgId = orgId;
 
     const stats = await server.prisma.domainEventLog.groupBy({
       by: ['type'],

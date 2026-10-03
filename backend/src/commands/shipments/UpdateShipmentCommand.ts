@@ -77,12 +77,13 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
       await tx.shipmentType.findFirstOrThrow({ where: { id: data.shipmentTypeId, orgId: command.orgId }, select: { id: true } });
     }
 
-    const updated = await tx.shipment.update({ where: { id }, data: updateData });
+    const updated = await tx.shipment.update({ where: { id, orgId: command.orgId }, data: updateData });
 
     // Rebuild the stop list from the route, but ONLY while the shipment is a
     // draft — in-flight shipments carry stop-level progress we must not wipe.
     if (data.waypoints !== undefined && updated.status === 'draft') {
       await syncShipmentStops(tx, {
+        orgId: command.orgId,
         shipmentId: id,
         originId: updated.originId,
         waypoints: data.waypoints,

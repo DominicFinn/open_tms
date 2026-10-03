@@ -20,6 +20,7 @@ describe('CustomerWebhookDeliveryService.findEligibleForRetry', () => {
     return {
       id: `del-${attemptCount}`,
       attemptCount,
+      webhook: { orgId: 'org-1' },
       createdAt: new Date(now.getTime() - minutesAgo * 60_000),
     };
   }
@@ -39,7 +40,7 @@ describe('CustomerWebhookDeliveryService.findEligibleForRetry', () => {
     ]);
     const svc = new CustomerWebhookDeliveryService(prisma);
     const eligible = await svc.findEligibleForRetry(5, now);
-    expect(eligible.map(e => e.id)).toEqual(['del-1']);
+    expect(eligible).toEqual([{ id: 'del-1', orgId: 'org-1', attemptCount: 1 }]);
   });
 
   it('attempt 2 waits 4 minutes', async () => {
@@ -130,13 +131,13 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const prisma = prismaWithDelivery();
     const svc = new CustomerWebhookDeliveryService(prisma);
 
-    const r = await svc.retry('del-1');
+    const r = await svc.retry('org-1', 'del-1');
 
     expect(r.status).toBe('delivered');
     expect(r.statusCode).toBe(200);
     expect(prisma.customerWebhookDelivery.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'del-1' },
+        where: { id: 'del-1', webhook: { orgId: 'org-1' } },
         data: expect.objectContaining({
           status: 'delivered',
           statusCode: 200,
@@ -151,7 +152,7 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const prisma = prismaWithDelivery();
     const svc = new CustomerWebhookDeliveryService(prisma);
 
-    const r = await svc.retry('del-1');
+    const r = await svc.retry('org-1', 'del-1');
 
     expect(r.status).toBe('failed');
     expect(r.statusCode).toBe(500);
@@ -167,7 +168,7 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const prisma = prismaWithDelivery({ delivery: { attemptCount: 3 } });
     const svc = new CustomerWebhookDeliveryService(prisma);
 
-    await svc.retry('del-1');
+    await svc.retry('org-1', 'del-1');
 
     const call = mockFetch.mock.calls[0][1] as any;
     expect(call.headers['X-OpenTms-Retry']).toBe('3');
@@ -179,7 +180,7 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const mockFetch = jest.spyOn(global, 'fetch' as any);
     const svc = new CustomerWebhookDeliveryService(prisma);
 
-    const r = await svc.retry('del-1');
+    const r = await svc.retry('org-1', 'del-1');
     expect(r.status).toBe('delivered');
     expect(r.statusCode).toBe(200);
     expect(mockFetch).not.toHaveBeenCalled();
@@ -190,7 +191,17 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const prisma = makePrisma();
     prisma.customerWebhookDelivery.findUnique.mockResolvedValue(null);
     const svc = new CustomerWebhookDeliveryService(prisma);
-    await expect(svc.retry('missing')).rejects.toThrow(/not found/);
+    await expect(svc.retry('org-1', 'missing')).rejects.toThrow(/not found/);
+  });
+
+  it('looks the delivery up inside the caller org, so another tenant\'s delivery reads as missing', async () => {
+    const prisma = makePrisma();
+    prisma.customerWebhookDelivery.findUnique.mockResolvedValue(null);
+    const svc = new CustomerWebhookDeliveryService(prisma);
+    await expect(svc.retry('org-2', 'del-1')).rejects.toThrow(/not found/);
+    expect(prisma.customerWebhookDelivery.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'del-1', webhook: { orgId: 'org-2' } } }),
+    );
   });
 
   it('records fetch errors as failed with errorMessage', async () => {
@@ -198,7 +209,7 @@ describe('CustomerWebhookDeliveryService.retry', () => {
     const prisma = prismaWithDelivery();
     const svc = new CustomerWebhookDeliveryService(prisma);
 
-    const r = await svc.retry('del-1');
+    const r = await svc.retry('org-1', 'del-1');
 
     expect(r.status).toBe('failed');
     expect(prisma.customerWebhookDelivery.update).toHaveBeenCalledWith(

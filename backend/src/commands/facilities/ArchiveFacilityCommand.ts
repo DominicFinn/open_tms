@@ -36,13 +36,13 @@ export class ArchiveFacilityCommandHandler extends BaseCommandHandler<
 
     // BUSINESS RULE: a facility with live storage topology under it cannot be archived. Bins hold
     // stock; archiving the root would strand it with no operator-visible home.
-    const zoneCount = await tx.warehouseZone.count({ where: { facilityId, active: true } });
+    const zoneCount = await tx.warehouseZone.count({ where: { facilityId, active: true, orgId: command.orgId } });
     if (zoneCount > 0) {
       throw new Error('Cannot archive a facility with active zones');
     }
 
     await tx.facility.update({
-      where: { id: facilityId },
+      where: { id: facilityId, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date(), active: false },
     });
 

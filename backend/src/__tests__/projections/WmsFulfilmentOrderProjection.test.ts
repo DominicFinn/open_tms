@@ -82,7 +82,7 @@ describe('WmsFulfilmentOrderProjection', () => {
 
     await projection.handle(createTestEvent(EVENT_TYPES.ORDER_UPDATED, 'order', 'order-1', {}));
 
-    expect(prisma.wmsFulfilmentOrderLine.deleteMany).toHaveBeenCalledWith({ where: { fulfilmentOrderId: 'demand-1' } });
+    expect(prisma.wmsFulfilmentOrderLine.deleteMany).toHaveBeenCalledWith({ where: { fulfilmentOrderId: 'demand-1', orgId: 'test-org' } });
     expect(prisma.$transaction).toHaveBeenCalled();
   });
 

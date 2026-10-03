@@ -123,7 +123,7 @@ describe('WarehouseService', () => {
       await service.generateMagicLink('user-1', 'org-1');
 
       expect(prisma.magicLink.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', active: true },
+        where: { userId: 'user-1', user: { organizationId: 'org-1' }, active: true },
         data: { active: false },
       });
     });
@@ -234,7 +234,7 @@ describe('WarehouseService', () => {
 
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'user-1' },
+          where: { id: 'user-1', organizationId: 'org-1' },
           data: expect.objectContaining({ failedLoginAttempts: 0 }),
         })
       );
@@ -313,7 +313,7 @@ describe('WarehouseService', () => {
 
       expect(result.success).toBe(false);
       expect(prisma.magicLink.update).toHaveBeenCalledWith({
-        where: { id: 'ml-1' },
+        where: { id: 'ml-1', user: { organizationId: 'org-1' } },
         data: { active: false },
       });
       expect(prisma.loginAuditLog.create).toHaveBeenCalledWith({
@@ -525,7 +525,7 @@ describe('WarehouseService', () => {
       expect(result.success).toBe(true);
       expect(prisma.shipmentFlag.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'flag-1' },
+          where: { id: 'flag-1', shipment: { orgId: 'org-1' } },
           data: expect.objectContaining({ resolved: true, resolvedBy: 'admin-1' }),
         })
       );
@@ -548,7 +548,7 @@ describe('WarehouseService', () => {
       expect(result.success).toBe(true);
       expect(prisma.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: { id: 'ship-1', orgId: 'org-1' },
           data: expect.objectContaining({
             launchedAt: expect.any(Date),
             launchedBy: 'user-1',
@@ -659,7 +659,7 @@ describe('WarehouseService', () => {
 
       expect(result.success).toBe(true);
       expect(prisma.deviceAssignment.updateMany).toHaveBeenCalledWith({
-        where: { deviceId: 'dev-1', active: true },
+        where: { deviceId: 'dev-1', device: { orgId: 'org-1' }, active: true },
         data: expect.objectContaining({ active: false }),
       });
       expect(prisma.deviceAssignment.create).toHaveBeenCalledWith({
@@ -799,6 +799,11 @@ describe('WarehouseService', () => {
       expect(result.success).toBe(false);
       if (!result.success) expect(result.error).toBe('User not found or inactive');
       expect(prisma.magicLink.create).not.toHaveBeenCalled();
+    });
+
+    it('generateMagicLink looks the user up inside the caller org', async () => {
+      await service.generateMagicLink('user-1', 'org-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1', organizationId: 'org-1' } });
     });
 
     it('flagShipment scopes the shipment lookup to the org', async () => {

@@ -49,6 +49,20 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
     });
     if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
 
+    const order = await tx.order.findFirst({
+      where: { id: p.orderId, orgId: command.orgId },
+      select: { id: true },
+    });
+    if (!order) throw new Error(`Order ${p.orderId} not found`);
+
+    if (p.shipmentId) {
+      const shipment = await tx.shipment.findFirst({
+        where: { id: p.shipmentId, orgId: command.orgId },
+        select: { id: true },
+      });
+      if (!shipment) throw new Error(`Shipment ${p.shipmentId} not found`);
+    }
+
     // Phase 2a (#248): the caller names the facility. locationId is still written from the
     // facility's source location until 6c drops the column, and is null in a warehouse-only
     // install.
@@ -70,7 +84,7 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
 
     // Move the trackable unit to the staging bin
     await tx.trackableUnit.update({
-      where: { id: p.trackableUnitId },
+      where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
       data: {
         currentBinId: p.stagingBinId,
         currentZoneId: bin.zoneId,

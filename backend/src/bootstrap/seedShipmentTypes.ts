@@ -61,7 +61,7 @@ export async function seedBuiltInShipmentTypesForOrg(prisma: PrismaClient, orgId
     if (existing) {
       if (existing.isBuiltIn) {
         await prisma.shipmentType.update({
-          where: { id: existing.id },
+          where: { id: existing.id, orgId },
           data: { icon: t.icon, color: t.color, description: t.description, defaults: t.defaults as any },
         });
       }

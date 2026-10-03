@@ -35,7 +35,7 @@ export class AssignDeviceCommandHandler extends BaseCommandHandler<AssignDeviceP
     if (!device) throw new Error(DEVICE_NOT_FOUND);
     if (!(await targetsBelongToOrg(tx, orgId, p))) throw new Error(ASSIGNMENT_TARGET_NOT_FOUND);
 
-    const released = await releaseActiveAssignments(tx, p.deviceId);
+    const released = await releaseActiveAssignments(tx, orgId, p.deviceId);
     for (const assignmentId of released) {
       emit(this.createEvent(command, {
         type: EVENT_TYPES.DEVICE_UNASSIGNED,

@@ -63,7 +63,7 @@ export function createCarrierTrackingPollWorker(
 
       const pollOne = async (integration: typeof due[number]): Promise<void> => {
         try {
-          const result = await trackingService.pollForUpdates(integration.id);
+          const result = await trackingService.pollForUpdates(integration.carrier.orgId, integration.id);
           polled++;
           totalEvents += result.eventsCreated;
           if (result.eventsCreated > 0) {

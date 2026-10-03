@@ -544,7 +544,7 @@ model Order {
   // Multi-tenancy: every Order is scoped to a single Organization.
   // Tightened to NOT NULL in Phase 2 of the multi-tenancy plan.
   orgId        String
-  orderNumber  String  @unique // Customer's order number or our generated number
+  orderNumber  String  // Customer's order number or our generated number
   poNumber     String? // Purchase order number
   status       String  @default("pending") // pending, verified, assigned, issue, cancelled, archived
   importSource String  @default("manual") // manual, csv, edi
@@ -640,7 +640,7 @@ model Order {
   @@index([destinationId])
   @@index([status, archived])
   @@index([customerId, archived])
-  @@index([orgId])
+  @@unique([orgId, orderNumber])
   @@index([orgId, status])
 }
 
@@ -930,7 +930,7 @@ model OrderReadModel {
   id                    String       @id // Same as Order.id
   organization          Organization @relation(fields: [orgId], references: [id])
   orgId                 String
-  orderNumber           String       @unique
+  orderNumber           String       
   poNumber              String?
   status                String // pending, verified, assigned, issue, cancelled, archived
   deliveryStatus        String? // in_transit, delivered, exception (null = not moving yet)
@@ -960,7 +960,7 @@ model OrderReadModel {
   createdAt             DateTime
   updatedAt             DateTime
 
-  @@index([orgId])
+  @@unique([orgId, orderNumber])
   @@index([status])
   @@index([deliveryStatus])
   @@index([customerId])
@@ -972,7 +972,7 @@ model ShipmentReadModel {
   id               String       @id // Same as Shipment.id
   organization     Organization @relation(fields: [orgId], references: [id])
   orgId            String
-  reference        String       @unique
+  reference        String       
   status           String // Canonical lifecycle: draft, ready, in_progress, complete
   hasException     Boolean      @default(false) // Orthogonal exception flag (drives Issues filter)
   customer         Customer     @relation(fields: [customerId], references: [id])
@@ -1010,7 +1010,7 @@ model ShipmentReadModel {
   createdAt DateTime
   updatedAt DateTime
 
-  @@index([orgId])
+  @@unique([orgId, reference])
   @@index([status])
   @@index([customerId])
   @@index([carrierId])
@@ -2243,7 +2243,7 @@ model SkillChain {
 model Quote {
   id            String  @id @default(uuid())
   orgId         String
-  quoteNumber   String  @unique // QTE-0001
+  quoteNumber   String  // QTE-0001
   version       Int     @default(1) // For revisions
   parentQuoteId String? // Links revisions
   parentQuote   Quote?  @relation("QuoteRevisions", fields: [parentQuoteId], references: [id])
@@ -2281,7 +2281,7 @@ model Quote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([orgId])
+  @@unique([orgId, quoteNumber])
   @@index([customerId])
   @@index([status])
 }

@@ -74,7 +74,7 @@ export async function edi820Routes(server: FastifyInstance) {
     const parsed = edi820ParseService.parseEDI820(body.content);
 
     if (!parsed.success) {
-      await tradingPartnerRepo.updateLog(logEntry.id, {
+      await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
         status: 'error',
         errorMessage: parsed.errors.join('; '),
         processedAt: new Date(),
@@ -177,7 +177,7 @@ export async function edi820Routes(server: FastifyInstance) {
 
     // Update log with results
     const appliedIds = results.filter(r => r.status === 'applied').map(r => r.invoiceId).filter(Boolean);
-    await tradingPartnerRepo.updateLog(logEntry.id, {
+    await tradingPartnerRepo.updateLog(logEntry.id, req.orgId!, {
       status: appliedCount > 0 ? 'success' : 'error',
       errorMessage: appliedCount === 0 ? 'No payments could be applied' : null,
       entitiesCreated: appliedCount,

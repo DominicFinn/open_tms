@@ -80,10 +80,10 @@ describe('QualityIssueSummaryProjection', () => {
 
     // Should look up the issue and shipment
     expect(mockPrisma.issue.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'issue-1' } })
+      expect.objectContaining({ where: { id: 'issue-1', orgId: 'org-1' } })
     );
     expect(mockPrisma.shipment.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'ship-1' } })
+      expect.objectContaining({ where: { id: 'ship-1', orgId: 'org-1' } })
     );
 
     // Should upsert summaries for carrier, lane, locations, customer

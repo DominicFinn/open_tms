@@ -59,10 +59,10 @@ describe('AgentDecisionProjection', () => {
         )
       );
 
-      expect(findUniqueMock).toHaveBeenCalledWith({ where: { id: 'decision-1' } });
+      expect(findUniqueMock).toHaveBeenCalledWith({ where: { id: 'decision-1', orgId: 'test-org' } });
       expect(upsertMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'decision-1' },
+          where: { id: 'decision-1', orgId: 'test-org' },
           create: expect.objectContaining({
             id: 'decision-1',
             orgId: 'org-1',
@@ -125,7 +125,7 @@ describe('AgentDecisionProjection', () => {
 
       expect(updateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'decision-1' },
+          where: { id: 'decision-1', orgId: 'test-org' },
           data: expect.objectContaining({
             outcomeStatus: 'correct',
           }),
@@ -147,7 +147,7 @@ describe('AgentDecisionProjection', () => {
 
       expect(updateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'decision-1' },
+          where: { id: 'decision-1', orgId: 'test-org' },
           data: expect.objectContaining({
             promotedToAutomation: true,
           }),

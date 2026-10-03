@@ -40,13 +40,13 @@ export class CreateLineItemCommandHandler extends BaseCommandHandler<CreateLineI
 
     // Verify the order exists (cheap guard so we don't write orphans).
     const order = await tx.order.findUniqueOrThrow({
-      where: { id: orderId },
+      where: { id: orderId, orgId: command.orgId },
       select: { id: true, orderNumber: true },
     });
 
     if (trackableUnitId) {
       const unit = await tx.trackableUnit.findUniqueOrThrow({
-        where: { id: trackableUnitId },
+        where: { id: trackableUnitId, order: { orgId: command.orgId } },
         select: { orderId: true },
       });
       if (unit.orderId !== orderId) {

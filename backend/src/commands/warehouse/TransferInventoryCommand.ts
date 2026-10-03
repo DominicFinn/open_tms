@@ -51,7 +51,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
     // Validate constraints: temperature compatibility
     if (source.sku) {
       // Check if the source has temp-sensitive items by looking at the bin's zone
-      const sourceZone = await tx.warehouseZone.findFirst({ where: { bins: { some: { id: source.binId } } } });
+      const sourceZone = await tx.warehouseZone.findFirst({ where: { orgId: command.orgId, bins: { some: { id: source.binId } } } });
       if (sourceZone?.temperatureZone && sourceZone.temperatureZone !== 'ambient') {
         const targetTemp = targetBin.temperatureZone || targetBin.zone?.temperatureZone;
         if (targetTemp && targetTemp !== sourceZone.temperatureZone) {
@@ -64,7 +64,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
     const sourcePrevQty = source.quantityOnHand;
     const sourceNewQty = sourcePrevQty - p.quantity;
     await tx.inventoryRecord.update({
-      where: { id: source.id },
+      where: { id: source.id, orgId: command.orgId },
       data: {
         quantityOnHand: sourceNewQty,
         quantityAvailable: sourceNewQty - source.quantityAllocated - source.quantityOnHold,
@@ -88,6 +88,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
     // Add to target - find or create inventory record at target bin
     let target = await tx.inventoryRecord.findFirst({
       where: {
+        orgId: command.orgId,
         binId: p.targetBinId,
         sku: source.sku,
         uomCode: source.uomCode,
@@ -100,7 +101,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
     if (target) {
       const targetPrevQty = target.quantityOnHand;
       await tx.inventoryRecord.update({
-        where: { id: target.id },
+        where: { id: target.id, orgId: command.orgId },
         data: {
           quantityOnHand: { increment: p.quantity },
           quantityAvailable: { increment: p.quantity },
@@ -157,7 +158,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
 
     // Clean up source if empty
     if (sourceNewQty === 0 && source.quantityAllocated === 0 && source.quantityOnHold === 0) {
-      await tx.inventoryRecord.delete({ where: { id: source.id } });
+      await tx.inventoryRecord.delete({ where: { id: source.id, orgId: command.orgId } });
     }
 
     emit(this.createEvent(command, {

@@ -54,11 +54,11 @@ export async function edi180Routes(server: FastifyInstance) {
     // Look up customer - prefer partner link, fall back to name/id match
     let customerId: string | null = null;
     if (body.partnerId) {
-      const partner = await prisma.tradingPartner.findUnique({ where: { id: body.partnerId }, select: { customerId: true } });
+      const partner = await prisma.tradingPartner.findUnique({ where: { id: body.partnerId, orgId }, select: { customerId: true } });
       customerId = partner?.customerId ?? null;
     }
     if (!customerId && parsed.customerId) {
-      const cust = await prisma.customer.findFirst({ where: { OR: [{ id: parsed.customerId }, { name: parsed.customerName }] }, select: { id: true } });
+      const cust = await prisma.customer.findFirst({ where: { orgId, OR: [{ id: parsed.customerId }, { name: parsed.customerName }] }, select: { id: true } });
       customerId = cust?.id ?? null;
     }
 
@@ -71,6 +71,7 @@ export async function edi180Routes(server: FastifyInstance) {
     const order = await prisma.order.findFirst({
       where: {
         customerId,
+        orgId,
         OR: [
           { id: parsed.originalOrderNumber },
           { orderNumber: parsed.originalOrderNumber },
@@ -155,8 +156,9 @@ export async function edi180Routes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     // Load the RMA with lines, customer, and origin location (for ship-to address)
+    const orgId = req.orgId!;
     const rma = await prisma.rma.findUnique({
-      where: { id: body.rmaId },
+      where: { id: body.rmaId, orgId },
       include: {
         lines: true,
       },
@@ -172,7 +174,7 @@ export async function edi180Routes(server: FastifyInstance) {
     }
 
     // Look up customer for sender info
-    const customer = await prisma.customer.findUnique({ where: { id: rma.customerId }, select: { id: true, name: true } });
+    const customer = await prisma.customer.findUnique({ where: { id: rma.customerId, orgId }, select: { id: true, name: true } });
     if (!customer) {
       reply.code(400);
       return { data: null, error: 'Customer not found' };
@@ -181,11 +183,11 @@ export async function edi180Routes(server: FastifyInstance) {
     // Look up the org / return receiving address. req.orgId is populated
     // by the EDI hook chain — scope to the requesting tenant rather than
     // just picking the first Organization.
-    const org = await prisma.organization.findUnique({ where: { id: req.orgId! } });
+    const org = await prisma.organization.findUnique({ where: { id: orgId } });
 
     // Look up original order to find warehouse ship-from (as return ship-to)
     const order = await prisma.order.findUnique({
-      where: { id: rma.orderId },
+      where: { id: rma.orderId, orgId },
       include: { origin: true },
     });
 

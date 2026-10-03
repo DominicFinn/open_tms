@@ -4,16 +4,24 @@ import { z } from 'zod';
 import { IAuthService } from '../services/AuthService.js';
 import { authenticateJWT, requirePermission } from '../middleware/jwtAuth.js';
 import { container, TOKENS } from '../di/index.js';
+import { attachOrgScopeHook, requireOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function internalUserRoutes(server: FastifyInstance) {
   const authService = container.resolve<IAuthService>(TOKENS.IAuthService);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  // This plugin sits outside the JWT scope, so it resolves the tenant itself, after the token is verified.
+  const authed = [authenticateJWT, attachOrgScopeHook(prisma), requireOrgScope];
+
+  // A user in another org is treated exactly like a missing one.
+  const userInOrg = (id: string, organizationId: string) =>
+    prisma.user.findFirst({ where: { id, organizationId }, select: { id: true } });
 
   server.get('/api/v1/users', {
     schema: { tags: ['Users'], summary: 'List internal users' },
-    preHandler: [authenticateJWT, requirePermission('users:read', 'users:write', 'users:*')],
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
+    preHandler: [...authed, requirePermission('users:read', 'users:write', 'users:*')],
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const users = await prisma.user.findMany({
+      where: { organizationId: req.orgId! },
       take: 200,
       orderBy: { createdAt: 'desc' },
       include: { roles: { include: { role: true } } },
@@ -46,7 +54,7 @@ export async function internalUserRoutes(server: FastifyInstance) {
         properties: { newPassword: { type: 'string', minLength: 8 } },
       },
     },
-    preHandler: [authenticateJWT, requirePermission('users:write', 'users:*')],
+    preHandler: [...authed, requirePermission('users:write', 'users:*')],
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = (req.params as { id: string });
     const parsed = z.object({ newPassword: z.string().min(8) }).safeParse((req as any).body);
@@ -56,8 +64,13 @@ export async function internalUserRoutes(server: FastifyInstance) {
       return { data: null, error: 'newPassword must be at least 8 characters' };
     }
 
+    if (!(await userInOrg(id, req.orgId!))) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+
     try {
-      await authService.adminResetPassword(id, parsed.data.newPassword);
+      await authService.adminResetPassword(req.orgId!, id, parsed.data.newPassword);
       return { data: { success: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -79,7 +92,7 @@ export async function internalUserRoutes(server: FastifyInstance) {
         },
       },
     },
-    preHandler: [authenticateJWT, requirePermission('users:write', 'users:*')],
+    preHandler: [...authed, requirePermission('users:write', 'users:*')],
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = (req.params as { id: string });
     const parsed = z.object({
@@ -93,9 +106,14 @@ export async function internalUserRoutes(server: FastifyInstance) {
       return { data: null, error: 'Invalid request' };
     }
 
+    if (!(await userInOrg(id, req.orgId!))) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+
     try {
       const user = await prisma.user.update({
-        where: { id },
+        where: { id, organizationId: req.orgId! },
         data: parsed.data,
       });
       return { data: { id: user.id, active: user.active }, error: null };

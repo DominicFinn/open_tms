@@ -239,7 +239,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     const quickPayDueDate = new Date();
     quickPayDueDate.setDate(quickPayDueDate.getDate() + body.daysToPayment);
 
-    const updated = await carrierInvoiceRepo.update(id, {
+    const updated = await carrierInvoiceRepo.update(id, req.orgId!, {
       quickPayRequested: true,
       quickPayDiscountPct: new Prisma.Decimal(body.discountPercent),
       quickPayDiscountCents: discountCents,

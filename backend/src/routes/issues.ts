@@ -58,7 +58,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const result = await issueRepo.findByOrg({
       orgId,
       status: query.status,
@@ -80,7 +80,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get('/api/v1/issues/stats', {
     schema: { tags: ['Issues'], summary: 'Issue dashboard statistics' },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const stats = await issueRepo.getStats(orgId);
     return { data: stats, error: null };
   });
@@ -94,17 +94,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
     }
-    // Fetch SLA evaluations
-    const slaEvals = await prisma.slaEvaluation.findMany({
-      where: { entityType: 'issue', entityId: req.params.id },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
-    });
-    // Fetch comment count
-    const commentCount = await prisma.comment.count({
-      where: { entityType: 'issue', entityId: req.params.id },
-    });
-    return { data: { ...issue, slaEvaluations: slaEvals, commentCount }, error: null };
+    return { data: issue, error: null };
   });
 
   // POST /api/v1/issues — create issue
@@ -129,7 +119,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: CREATE_ISSUE,
@@ -164,7 +154,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -198,7 +188,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { status: string; resolution?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const data: any = { status: body.status };
     if (body.resolution) data.resolution = body.resolution;
@@ -232,7 +222,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { assigneeId: string; assigneeName: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -264,7 +254,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { escalatedTo: string; reason?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: ESCALATE_ISSUE,
@@ -296,7 +286,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { until: string; reason?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -323,7 +313,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.post<{ Params: { id: string } }>('/api/v1/issues/:id/unsnooze', {
     schema: { tags: ['Issues'], summary: 'Unsnooze an issue' },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -355,7 +345,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { needsCapa: boolean };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -383,7 +373,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = (req.body as any) || {};
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -406,7 +396,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.post<{ Params: { id: string } }>('/api/v1/issues/:id/reopen', {
     schema: { tags: ['Issues'], summary: 'Reopen a resolved or closed issue' },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
     const result = await commandBus.dispatch({
       type: UPDATE_ISSUE,
@@ -440,7 +430,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { labelId: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -467,7 +457,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.delete<{ Params: { id: string; labelId: string } }>('/api/v1/issues/:id/labels/:labelId', {
     schema: { tags: ['Issues'], summary: 'Remove a label from an issue' },
   }, async (req, reply) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -491,41 +481,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string } }>('/api/v1/issues/:id/activity', {
     schema: { tags: ['Issues'], summary: 'Get issue activity timeline (events + comments)' },
   }, async (req) => {
-    const issueId = req.params.id;
-    // Fetch domain events for this issue
-    const events = await prisma.domainEventLog.findMany({
-      where: { entityType: 'issue', entityId: issueId },
-      orderBy: { createdAt: 'asc' },
-      take: 200,
-    });
-    // Fetch comments
-    const comments = await prisma.comment.findMany({
-      where: { entityType: 'issue', entityId: issueId },
-      orderBy: { createdAt: 'asc' },
-      take: 500,
-    });
-    // Merge and sort
-    const activity = [
-      ...events.map(e => ({
-        type: 'event' as const,
-        id: e.id,
-        eventType: e.type,
-        payload: e.payload,
-        actorId: (e.metadata as any)?.actorId || e.actorId || null,
-        timestamp: e.timestamp || e.createdAt.toISOString(),
-      })),
-      ...comments.map(c => ({
-        type: 'comment' as const,
-        id: c.id,
-        authorId: c.authorId,
-        authorName: c.authorName,
-        authorType: c.authorType,
-        body: c.body,
-        visibleToCustomer: c.visibleToCustomer,
-        timestamp: c.createdAt.toISOString(),
-      })),
-    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
+    const activity = await issueRepo.getActivity(req.params.id, req.orgId!);
     return { data: activity, error: null };
   });
 
@@ -566,12 +522,8 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get('/api/v1/issue-labels', {
     schema: { tags: ['Issue Labels'], summary: 'List all issue labels for the org' },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
-    const labels = await prisma.issueLabel.findMany({
-      where: { orgId },
-      orderBy: { name: 'asc' },
-      take: 500,
-    });
+    const orgId = req.orgId!;
+    const labels = await issueRepo.findLabelsByOrg(orgId);
     return { data: labels, error: null };
   });
 
@@ -591,7 +543,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as { name: string; color?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -632,7 +584,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req, reply) => {
     const body = req.body as { name?: string; color?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -659,7 +611,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.delete<{ Params: { id: string } }>('/api/v1/issue-labels/:id', {
     schema: { tags: ['Issue Labels'], summary: 'Delete an issue label' },
   }, async (req, reply) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
@@ -687,12 +639,8 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   server.get('/api/v1/kanban-views', {
     schema: { tags: ['Kanban Views'], summary: 'List saved kanban views for the org' },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
-    const views = await prisma.kanbanView.findMany({
-      where: { orgId },
-      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-      take: 500,
-    });
+    const orgId = req.orgId!;
+    const views = await issueRepo.findKanbanViews(orgId);
     return { data: views, error: null };
   });
 
@@ -716,27 +664,9 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const actorId = (req as any).userId || 'system';
-    // If setting as default, unset other defaults
-    if (body.isDefault) {
-      await prisma.kanbanView.updateMany({
-        where: { orgId, isDefault: true },
-        data: { isDefault: false },
-      });
-    }
-    const view = await prisma.kanbanView.create({
-      data: {
-        orgId,
-        name: body.name,
-        description: body.description,
-        filters: body.filters,
-        groupBy: body.groupBy || 'status',
-        sortBy: body.sortBy || 'createdAt',
-        isDefault: body.isDefault || false,
-        createdBy: actorId,
-      },
-    });
+    const view = await issueRepo.createKanbanView(orgId, actorId, body);
     reply.code(201);
     return { data: view, error: null };
   });
@@ -760,35 +690,23 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req, reply) => {
     const body = req.body as any;
-    const orgId = (req as any).orgId || 'default-org';
-    if (body.isDefault) {
-      await prisma.kanbanView.updateMany({
-        where: { orgId, isDefault: true },
-        data: { isDefault: false },
-      });
-    }
-    try {
-      const view = await prisma.kanbanView.update({
-        where: { id: req.params.id },
-        data: body,
-      });
-      return { data: view, error: null };
-    } catch (err: any) {
+    const view = await issueRepo.updateKanbanView(req.params.id, req.orgId!, body);
+    if (!view) {
       reply.code(404);
       return { data: null, error: 'View not found' };
     }
+    return { data: view, error: null };
   });
 
   // DELETE /api/v1/kanban-views/:id
   server.delete<{ Params: { id: string } }>('/api/v1/kanban-views/:id', {
     schema: { tags: ['Kanban Views'], summary: 'Delete a saved kanban view' },
   }, async (req, reply) => {
-    try {
-      await prisma.kanbanView.delete({ where: { id: req.params.id } });
-      return { data: { success: true }, error: null };
-    } catch (err: any) {
+    const deleted = await issueRepo.deleteKanbanView(req.params.id, req.orgId!);
+    if (!deleted) {
       reply.code(404);
       return { data: null, error: 'View not found' };
     }
+    return { data: { success: true }, error: null };
   });
 };

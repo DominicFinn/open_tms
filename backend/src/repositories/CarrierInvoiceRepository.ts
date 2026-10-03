@@ -48,7 +48,7 @@ export interface ICarrierInvoiceRepository {
   create(data: CreateCarrierInvoiceDTO): Promise<CarrierInvoice>;
   findById(id: string, orgId: string): Promise<CarrierInvoiceWithLineItems | null>;
   findAll(filters: CarrierInvoiceFilters): Promise<CarrierInvoiceWithLineItems[]>;
-  update(id: string, data: Partial<CarrierInvoice>): Promise<CarrierInvoice>;
+  update(id: string, orgId: string, data: Partial<CarrierInvoice>): Promise<CarrierInvoice>;
   addLineItem(data: CreateCarrierInvoiceLineItemDTO): Promise<CarrierInvoiceLineItem>;
   addLineItems(data: CreateCarrierInvoiceLineItemDTO[]): Promise<number>;
 }
@@ -99,8 +99,8 @@ export class CarrierInvoiceRepository implements ICarrierInvoiceRepository {
     }) as Promise<CarrierInvoiceWithLineItems[]>;
   }
 
-  async update(id: string, data: Partial<CarrierInvoice>): Promise<CarrierInvoice> {
-    return this.prisma.carrierInvoice.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<CarrierInvoice>): Promise<CarrierInvoice> {
+    return this.prisma.carrierInvoice.update({ where: { id, orgId }, data });
   }
 
   async addLineItem(data: CreateCarrierInvoiceLineItemDTO): Promise<CarrierInvoiceLineItem> {

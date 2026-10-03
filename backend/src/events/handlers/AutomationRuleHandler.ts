@@ -67,7 +67,7 @@ export class AutomationRuleHandler {
         await this.logExecution(event, rule, true, evaluationMs, actionResult);
 
         await this.prisma.automationRule.update({
-          where: { id: rule.id },
+          where: { id: rule.id, orgId: event.orgId },
           data: { executionCount: { increment: 1 }, lastExecutedAt: new Date() },
         });
 
@@ -115,7 +115,7 @@ export class AutomationRuleHandler {
 
       // If using a named chain, load it
       if (rule.skillChainId && steps.length === 0) {
-        const chain = await this.prisma.skillChain.findUnique({ where: { id: rule.skillChainId } });
+        const chain = await this.prisma.skillChain.findUnique({ where: { id: rule.skillChainId, orgId: event.orgId } });
         if (chain) {
           const chainResult = await this.chainExecutor.execute(
             chain.steps as SkillChainStep[],

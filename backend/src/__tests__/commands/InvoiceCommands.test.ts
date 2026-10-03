@@ -181,7 +181,7 @@ describe('Invoice Command Handlers', () => {
         data: { status: 'invoiced' },
       });
       expect(mockTx.shipmentFinancialSummary.updateMany).toHaveBeenCalledWith({
-        where: { shipmentId: { in: ['ship-1'] } },
+        where: { shipmentId: { in: ['ship-1'] }, orgId: 'test-org' },
         data: { billingStatus: 'invoiced' },
       });
     });
@@ -342,7 +342,7 @@ describe('Invoice Command Handlers', () => {
       });
       // Shipment billing reverted
       expect(mockTx.shipmentFinancialSummary.updateMany).toHaveBeenCalledWith({
-        where: { shipmentId: { in: ['ship-1'] } },
+        where: { shipmentId: { in: ['ship-1'] }, orgId: 'test-org' },
         data: { billingStatus: 'ready_to_invoice' },
       });
     });

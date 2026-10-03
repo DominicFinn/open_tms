@@ -406,7 +406,7 @@ export class TriageRepository implements ITriageRepository {
 
     const [signals, siblings] = await Promise.all([
       this.prisma.issueSignal.findMany({
-        where: { issueId: issue.id }, orderBy: { occurredAt: 'desc' }, take: 100,
+        where: { issueId: issue.id, orgId }, orderBy: { occurredAt: 'desc' }, take: 100,
       }),
       issue.sourceEntityId
         ? this.prisma.issueReadModel.findMany({

@@ -128,7 +128,10 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
       const kindLabel = await (async () => {
         const id = orderData.packingSummary!.packagingTypeId;
         if (!id) return 'pallet';
-        const pt = await tx.packagingType.findUnique({ where: { id }, select: { kind: true } });
+        const pt = await tx.packagingType.findUnique({
+          where: { id, orgId: command.orgId },
+          select: { kind: true },
+        });
         return pt?.kind ?? 'pallet';
       })();
       trackableUnitsCreate = trackableUnitsFromPackingSummary(orderData.packingSummary, kindLabel);

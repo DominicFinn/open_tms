@@ -54,7 +54,7 @@ Created: <date>
 
 ## Documentation
 - [ ] DOMAIN_BEHAVIOURS.md updated
-- [ ] roadmap.md updated
+- [ ] docs/roadmap/completed.md and backlog.md updated
 - [ ] README.md updated (if user-facing)
 - [ ] www/ updated (if user-facing)
 ```

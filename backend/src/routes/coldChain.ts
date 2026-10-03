@@ -13,6 +13,16 @@ import { UPDATE_CAPA } from '../commands/capa/UpdateCAPACommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { DocumentSourceNotFoundError } from '../services/DocumentGenerationService.js';
 
+/** A cross-tenant excursion id is indistinguishable from a missing one. */
+function excursionFailure(reply: FastifyReply, error: string | undefined) {
+  if (error?.includes('not found')) {
+    reply.code(404);
+    return { data: null, error: 'Excursion not found' };
+  }
+  reply.code(400);
+  return { data: null, error };
+}
+
 export async function coldChainRoutes(server: FastifyInstance) {
   // Tenant comes from the caller's token via registerOrgScope, not from whichever
   // Organization row comes back first (#117).
@@ -123,7 +133,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
     try {
-      const summary = await coldChainService.getTemperatureSummary(shipmentId);
+      const summary = await coldChainService.getTemperatureSummary(req.orgId!, shipmentId);
       return { data: summary, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -158,7 +168,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    const excursions = await coldChainRepo.listExcursions(shipmentId);
+    const excursions = await coldChainRepo.listExcursions(shipmentId, req.orgId!);
     return { data: excursions, error: null };
   });
 
@@ -194,7 +204,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const excursion = await coldChainRepo.getExcursion(id);
+    const excursion = await coldChainRepo.getExcursion(id, req.orgId!);
     if (!excursion) {
       reply.code(404);
       return { data: null, error: 'Excursion not found' };
@@ -251,8 +261,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     });
 
     if (!result.success) {
-      reply.code(400);
-      return { data: null, error: result.error };
+      return excursionFailure(reply, result.error);
     }
 
     return { data: result.data, error: null };
@@ -309,8 +318,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     });
 
     if (!result.success) {
-      reply.code(400);
-      return { data: null, error: result.error };
+      return excursionFailure(reply, result.error);
     }
 
     return { data: result.data, error: null };
@@ -403,7 +411,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { deviceId } = req.params as { deviceId: string };
-    const calibrations = await coldChainRepo.listCalibrations(deviceId);
+    const calibrations = await coldChainRepo.listCalibrations(deviceId, req.orgId!);
     return { data: calibrations, error: null };
   });
 
@@ -432,7 +440,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { deviceId } = req.params as { deviceId: string };
-    const calibration = await coldChainRepo.getLatestCalibration(deviceId);
+    const calibration = await coldChainRepo.getLatestCalibration(deviceId, req.orgId!);
     return { data: calibration, error: null };
   });
 
@@ -579,7 +587,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const report = await coldChainRepo.getCAPAReport(id);
+    const report = await coldChainRepo.getCAPAReport(id, req.orgId!);
     if (!report) {
       reply.code(404);
       return { data: null, error: 'CAPA report not found' };
@@ -728,7 +736,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const updated = await coldChainRepo.getCAPAReport(id);
+    const updated = await coldChainRepo.getCAPAReport(id, req.orgId!);
     return { data: updated, error: null };
   });
 

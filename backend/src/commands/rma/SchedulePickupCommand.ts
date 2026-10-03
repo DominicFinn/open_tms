@@ -40,7 +40,7 @@ export class SchedulePickupCommandHandler extends BaseCommandHandler<
     emit: EmitFn,
   ) {
     const p = command.payload;
-    const rma = await tx.rma.findUnique({ where: { id: p.rmaId } });
+    const rma = await tx.rma.findUnique({ where: { id: p.rmaId, orgId: command.orgId } });
     if (!rma) throw new Error(`RMA ${p.rmaId} not found`);
     if (!rma.returnTrackingNumber) {
       throw new Error('Cannot schedule pickup without a return tracking number - generate the label first');
@@ -54,7 +54,9 @@ export class SchedulePickupCommandHandler extends BaseCommandHandler<
 
     let carrierAccountNumber: string | undefined;
     if (rma.returnCarrierId) {
-      const carrier = await tx.carrier.findUnique({ where: { id: rma.returnCarrierId } });
+      const carrier = await tx.carrier.findUnique({
+        where: { id: rma.returnCarrierId, orgId: command.orgId },
+      });
       carrierAccountNumber = carrier?.returnLabelAccountNumber ?? undefined;
     }
 
@@ -72,7 +74,7 @@ export class SchedulePickupCommandHandler extends BaseCommandHandler<
     });
 
     await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: {
         returnPickupScheduledAt: result.scheduledFor,
         returnPickupWindow: result.window ?? p.pickupWindow ?? null,

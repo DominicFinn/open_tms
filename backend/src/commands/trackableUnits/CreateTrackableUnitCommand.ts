@@ -52,7 +52,7 @@ export class CreateTrackableUnitCommandHandler extends BaseCommandHandler<Create
 
     // Next sequence number for this order
     const last = await tx.trackableUnit.findFirst({
-      where: { orderId: p.orderId },
+      where: { orderId: p.orderId, order: { orgId: command.orgId } },
       orderBy: { sequenceNumber: 'desc' },
       select: { sequenceNumber: true },
     });

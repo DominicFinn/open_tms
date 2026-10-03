@@ -88,7 +88,7 @@ export class AuditHandler implements IEventHandler {
       // display even when it isn't a resolvable User.
       try {
         const user = await this.prisma.user.findUnique({
-          where: { id: event.actorId },
+          where: { id: event.actorId, organizationId: event.orgId },
           select: { firstName: true, lastName: true, email: true },
         });
         if (user) {

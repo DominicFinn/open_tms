@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Organization, PrismaClient } from '@prisma/client';
 
 export interface UpdateOrganizationSettingsDTO {
   name?: string;
@@ -23,61 +23,41 @@ export interface UpdateOrganizationSettingsDTO {
 }
 
 export interface IOrganizationRepository {
-  getSettings(): Promise<any>;
-  updateSettings(data: UpdateOrganizationSettingsDTO): Promise<any>;
-  getTrackableUnitLabel(): Promise<string>;
+  getSettings(orgId: string): Promise<Organization | null>;
+  updateSettings(orgId: string, data: UpdateOrganizationSettingsDTO): Promise<Organization | null>;
+  getTrackableUnitLabel(orgId: string): Promise<string | null>;
 }
 
 export class OrganizationRepository implements IOrganizationRepository {
   constructor(private prisma: PrismaClient) {}
 
-  /**
-   * Get the organization settings (there's only one org in the system)
-   * If no org exists, create a default one
-   */
-  async getSettings(): Promise<any> {
-    let org = await this.prisma.organization.findFirst();
-
-    if (!org) {
-      // Create default organization if it doesn't exist
-      org = await this.prisma.organization.create({
-        data: {
-          name: 'Default Organization',
-          trackingMode: 'item',
-          trackableUnitType: 'box',
-          weightUnit: 'kg',
-          dimUnit: 'cm'
-        }
-      });
-    }
-
-    return org;
+  /** Settings for the caller's own organization. Null when the org does not exist. */
+  async getSettings(orgId: string): Promise<Organization | null> {
+    return this.prisma.organization.findUnique({ where: { id: orgId } });
   }
 
-  /**
-   * Update organization settings
-   */
-  async updateSettings(data: UpdateOrganizationSettingsDTO): Promise<any> {
-    const org = await this.getSettings();
+  async updateSettings(orgId: string, data: UpdateOrganizationSettingsDTO): Promise<Organization | null> {
+    const org = await this.getSettings(orgId);
+    if (!org) return null;
 
     return this.prisma.organization.update({
       where: { id: org.id },
-      data
+      data,
     });
   }
 
   /**
-   * Get the human-readable label for the trackable unit type
-   * Returns either the preset type or the custom name
+   * The human-readable label for the trackable unit type: the custom name when the org uses a
+   * custom type, otherwise the preset type capitalised.
    */
-  async getTrackableUnitLabel(): Promise<string> {
-    const org = await this.getSettings();
+  async getTrackableUnitLabel(orgId: string): Promise<string | null> {
+    const org = await this.getSettings(orgId);
+    if (!org) return null;
 
     if (org.trackableUnitType === 'custom' && org.customUnitName) {
       return org.customUnitName;
     }
 
-    // Return the standard type, capitalized
     return org.trackableUnitType.charAt(0).toUpperCase() + org.trackableUnitType.slice(1);
   }
 }

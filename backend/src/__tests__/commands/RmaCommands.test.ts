@@ -126,6 +126,40 @@ describe('CreateRmaCommand', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('does not belong');
   });
+
+  it('treats an order from another org as missing', async () => {
+    const tx = {
+      order: { findUnique: jest.fn().mockResolvedValue(null) },
+      rma: { create: jest.fn() },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new CreateRmaCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(
+        CREATE_RMA,
+        {
+          customerId: 'cust-1',
+          orderId: 'order-1',
+          returnReason: 'damaged',
+          lines: [{ orderLineItemId: 'oli-1', sku: 'SKU-A', requestedQuantity: 1 }],
+        },
+        { orgId: 'other-org' }
+      )
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.order.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'order-1', orgId: 'other-org' } })
+    );
+    expect(tx.rma.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('AuthorizeRmaCommand', () => {
@@ -219,7 +253,10 @@ describe('ReceiveRmaLineCommand', () => {
       },
       rma: { update: jest.fn().mockResolvedValue({}) },
       warehouseBin: { findUnique: jest.fn().mockResolvedValue({ zoneId: 'zone-q' }) },
-      trackableUnit: { update: jest.fn().mockResolvedValue({}) },
+      trackableUnit: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -241,10 +278,53 @@ describe('ReceiveRmaLineCommand', () => {
     expect(result.success).toBe(true);
     expect(result.data?.receivedQuantity).toBe(3);
     expect(result.data?.rmaFullyReceived).toBe(true);
+    expect(tx.rmaLine.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'line-1', rma: { orgId: 'test-org' } } })
+    );
     expect(tx.trackableUnit.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ qualityStatus: 'quarantine' }) })
+      expect.objectContaining({
+        where: { id: 'unit-1', order: { orgId: 'test-org' } },
+        data: expect.objectContaining({ qualityStatus: 'quarantine' }),
+      })
     );
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_GOODS_RECEIVED)).toBe(true);
+  });
+
+  it('refuses a trackable unit that belongs to another org', async () => {
+    const tx = {
+      rmaLine: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'line-1', rma: { id: 'rma-1', status: 'authorized' }, requestedQuantity: 3,
+        }),
+        update: jest.fn(),
+      },
+      trackableUnit: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
+      warehouseBin: { findUnique: jest.fn() },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new ReceiveRmaLineCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(RECEIVE_RMA_LINE, {
+        rmaLineId: 'line-1',
+        receivedQuantity: 3,
+        quarantineBinId: 'bin-q',
+        trackableUnitId: 'foreign-unit',
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'foreign-unit', order: { orgId: 'test-org' } } })
+    );
+    expect(tx.rmaLine.update).not.toHaveBeenCalled();
+    expect(tx.trackableUnit.update).not.toHaveBeenCalled();
   });
 
   it('rejects if received quantity exceeds requested', async () => {

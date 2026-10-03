@@ -59,6 +59,7 @@ export async function edi214Routes(server: FastifyInstance) {
     // 2. Find matching shipment by reference or pro number
     const shipment = await prisma.shipment.findFirst({
       where: {
+        orgId: req.orgId!,
         archived: false,
         OR: [
           { reference: parseResult.shipmentReference },
@@ -136,7 +137,7 @@ export async function edi214Routes(server: FastifyInstance) {
     // 5. Generate 997 acknowledgment if required
     let ack997Sent = false;
     if (partnerId) {
-      const partner = await tradingPartnerRepo.findById(partnerId);
+      const partner = await tradingPartnerRepo.findById(partnerId, req.orgId!);
       if (partner) {
         const txn214 = (partner as any).transactions?.find(
           (t: any) => t.transactionType === '214' && t.direction === 'inbound'
@@ -152,6 +153,7 @@ export async function edi214Routes(server: FastifyInstance) {
             });
 
             await deliveryService.deliver({
+              orgId: req.orgId!,
               partnerId,
               transactionType: '997',
               ediContent: ack997Content,
@@ -206,7 +208,7 @@ export async function edi214Routes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     const shipment = await prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,
@@ -236,6 +238,7 @@ export async function edi214Routes(server: FastifyInstance) {
       // Auto-detect: find customer trading partner with outbound 214
       const partners = await prisma.tradingPartner.findMany({
         where: {
+          orgId: req.orgId!,
           active: true,
           outboundEnabled: true,
           customerId: shipment.customerId,
@@ -248,7 +251,7 @@ export async function edi214Routes(server: FastifyInstance) {
       }
     }
 
-    const partner = targetPartnerId ? await tradingPartnerRepo.findById(targetPartnerId) : null;
+    const partner = targetPartnerId ? await tradingPartnerRepo.findById(targetPartnerId, req.orgId!) : null;
 
     const ediContent = edi214Service.generateEDI214(ediData, {
       senderId: partner?.senderId || 'OPENTMS',
@@ -261,6 +264,7 @@ export async function edi214Routes(server: FastifyInstance) {
     if (targetPartnerId) {
       try {
         const deliveryResult = await deliveryService.deliver({
+          orgId: req.orgId!,
           partnerId: targetPartnerId,
           transactionType: '214',
           ediContent,
@@ -308,7 +312,7 @@ export async function edi214Routes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     const shipment = await prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,

@@ -199,6 +199,40 @@ describe('SOP Checklist Command Handlers', () => {
       expect(result.events[0].type).toBe(EVENT_TYPES.SOP_AUDIT_FAILED);
     });
 
+    it('refuses a response to an item from another checklist and writes nothing', async () => {
+      const mockTx = {
+        sOPAudit: {
+          findFirst: jest.fn().mockResolvedValue(mockAudit),
+          update: jest.fn(),
+        },
+        sOPAuditResponse: { create: jest.fn() },
+        sOPChecklist: { update: jest.fn() },
+        domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+      const mockPrisma = {
+        $transaction: jest.fn((fn: Function) => fn(mockTx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+
+      const { bus } = mockEventBus();
+      const handler = new CompleteSOPAuditCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(COMPLETE_SOP_AUDIT, {
+          auditId: 'audit-1',
+          responses: [
+            { checklistItemId: 'item-1', result: 'pass' },
+            { checklistItemId: 'item-foreign', result: 'pass' },
+          ],
+        })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not found');
+      expect(mockTx.sOPAuditResponse.create).not.toHaveBeenCalled();
+      expect(mockTx.sOPAudit.update).not.toHaveBeenCalled();
+    });
+
     it('fails when audit not found', async () => {
       const mockTx = {
         sOPAudit: { findFirst: jest.fn().mockResolvedValue(null) },

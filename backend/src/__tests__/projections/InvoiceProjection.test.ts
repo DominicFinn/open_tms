@@ -71,11 +71,11 @@ describe('InvoiceProjection', () => {
       await projection.handle(event);
 
       expect(mockPrisma.invoice.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'inv-1' } })
+        expect.objectContaining({ where: { id: 'inv-1', orgId: 'test-org' } })
       );
       expect(mockPrisma.invoiceReadModel.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-1' },
+          where: { id: 'inv-1', orgId: 'test-org' },
           create: expect.objectContaining({
             id: 'inv-1',
             orgId: 'test-org',
@@ -145,7 +145,7 @@ describe('InvoiceProjection', () => {
 
       expect(mockPrisma.invoiceReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-1' },
+          where: { id: 'inv-1', orgId: 'test-org' },
           data: expect.objectContaining({
             status: 'sent',
             paidCents: 0,
@@ -180,7 +180,7 @@ describe('InvoiceProjection', () => {
 
       expect(mockPrisma.invoiceReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-1' },
+          where: { id: 'inv-1', orgId: 'test-org' },
           data: expect.objectContaining({
             status: 'paid',
             paidCents: 150000,

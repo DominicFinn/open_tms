@@ -26,6 +26,7 @@ export async function locationReportRoutes(server: FastifyInstance) {
       to?: string;
       locationType?: string;
     };
+    const orgId = req.orgId!;
 
     const dateFrom = from ? new Date(from + 'T00:00:00Z') : undefined;
     const dateTo = to ? new Date(to + 'T23:59:59Z') : undefined;
@@ -38,7 +39,7 @@ export async function locationReportRoutes(server: FastifyInstance) {
     }
 
     // Fetch active locations with optional type filter
-    const locationWhere: Record<string, unknown> = { archived: false };
+    const locationWhere: Record<string, unknown> = { orgId, archived: false };
     if (locationType) locationWhere.locationType = locationType;
 
     const locations = await server.prisma.location.findMany({
@@ -60,10 +61,12 @@ export async function locationReportRoutes(server: FastifyInstance) {
 
     // Count shipments per origin and destination location
     const shipmentOriginFilter: Record<string, unknown> = {
+      orgId,
       originId: { in: locationIds },
       archived: false,
     };
     const shipmentDestFilter: Record<string, unknown> = {
+      orgId,
       destinationId: { in: locationIds },
       archived: false,
     };
@@ -90,10 +93,12 @@ export async function locationReportRoutes(server: FastifyInstance) {
 
     // Count orders per origin and destination location
     const orderOriginFilter: Record<string, unknown> = {
+      orgId,
       originId: { in: locationIds },
       archived: false,
     };
     const orderDestFilter: Record<string, unknown> = {
+      orgId,
       destinationId: { in: locationIds },
       archived: false,
     };
@@ -122,6 +127,7 @@ export async function locationReportRoutes(server: FastifyInstance) {
     const inTransitCounts = await server.prisma.shipment.groupBy({
       by: ['destinationId'],
       where: {
+        orgId,
         destinationId: { in: locationIds },
         status: 'in_transit',
         archived: false,

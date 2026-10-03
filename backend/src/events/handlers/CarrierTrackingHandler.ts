@@ -67,7 +67,7 @@ export class CarrierTrackingHandler implements IEventHandler {
     if (!shipmentId) return;
 
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       select: { id: true, reference: true, status: true },
     });
 
@@ -85,7 +85,7 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     // Update shipment to complete
     await this.prisma.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       data: {
         status: 'complete',
         deliveryDate: payload.occurredAt ? new Date(payload.occurredAt) : new Date(),
@@ -154,7 +154,7 @@ export class CarrierTrackingHandler implements IEventHandler {
     if (!shipmentId) return;
 
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       select: { id: true, reference: true, status: true, carrierId: true },
     });
 
@@ -200,7 +200,7 @@ export class CarrierTrackingHandler implements IEventHandler {
     // SHIPMENT_EXCEPTION event above drives triage, notifications, and the
     // read-model flag via ShipmentProjection.onShipmentException.
     await this.prisma.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       data: { hasException: true },
     });
   }
@@ -227,7 +227,7 @@ export class CarrierTrackingHandler implements IEventHandler {
     // Update integration status to 'error' so polling stops until manually re-enabled
     try {
       await this.prisma.carrierTrackingIntegration.update({
-        where: { id: integrationId },
+        where: { id: integrationId, carrier: { orgId: event.orgId } },
         data: { status: 'error' },
       });
     } catch (err) {
@@ -265,7 +265,7 @@ export class CarrierTrackingHandler implements IEventHandler {
     if (!targetStatus) return;
 
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       select: { id: true, reference: true, status: true },
     });
 
@@ -281,7 +281,7 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     const previousStatus = shipment.status;
     await this.prisma.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: event.orgId },
       data: { status: targetStatus },
     });
 

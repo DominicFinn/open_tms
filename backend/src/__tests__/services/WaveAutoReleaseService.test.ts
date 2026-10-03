@@ -118,7 +118,7 @@ describe('WaveAutoReleaseService.runOnce', () => {
       payload: { templateId: 't1' },
     }));
     expect(prisma.waveTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 't1' },
+      where: { id: 't1', orgId: 'org1' },
       data: { lastAutoReleasedAt: now },
     }));
   });

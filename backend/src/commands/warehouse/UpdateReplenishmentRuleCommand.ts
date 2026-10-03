@@ -42,7 +42,7 @@ export class UpdateReplenishmentRuleCommandHandler extends BaseCommandHandler<
     const max = updates.maxQuantity ?? existing.maxQuantity;
     if (max < min) throw new Error('maxQuantity must be at least minQuantity');
 
-    await tx.replenishmentRule.update({ where: { id: ruleId }, data: updates });
+    await tx.replenishmentRule.update({ where: { id: ruleId, orgId: command.orgId }, data: updates });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.REPLENISHMENT_RULE_UPDATED,

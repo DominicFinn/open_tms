@@ -43,7 +43,7 @@ describe('OrderProjection — out-of-order delivery recovery', () => {
 
     // Materialise was called (upsert path) AND the count refresh re-ran.
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'order-late' },
+      where: { id: 'order-late', orgId: 'test-org' },
       create: expect.objectContaining({ orderNumber: 'ORD-LATE', customerName: 'Acme' }),
     }));
     expect(update).toHaveBeenCalledTimes(2);

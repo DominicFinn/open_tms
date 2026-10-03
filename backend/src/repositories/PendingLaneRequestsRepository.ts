@@ -40,19 +40,20 @@ export interface PendingLaneRequestWithRelations {
 }
 
 export interface IPendingLaneRequestsRepository {
-  all(): Promise<PendingLaneRequestWithRelations[]>;
-  findById(id: string): Promise<PendingLaneRequestWithRelations | null>;
-  findByStatus(status: string): Promise<PendingLaneRequestWithRelations[]>;
-  approve(id: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations>;
-  reject(id: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations>;
-  markAsLaneCreated(id: string, laneId: string): Promise<PendingLaneRequestWithRelations>;
+  all(orgId: string): Promise<PendingLaneRequestWithRelations[]>;
+  findById(id: string, orgId: string): Promise<PendingLaneRequestWithRelations | null>;
+  findByStatus(status: string, orgId: string): Promise<PendingLaneRequestWithRelations[]>;
+  approve(id: string, orgId: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations>;
+  reject(id: string, orgId: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations>;
+  markAsLaneCreated(id: string, orgId: string, laneId: string): Promise<PendingLaneRequestWithRelations>;
 }
 
 export class PendingLaneRequestsRepository implements IPendingLaneRequestsRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<PendingLaneRequestWithRelations[]> {
+  async all(orgId: string): Promise<PendingLaneRequestWithRelations[]> {
     return (this.prisma.pendingLaneRequest.findMany({
+      where: { order: { orgId } },
       include: {
         order: {
           select: {
@@ -89,9 +90,9 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
     }) as Promise<PendingLaneRequestWithRelations[]>);
   }
 
-  async findById(id: string): Promise<PendingLaneRequestWithRelations | null> {
+  async findById(id: string, orgId: string): Promise<PendingLaneRequestWithRelations | null> {
     return (this.prisma.pendingLaneRequest.findUnique({
-      where: { id },
+      where: { id, order: { orgId } },
       include: {
         order: {
           select: {
@@ -127,9 +128,9 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
     }) as Promise<PendingLaneRequestWithRelations | null>);
   }
 
-  async findByStatus(status: string): Promise<PendingLaneRequestWithRelations[]> {
+  async findByStatus(status: string, orgId: string): Promise<PendingLaneRequestWithRelations[]> {
     return (this.prisma.pendingLaneRequest.findMany({
-      where: { status },
+      where: { status, order: { orgId } },
       include: {
         order: {
           select: {
@@ -166,9 +167,9 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
     }) as Promise<PendingLaneRequestWithRelations[]>);
   }
 
-  async approve(id: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations> {
+  async approve(id: string, orgId: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations> {
     const updated = await this.prisma.pendingLaneRequest.update({
-      where: { id },
+      where: { id, order: { orgId } },
       data: {
         status: 'approved',
         resolvedAt: new Date(),
@@ -212,9 +213,9 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
     return updated as PendingLaneRequestWithRelations;
   }
 
-  async reject(id: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations> {
+  async reject(id: string, orgId: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations> {
     const updated = await this.prisma.pendingLaneRequest.update({
-      where: { id },
+      where: { id, order: { orgId } },
       data: {
         status: 'rejected',
         resolvedAt: new Date(),
@@ -258,9 +259,9 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
     return updated as PendingLaneRequestWithRelations;
   }
 
-  async markAsLaneCreated(id: string, laneId: string): Promise<PendingLaneRequestWithRelations> {
+  async markAsLaneCreated(id: string, orgId: string, laneId: string): Promise<PendingLaneRequestWithRelations> {
     const updated = await this.prisma.pendingLaneRequest.update({
-      where: { id },
+      where: { id, order: { orgId } },
       data: {
         status: 'lane_created',
         createdLaneId: laneId,

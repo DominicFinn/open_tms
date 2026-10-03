@@ -114,7 +114,7 @@ export class WmsFulfilmentOrderProjection implements IEventHandler {
     // Replace the lines wholesale. They are a projection of the source, and a line removed
     // upstream has to disappear here or the wave allocates against stock nobody ordered.
     await this.prisma.$transaction([
-      this.prisma.wmsFulfilmentOrderLine.deleteMany({ where: { fulfilmentOrderId: order.id } }),
+      this.prisma.wmsFulfilmentOrderLine.deleteMany({ where: { fulfilmentOrderId: order.id, orgId: snapshot.orgId } }),
       this.prisma.wmsFulfilmentOrderLine.createMany({
         data: snapshot.lines.map((line) => ({
           fulfilmentOrderId: order.id,

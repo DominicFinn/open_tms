@@ -32,8 +32,12 @@ export async function organizationRoutes(server: FastifyInstance) {
   server.addHook('preHandler', guardWrites('settings'));
 
   // Get organization settings
-  server.get('/api/v1/organization/settings', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const settings = await orgRepo.getSettings();
+  server.get('/api/v1/organization/settings', async (req: FastifyRequest, reply: FastifyReply) => {
+    const settings = await orgRepo.getSettings(req.orgId!);
+    if (!settings) {
+      reply.code(404);
+      return { data: null, error: 'Organization not found' };
+    }
     return { data: settings, error: null };
   });
 
@@ -56,13 +60,21 @@ export async function organizationRoutes(server: FastifyInstance) {
       settingsData.bondExpirationDate = body.bondExpirationDate ? new Date(body.bondExpirationDate) : null;
     }
 
-    const updated = await orgRepo.updateSettings(settingsData);
+    const updated = await orgRepo.updateSettings(req.orgId!, settingsData);
+    if (!updated) {
+      reply.code(404);
+      return { data: null, error: 'Organization not found' };
+    }
     return { data: updated, error: null };
   });
 
   // Get the current trackable unit label (helper endpoint)
-  server.get('/api/v1/organization/trackable-unit-label', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const label = await orgRepo.getTrackableUnitLabel();
+  server.get('/api/v1/organization/trackable-unit-label', async (req: FastifyRequest, reply: FastifyReply) => {
+    const label = await orgRepo.getTrackableUnitLabel(req.orgId!);
+    if (label === null) {
+      reply.code(404);
+      return { data: null, error: 'Organization not found' };
+    }
     return { data: { label }, error: null };
   });
 }

@@ -43,7 +43,7 @@ describe('LaneProjection', () => {
 
     expect(mockPrisma.laneReadModel.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'lane-1' },
+        where: { id: 'lane-1', orgId: 'test-org' },
         create: expect.objectContaining({
           name: 'Chicago → New York',
           originCity: 'Chicago',
@@ -64,7 +64,7 @@ describe('LaneProjection', () => {
 
     expect(mockPrisma.laneReadModel.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'lane-1' },
+        where: { id: 'lane-1', orgId: 'test-org' },
         data: expect.objectContaining({
           serviceLevel: 'FTL',
           carrierCount: 2,

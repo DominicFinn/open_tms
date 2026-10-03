@@ -427,7 +427,7 @@ describe('Warehouse topology commands stay inside the command org', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Aisle');
-    expect(mockTx.warehouseAisle.findFirst).toHaveBeenCalledWith({ where: { id: 'aisle-elsewhere', zoneId: 'zone-1' } });
+    expect(mockTx.warehouseAisle.findFirst).toHaveBeenCalledWith({ where: { id: 'aisle-elsewhere', zoneId: 'zone-1', zone: { orgId: 'test-org' } } });
     expect(mockTx.warehouseBin.create).not.toHaveBeenCalled();
   });
 

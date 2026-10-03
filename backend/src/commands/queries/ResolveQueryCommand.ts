@@ -84,7 +84,7 @@ export class ResolveQueryCommandHandler extends BaseCommandHandler<ResolveQueryP
     }
 
     await tx.financialQuery.update({
-      where: { id: query.id },
+      where: { id: query.id, orgId: command.orgId },
       data: {
         status,
         resolvedBy: command.actorId,

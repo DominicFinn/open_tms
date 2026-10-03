@@ -113,6 +113,35 @@ describe('GenerateReturnLabelCommand', () => {
     }));
   });
 
+  it('refuses a carrier that belongs to another org and generates nothing', async () => {
+    const rma = { id: 'rma-3', rmaNumber: 'RMA-003', status: 'authorized', returnCarrierId: null };
+    const tx: any = {
+      rma: { findUnique: jest.fn().mockResolvedValue(rma), update: jest.fn() },
+      carrier: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const prisma: any = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const provider = makeProvider();
+    const storage = makeStorage();
+    const { bus } = mockEventBus();
+    const handler = new GenerateReturnLabelCommandHandler(prisma, bus, makeRegistry(provider), storage);
+
+    const result = await handler.execute(
+      createTestCommand(GENERATE_RETURN_LABEL, {
+        rmaId: 'rma-3', carrierId: 'foreign-carrier',
+        from: ADDR, to: WAREHOUSE, parcels: [{ weightKg: 1 }],
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.carrier.findUnique).toHaveBeenCalledWith({ where: { id: 'foreign-carrier', orgId: 'test-org' } });
+    expect(provider.generateLabel).not.toHaveBeenCalled();
+    expect(tx.rma.update).not.toHaveBeenCalled();
+  });
+
   it('rejects when RMA is completed or rejected', async () => {
     const rma = { id: 'rma-3', rmaNumber: 'RMA-003', status: 'completed', returnCarrierId: null };
     const tx: any = { rma: { findUnique: jest.fn().mockResolvedValue(rma), update: jest.fn() }, carrier: { findUnique: jest.fn() } };

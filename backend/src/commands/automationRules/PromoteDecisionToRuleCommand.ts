@@ -37,7 +37,7 @@ export class PromoteDecisionToRuleCommandHandler extends BaseCommandHandler<Prom
   ): Promise<PromoteDecisionToRuleResult> {
     const { decisionId, name, priority } = command.payload;
 
-    const decision = await tx.agentDecision.findUnique({ where: { id: decisionId } });
+    const decision = await tx.agentDecision.findUnique({ where: { id: decisionId, orgId: command.orgId } });
     if (!decision) throw new Error('Decision not found');
 
     const conditions = (decision.matchedConditions as RuleConditionLike[]) || [];
@@ -82,7 +82,7 @@ export class PromoteDecisionToRuleCommandHandler extends BaseCommandHandler<Prom
     });
 
     await tx.agentDecision.update({
-      where: { id: decision.id },
+      where: { id: decision.id, orgId: command.orgId },
       data: { promotedToAutomation: true, promotedAt: new Date() },
     });
 

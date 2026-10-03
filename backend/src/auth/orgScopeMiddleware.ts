@@ -30,6 +30,8 @@
 import type { FastifyRequest, FastifyReply, FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import { resolveOrgId } from './orgScope.js';
+import { resolveApiKeyOrgId } from './ingestOrgScope.js';
+import { authenticateJWT } from '../middleware/jwtAuth.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -143,6 +145,7 @@ export function attachOrgScopeFromCustomerUserHook(prisma: PrismaClient): preHan
       return;
     }
     try {
+      // tenancy-exempt: the customer id comes from the caller's own verified portal token; this lookup is what sets the org
       const customer = await prisma.customer.findUnique({
         where: { id: customerId },
         select: { orgId: true },
@@ -172,6 +175,7 @@ export function attachOrgScopeFromCarrierUserHook(prisma: PrismaClient): preHand
       return;
     }
     try {
+      // tenancy-exempt: the carrier id comes from the caller's own verified portal token; this lookup is what sets the org
       const carrier = await prisma.carrier.findUnique({
         where: { id: carrierId },
         select: { orgId: true },
@@ -184,79 +188,37 @@ export function attachOrgScopeFromCarrierUserHook(prisma: PrismaClient): preHand
 }
 
 /**
- * EDI / trading-partner variant. EDI inbound endpoints serve two callers:
- *  1. Authed admins (UI, internal scripts) — JWT carries organizationId.
- *  2. Webhook ingest from carriers / 3PLs / SFTP collectors — no JWT.
+ * EDI scope (#314). EDI endpoints have two callers: the admin UI, with an internal JWT, and the EDI
+ * collector, with an API key. The tenant comes from whichever credential authenticated.
  *
- * Resolution order:
- *  1. JWT (`req.user.organizationId`) — admin always wins.
- *  2. Body `partnerId` — webhook payload references a known TradingPartner;
- *     walk through `partner.customer.orgId` (preferred) or
- *     `partner.carrier.orgId` to derive tenant.
- *  3. URL params (`:id` or `:partnerId`) — endpoints like
- *     `/api/v1/trading-partners/:id/logs` carry the partner in the path.
- *  4. Otherwise null — webhook payloads with no partnerId can't be
- *     attributed; the route can decide whether to refuse or accept.
+ * BUSINESS RULE: a trading partner id is not a secret, so it never selects the tenant. It used to:
+ * any unauthenticated request naming a partner was given that partner's org. A partner id in the
+ * body or path now only picks a partner inside the caller's org, and the routes look it up with
+ * that org, so a foreign id is a 404.
  *
- * The body-derived path is identical to the backfill logic in
- * [TradingPartnerRepository.createLog]; centralising it here means EDI
- * route handlers don't need to re-derive orgId for every command they
- * dispatch.
+ * On a plugin inside the authenticated scope the org is already set and this does nothing. On a
+ * public EDI plugin, a request with an `x-api-key` is scoped to that key's org; anything else must
+ * carry a valid internal JWT, or it is refused with 401.
  */
-export function attachOrgScopeFromPartnerHook(prisma: PrismaClient): preHandlerHookHandler {
-  return async (req: FastifyRequest, _reply: FastifyReply): Promise<void> => {
+export function attachEdiOrgScopeHook(prisma: PrismaClient): preHandlerHookHandler {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (req.orgId !== undefined) return;
-
-    // 1. JWT always wins
-    const fromJwt = req.user?.organizationId;
-    if (fromJwt) {
-      req.orgId = fromJwt;
-      return;
+    const hasApiKey = typeof req.headers['x-api-key'] === 'string';
+    if (!req.user && !hasApiKey) {
+      await authenticateJWT(req, reply);
+      if (reply.sent) return;
     }
-
-    // 2/3. Try partnerId from body, then URL params.
-    const body = req.body as Record<string, unknown> | null | undefined;
-    const params = req.params as Record<string, unknown> | null | undefined;
-    const candidate =
-      (typeof body?.partnerId === 'string' ? body.partnerId : undefined) ??
-      (typeof params?.partnerId === 'string' ? params.partnerId : undefined) ??
-      (typeof params?.id === 'string' ? params.id : undefined);
-
-    // No JWT and no partner candidate: leave req.orgId undefined so a
-    // downstream `attachOrgScopeHook` (chained as a fallback) can run
-    // the sole-Organization lookup. Setting null here would block it,
-    // because the standard hook's idempotence check skips when orgId is
-    // already defined.
-    if (!candidate) return;
-
     try {
-      const partner = await prisma.tradingPartner.findUnique({
-        where: { id: candidate },
-        select: {
-          customer: { select: { orgId: true } },
-          carrier: { select: { orgId: true } },
-        },
-      });
-      const derived = partner?.customer?.orgId ?? partner?.carrier?.orgId;
-      // Same logic: if the partner exists but has no relation chain back
-      // to an org, leave req.orgId undefined for the fallback hook
-      // rather than locking it to null.
-      if (derived) req.orgId = derived;
+      req.orgId = req.user ? await resolveOrgId(req, prisma) : await resolveApiKeyOrgId(req, prisma);
     } catch {
-      // Defensive: on DB error, do not block the fallback hook.
+      req.orgId = null;
     }
   };
 }
 
 /**
- * Convenience for EDI route plugins. Chains the partner-aware hook with
- * the standard sole-Organization fallback so:
- *  - admin reads use the JWT
- *  - webhook ingest derives orgId from `body.partnerId` / URL params
- *  - everything else (create-partner, unauthed seed flows) lands on the
- *    sole Organization when there is exactly one, and null otherwise
- *
- * Use at the top of an EDI route plugin:
+ * Use at the top of an EDI route plugin. Refuses any request that the EDI scope could not attribute
+ * to a tenant.
  *
  *   export async function ediInboundRoutes(server: FastifyInstance) {
  *     await registerOrgScopeForEdi(server);
@@ -264,6 +226,6 @@ export function attachOrgScopeFromPartnerHook(prisma: PrismaClient): preHandlerH
  *   }
  */
 export async function registerOrgScopeForEdi(server: FastifyInstance): Promise<void> {
-  server.addHook('preHandler', attachOrgScopeFromPartnerHook(server.prisma));
-  server.addHook('preHandler', attachOrgScopeHook(server.prisma));
+  server.addHook('preHandler', attachEdiOrgScopeHook(server.prisma));
+  server.addHook('preHandler', requireOrgScope);
 }

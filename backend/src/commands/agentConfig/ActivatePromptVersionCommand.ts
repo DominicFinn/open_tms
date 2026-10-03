@@ -31,16 +31,16 @@ export class ActivatePromptVersionCommandHandler extends BaseCommandHandler<Acti
   ): Promise<ActivatePromptVersionResult> {
     const { configId, versionId } = command.payload;
 
-    const config = await tx.agentConfig.findUnique({ where: { id: configId } });
+    const config = await tx.agentConfig.findUnique({ where: { id: configId, orgId: command.orgId } });
     if (!config) throw new Error('Agent config not found');
 
     const version = await tx.agentConfigVersion.findFirst({
-      where: { id: versionId, configId },
+      where: { id: versionId, configId, config: { orgId: command.orgId } },
     });
     if (!version) throw new Error('Version not found');
 
     await tx.agentConfig.update({
-      where: { id: configId },
+      where: { id: configId, orgId: command.orgId },
       data: { activeVersionId: versionId },
     });
 

@@ -31,7 +31,7 @@ export class SendInvoiceCommandHandler extends BaseCommandHandler<SendInvoicePay
     }
 
     const updated = await tx.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: {
         status: 'sent',
         sentAt: new Date(),

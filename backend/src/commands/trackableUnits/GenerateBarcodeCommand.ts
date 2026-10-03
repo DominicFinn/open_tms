@@ -32,7 +32,7 @@ export class GenerateTrackableUnitBarcodeCommandHandler extends BaseCommandHandl
     const barcode = `TU-${id}-${Date.now()}`;
 
     const updated = await tx.trackableUnit.update({
-      where: { id },
+      where: { id, order: { orgId: command.orgId } },
       data: { barcode },
     });
 

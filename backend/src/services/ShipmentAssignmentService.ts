@@ -12,7 +12,7 @@ export interface AssignmentResult {
 }
 
 export interface IShipmentAssignmentService {
-  assignOrderToShipment(orderId: string, actorId?: string | null): Promise<AssignmentResult>;
+  assignOrderToShipment(orgId: string, orderId: string, actorId?: string | null): Promise<AssignmentResult>;
 }
 
 const ASSIGNMENT_SOURCE = 'shipment-assignment-service';
@@ -28,10 +28,10 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
    * Attempt to assign an order to a shipment based on matching lanes.
    * If no matching lane exists, create a pending lane request.
    */
-  async assignOrderToShipment(orderId: string, actorId: string | null = null): Promise<AssignmentResult> {
+  async assignOrderToShipment(orgId: string, orderId: string, actorId: string | null = null): Promise<AssignmentResult> {
     // Fetch order with all details
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       include: {
         trackableUnits: {
           include: {
@@ -67,6 +67,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
 
     // Find matching lanes
     const matchingLane = await this.findMatchingLane(
+      orgId,
       order.originId,
       order.destinationId,
       order.serviceLevel,
@@ -81,7 +82,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       const pendingRequest = await this.createPendingLaneRequest(order);
 
       await this.prisma.order.update({
-        where: { id: orderId },
+        where: { id: orderId, orgId },
         data: { status: 'issue' }
       });
 
@@ -118,6 +119,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
 
     // Find or create shipment for this lane
     const shipment = await this.findOrCreateShipment(
+      orgId,
       matchingLane.id,
       order.customerId,
       order.originId,
@@ -159,6 +161,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
    * Find a lane that matches the order requirements
    */
   private async findMatchingLane(
+    orgId: string,
     originId: string,
     destinationId: string,
     serviceLevel: string,
@@ -167,6 +170,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
   ) {
     const lanes = await this.prisma.lane.findMany({
       where: {
+        orgId,
         originId,
         destinationId,
         archived: false,
@@ -221,6 +225,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
    * Find an existing shipment for the lane or create a new one
    */
   private async findOrCreateShipment(
+    orgId: string,
     laneId: string,
     customerId: string,
     originId: string,
@@ -232,7 +237,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
   ) {
     // For FTL, always create a new shipment (dedicated)
     if (serviceLevel === 'FTL') {
-      return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
+      return this.createShipment(orgId, laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
     }
 
     // For LTL, try to find an existing draft shipment — matching the same
@@ -241,6 +246,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     // mismatch anyway; filtering here finds a shipment that actually fits).
     const existingShipment = await this.prisma.shipment.findFirst({
       where: {
+        orgId,
         laneId,
         status: 'draft', // Only consolidate into draft shipments
         archived: false,
@@ -257,7 +263,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     }
 
     // No existing shipment - create new one
-    return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
+    return this.createShipment(orgId, laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
   }
 
   /**
@@ -268,6 +274,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
    * tripped AutoTenderHandler/SlaEvaluationHandler (#264).
    */
   private async createShipment(
+    orgId: string,
     laneId: string,
     customerId: string,
     originId: string,
@@ -284,7 +291,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     // NOT NULL post phase 2). Any code path reaching this without a valid
     // customerId already threw earlier.
     const customer = await this.prisma.customer.findUniqueOrThrow({
-      where: { id: customerId },
+      where: { id: customerId, orgId },
       select: { orgId: true },
     });
 

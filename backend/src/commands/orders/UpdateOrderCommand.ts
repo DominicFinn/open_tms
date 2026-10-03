@@ -39,8 +39,8 @@ export class UpdateOrderCommandHandler extends BaseCommandHandler<UpdateOrderPay
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
 
-    const previous = await tx.order.findUniqueOrThrow({ where: { id } });
-    const updated = await tx.order.update({ where: { id }, data });
+    const previous = await tx.order.findUniqueOrThrow({ where: { id, orgId: command.orgId } });
+    const updated = await tx.order.update({ where: { id, orgId: command.orgId }, data });
 
     // Build changes object for the event payload
     const changes: Record<string, { before: unknown; after: unknown }> = {};

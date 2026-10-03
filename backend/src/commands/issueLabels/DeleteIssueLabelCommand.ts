@@ -29,16 +29,22 @@ export class DeleteIssueLabelCommandHandler extends BaseCommandHandler<DeleteIss
   ): Promise<DeleteIssueLabelResult> {
     const { id } = command.payload;
 
+    const label = await tx.issueLabel.findFirst({
+      where: { id, orgId: command.orgId },
+      select: { id: true },
+    });
+    if (!label) throw new Error('Label not found');
+
     // Capture which issues were carrying this label so the projection can
     // refresh their labels cache after the deletion.
     const assignments = await tx.issueLabelAssignment.findMany({
-      where: { labelId: id },
+      where: { labelId: id, issue: { orgId: command.orgId } },
       select: { issueId: true },
     });
     const affectedIssueIds = Array.from(new Set(assignments.map((a) => a.issueId)));
 
-    await tx.issueLabelAssignment.deleteMany({ where: { labelId: id } });
-    await tx.issueLabel.delete({ where: { id } });
+    await tx.issueLabelAssignment.deleteMany({ where: { labelId: id, issue: { orgId: command.orgId } } });
+    await tx.issueLabel.delete({ where: { id, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.ISSUE_LABEL_DELETED,

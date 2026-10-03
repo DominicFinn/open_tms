@@ -67,7 +67,7 @@ describe('CQRS Pipeline Integration', () => {
       // 3. Verify projection called upsert with correct data
       expect(mockPrisma.carrierReadModel.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'carrier-1' },
+          where: { id: 'carrier-1', orgId: 'test-org' },
           create: expect.objectContaining({
             name: 'FastFreight',
             mcNumber: 'MC-123',

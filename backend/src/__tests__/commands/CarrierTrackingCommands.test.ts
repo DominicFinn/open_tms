@@ -232,7 +232,7 @@ describe('Carrier Tracking Command Handlers', () => {
       );
 
       expect(mockTx.carrierTrackingEvent.deleteMany).toHaveBeenCalledWith({
-        where: { integrationId: 'int-1' },
+        where: { integrationId: 'int-1', shipment: { orgId: 'test-org' } },
       });
       // Ensure deleteMany was called before delete
       const deleteManyOrder = mockTx.carrierTrackingEvent.deleteMany.mock.invocationCallOrder[0];

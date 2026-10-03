@@ -28,7 +28,7 @@ export function createWebhookRetryWorker(service: CustomerWebhookDeliveryService
       let delivered = 0, stillFailed = 0;
       for (const row of eligible) {
         try {
-          const r = await service.retry(row.id);
+          const r = await service.retry(row.orgId, row.id);
           if (r.status === 'delivered') delivered++;
           else stillFailed++;
         } catch (err) {

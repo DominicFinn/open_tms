@@ -7,8 +7,8 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
   const pendingRequestsRepo = container.resolve<IPendingLaneRequestsRepository>(TOKENS.IPendingLaneRequestsRepository);
 
   // Get all pending lane requests
-  server.get('/api/v1/pending-lane-requests', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const requests = await pendingRequestsRepo.all();
+  server.get('/api/v1/pending-lane-requests', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const requests = await pendingRequestsRepo.all(req.orgId!);
     return { data: requests, error: null };
   });
 
@@ -21,7 +21,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
       return { data: null, error: 'Invalid status. Must be one of: pending, approved, rejected, lane_created' };
     }
 
-    const requests = await pendingRequestsRepo.findByStatus(status);
+    const requests = await pendingRequestsRepo.findByStatus(status, req.orgId!);
     return { data: requests, error: null };
   });
 
@@ -29,7 +29,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
   server.get('/api/v1/pending-lane-requests/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const request = await pendingRequestsRepo.findById(id);
+    const request = await pendingRequestsRepo.findById(id, req.orgId!);
     if (!request) {
       reply.code(404);
       return { data: null, error: 'Pending lane request not found' };
@@ -47,7 +47,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const request = await pendingRequestsRepo.findById(id);
+      const request = await pendingRequestsRepo.findById(id, req.orgId!);
       if (!request) {
         reply.code(404);
         return { data: null, error: 'Pending lane request not found' };
@@ -60,6 +60,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
 
       const updated = await pendingRequestsRepo.approve(
         id,
+        req.orgId!,
         body.resolvedById || 'system',
         body.notes
       );
@@ -80,7 +81,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const request = await pendingRequestsRepo.findById(id);
+      const request = await pendingRequestsRepo.findById(id, req.orgId!);
       if (!request) {
         reply.code(404);
         return { data: null, error: 'Pending lane request not found' };
@@ -93,6 +94,7 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
 
       const updated = await pendingRequestsRepo.reject(
         id,
+        req.orgId!,
         body.resolvedById || 'system',
         body.notes
       );
@@ -112,13 +114,13 @@ export async function pendingLaneRequestRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const request = await pendingRequestsRepo.findById(id);
+      const request = await pendingRequestsRepo.findById(id, req.orgId!);
       if (!request) {
         reply.code(404);
         return { data: null, error: 'Pending lane request not found' };
       }
 
-      const updated = await pendingRequestsRepo.markAsLaneCreated(id, body.laneId);
+      const updated = await pendingRequestsRepo.markAsLaneCreated(id, req.orgId!, body.laneId);
 
       return { data: updated, error: null };
     } catch (err: any) {

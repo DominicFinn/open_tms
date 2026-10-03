@@ -97,7 +97,7 @@ export class CreateReceivingTaskCommandHandler extends BaseCommandHandler<
     // If linked to an appointment, update its status
     if (p.appointmentId) {
       await tx.receivingAppointment.update({
-        where: { id: p.appointmentId },
+        where: { id: p.appointmentId, orgId: command.orgId },
         data: { status: 'receiving' },
       });
     }

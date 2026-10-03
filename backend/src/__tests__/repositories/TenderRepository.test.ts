@@ -67,9 +67,12 @@ describe('TenderRepository', () => {
       const prisma = buildPrisma();
       const repo = new TenderRepository(prisma);
 
-      await repo.findByShipmentId('ship-1');
+      await repo.findByShipmentId('ship-1', 'org-1');
 
-      expect(prisma.tender.findMany.mock.calls[0][0].where).toEqual({ shipmentId: 'ship-1' });
+      expect(prisma.tender.findMany.mock.calls[0][0].where).toEqual({
+        shipment: { orgId: 'org-1' },
+        shipmentId: 'ship-1',
+      });
     });
   });
 
@@ -106,12 +109,12 @@ describe('TenderRepository', () => {
       const prisma = buildPrisma();
       const repo = new TenderRepository(prisma);
 
-      await repo.findActiveOffersForCarrier('car-1');
+      await repo.findActiveOffersForCarrier('car-1', 'org-1');
 
       const where = prisma.tenderOffer.findMany.mock.calls[0][0].where;
       expect(where.carrierId).toBe('car-1');
       expect(where.status).toEqual({ in: ['sent', 'viewed'] });
-      expect(where.tender).toEqual({ status: 'open' });
+      expect(where.tender).toEqual({ status: 'open', shipment: { orgId: 'org-1' } });
     });
   });
 
@@ -133,9 +136,55 @@ describe('TenderRepository', () => {
       const prisma = buildPrisma();
       const repo = new TenderRepository(prisma);
 
-      await repo.findBidsByTenderId('t-1');
+      await repo.findBidsByTenderId('t-1', 'org-1');
 
       expect(prisma.tenderBid.findMany.mock.calls[0][0].orderBy).toEqual({ rate: 'asc' });
+    });
+  });
+
+  describe('org scoping', () => {
+    it('reaches a tender only through its shipment org', async () => {
+      const prisma = buildPrisma();
+      const repo = new TenderRepository(prisma);
+
+      await repo.findById('t-1', 'org-1');
+
+      expect(prisma.tender.findUnique.mock.calls[0][0].where).toEqual({ id: 't-1', shipment: { orgId: 'org-1' } });
+    });
+
+    it('returns null for a tender id from another org', async () => {
+      const prisma = buildPrisma();
+      prisma.tender.findUnique.mockResolvedValue(null);
+      const repo = new TenderRepository(prisma);
+
+      await expect(repo.findById('t-other-org', 'org-1')).resolves.toBeNull();
+    });
+
+    it('scopes offer and bid lookups and writes through tender and shipment', async () => {
+      const prisma = buildPrisma();
+      const repo = new TenderRepository(prisma);
+      const scoped = { tender: { shipment: { orgId: 'org-1' } } };
+
+      await repo.findOfferById('o-1', 'org-1');
+      await repo.updateOffer('o-1', 'org-1', {});
+      await repo.findBidById('b-1', 'org-1');
+      await repo.updateBid('b-1', 'org-1', {});
+      await repo.update('t-1', 'org-1', {});
+
+      expect(prisma.tenderOffer.findUnique.mock.calls[0][0].where).toEqual({ id: 'o-1', ...scoped });
+      expect(prisma.tenderOffer.update.mock.calls[0][0].where).toEqual({ id: 'o-1', ...scoped });
+      expect(prisma.tenderBid.findUnique.mock.calls[0][0].where).toEqual({ id: 'b-1', ...scoped });
+      expect(prisma.tenderBid.update.mock.calls[0][0].where).toEqual({ id: 'b-1', ...scoped });
+      expect(prisma.tender.update.mock.calls[0][0].where).toEqual({ id: 't-1', shipment: { orgId: 'org-1' } });
+    });
+
+    it('adds the shipment org to findAll when given', async () => {
+      const prisma = buildPrisma();
+      const repo = new TenderRepository(prisma);
+
+      await repo.findAll({ orgId: 'org-1', status: 'open' });
+
+      expect(prisma.tender.findMany.mock.calls[0][0].where).toEqual({ shipment: { orgId: 'org-1' }, status: 'open' });
     });
   });
 });

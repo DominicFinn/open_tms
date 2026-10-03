@@ -49,7 +49,7 @@ describe('TransitionShipmentStatusCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1' }, data: { status: 'ready' } });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'test-org' }, data: { status: 'ready' } });
     expect(result.events).toHaveLength(1);
     expect(result.events[0].type).toBe(EVENT_TYPES.SHIPMENT_STATUS_CHANGED);
     expect(result.events[0].payload).toEqual(
@@ -67,7 +67,7 @@ describe('TransitionShipmentStatusCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1' }, data: { status: 'ready' } });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'test-org' }, data: { status: 'ready' } });
   });
 
   it('rejects skipping a step (draft -> in_progress)', async () => {
@@ -111,7 +111,7 @@ describe('TransitionShipmentStatusCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1' }, data: { status: 'draft' } });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1', orgId: 'test-org' }, data: { status: 'draft' } });
   });
 
   it('propagates command metadata (actorId/orgId) onto the emitted event', async () => {

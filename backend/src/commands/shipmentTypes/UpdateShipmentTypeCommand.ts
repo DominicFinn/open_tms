@@ -43,7 +43,7 @@ export class UpdateShipmentTypeCommandHandler extends BaseCommandHandler<UpdateS
     if (!existing) {
       throw new Error('Shipment type not found');
     }
-    const updated = await tx.shipmentType.update({ where: { id }, data: updateData });
+    const updated = await tx.shipmentType.update({ where: { id, orgId: command.orgId }, data: updateData });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.SHIPMENT_TYPE_UPDATED,

@@ -145,7 +145,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = (req as any).body;
     try {
-      await authService.changePassword(req.customerUser!.sub, body.currentPassword, body.newPassword);
+      await authService.changePassword(req.customerUser!.sub, req.orgId!, body.currentPassword, body.newPassword);
       return { data: { success: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -159,25 +159,27 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal'], summary: 'Customer dashboard summary stats' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
+    const orgId = req.orgId!;
 
     const customerShipmentIds = await server.prisma.shipment.findMany({
-      where: { customerId }, select: { id: true },
+      where: { customerId, orgId }, select: { id: true },
     }).then(rows => rows.map(r => r.id));
     const customerOrderIds = await server.prisma.order.findMany({
-      where: { customerId }, select: { id: true },
+      where: { customerId, orgId }, select: { id: true },
     }).then(rows => rows.map(r => r.id));
 
     const [activeShipments, recentDeliveries, openIssues, outstandingInvoices] = await Promise.all([
       server.prisma.shipmentReadModel.count({
-        where: { customerId, status: { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] } },
+        where: { customerId, orgId, status: { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] } },
       }),
       server.prisma.shipmentReadModel.count({
-        where: { customerId, status: 'delivered' },
+        where: { customerId, orgId, status: 'delivered' },
       }),
       customerShipmentIds.length === 0 && customerOrderIds.length === 0
         ? Promise.resolve(0)
         : server.prisma.issueReadModel.count({
             where: {
+              orgId,
               status: { in: ['open', 'in_progress'] },
               OR: [
                 customerShipmentIds.length > 0
@@ -190,7 +192,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
             },
           }),
       server.prisma.invoiceReadModel.aggregate({
-        where: { customerId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
+        where: { customerId, orgId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
         _sum: { balanceCents: true },
         _count: true,
       }),
@@ -201,7 +203,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // explicitly — an archive shouldn't surface a customer-facing shipment in
     // their own activity feed.
     const recentShipments = await server.prisma.shipmentReadModel.findMany({
-      where: { customerId, status: { not: 'archived' } },
+      where: { customerId, orgId, status: { not: 'archived' } },
       orderBy: { updatedAt: 'desc' },
       take: 5,
       select: {
@@ -246,7 +248,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { search?: string; status?: string; limit?: number; offset?: number };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     // Archived orders stay in OrderReadModel (status: 'archived') rather than
     // being deleted, so exclude them by default here too — the customer
     // portal has no "Archived" view of its own, unlike the admin app.
@@ -281,7 +283,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
 
     const order = await server.prisma.order.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,
@@ -306,7 +308,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
 
     const order = await server.prisma.order.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       select: { id: true, orgId: true, archived: true },
     });
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
@@ -335,15 +337,15 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // are consistent across portal + admin).
 
   /** Walks `unitId` (or order id) back to the customer's order; returns the order or 404-style result. */
-  async function ensureCustomerOwnsOrder(orderId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+  async function ensureCustomerOwnsOrder(orderId: string, customerId: string, orgId: string): Promise<{ id: string; orgId: string } | null> {
     return server.prisma.order.findFirst({
-      where: { id: orderId, customerId },
+      where: { id: orderId, customerId, orgId },
       select: { id: true, orgId: true },
     });
   }
-  async function customerOwnsUnit(unitId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+  async function customerOwnsUnit(unitId: string, customerId: string, orgId: string): Promise<{ id: string; orgId: string } | null> {
     const unit = await server.prisma.trackableUnit.findUnique({
-      where: { id: unitId },
+      where: { id: unitId, order: { orgId, customerId } },
       select: { order: { select: { id: true, orgId: true, customerId: true } } },
     });
     if (!unit?.order || unit.order.customerId !== customerId) return null;
@@ -356,7 +358,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = (req as any).body ?? {};
-    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
 
     const result = await commandBus.dispatch({
@@ -392,7 +394,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Update a handling unit (identifier, notes, packaging, dims, weight, stackable)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
-    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
     const body = (req as any).body ?? {};
 
@@ -413,7 +415,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Delete a handling unit (cascade-deletes its line items)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
-    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
 
     const result = await commandBus.dispatch({
@@ -432,7 +434,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Add a new line item directly to a handling unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
-    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
     const body = (req as any).body ?? {};
 
@@ -460,7 +462,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // checks this, but failing here keeps the existence opaque rather than
     // surfacing "Cannot move line item across orders" with order ids).
     const lineItem = await server.prisma.orderLineItem.findUnique({
-      where: { id: itemId },
+      where: { id: itemId, order: { orgId: req.orgId!, customerId: req.customerUser!.customerId } },
       select: { orderId: true, order: { select: { id: true, orgId: true, customerId: true } } },
     });
     if (!lineItem?.order || lineItem.order.customerId !== req.customerUser!.customerId) {
@@ -470,7 +472,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const targetUnitId = body.targetUnitId ?? null;
     if (targetUnitId) {
       const targetUnit = await server.prisma.trackableUnit.findUnique({
-        where: { id: targetUnitId }, select: { orderId: true },
+        where: { id: targetUnitId, order: { orgId: lineItem.order.orgId } }, select: { orderId: true },
       });
       if (!targetUnit || targetUnit.orderId !== lineItem.orderId) {
         reply.code(404); return { data: null, error: 'Target unit not found' };
@@ -493,7 +495,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Generate a barcode for a handling unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
-    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
     const result = await commandBus.dispatch({
       type: GENERATE_TRACKABLE_UNIT_BARCODE,
@@ -507,12 +509,12 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   /** True iff `unitId` exists and belongs to `orderId`. Cheap belongs-to check. */
-  async function unitBelongsToCustomerOrder(unitId: string, orderId: string): Promise<boolean> {
-    const u = await server.prisma.trackableUnit.findUnique({ where: { id: unitId }, select: { orderId: true } });
+  async function unitBelongsToCustomerOrder(unitId: string, orderId: string, orgId: string): Promise<boolean> {
+    const u = await server.prisma.trackableUnit.findUnique({ where: { id: unitId, order: { orgId } }, select: { orderId: true } });
     return !!u && u.orderId === orderId;
   }
-  async function lineItemBelongsToCustomerOrder(itemId: string, orderId: string): Promise<boolean> {
-    const li = await server.prisma.orderLineItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
+  async function lineItemBelongsToCustomerOrder(itemId: string, orderId: string, orgId: string): Promise<boolean> {
+    const li = await server.prisma.orderLineItem.findUnique({ where: { id: itemId, order: { orgId } }, select: { orderId: true } });
     return !!li && li.orderId === orderId;
   }
 
@@ -522,7 +524,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = (req as any).body ?? {};
-    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
     // Body-supplied source/target unit ids must belong to this customer's
     // order. Without this a customer could merge units between other tenants'
@@ -530,10 +532,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     if (!body.sourceUnitId || !body.targetUnitId) {
       reply.code(400); return { data: null, error: 'sourceUnitId and targetUnitId are required' };
     }
-    if (!(await unitBelongsToCustomerOrder(body.sourceUnitId, id))) {
+    if (!(await unitBelongsToCustomerOrder(body.sourceUnitId, id, order.orgId))) {
       reply.code(404); return { data: null, error: 'Source unit not found' };
     }
-    if (!(await unitBelongsToCustomerOrder(body.targetUnitId, id))) {
+    if (!(await unitBelongsToCustomerOrder(body.targetUnitId, id, order.orgId))) {
       reply.code(404); return { data: null, error: 'Target unit not found' };
     }
     const result = await commandBus.dispatch({
@@ -553,14 +555,14 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
     const body = (req as any).body ?? {};
-    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
     // Every line being peeled off must belong to the same order. The command
     // also checks they live on the source unit, but failing here gives a
     // clearer error and avoids triggering the command bus on bad input.
     const itemIds: string[] = body.itemIdsToMove ?? [];
     for (const itemId of itemIds) {
-      if (!(await lineItemBelongsToCustomerOrder(itemId, order.id))) {
+      if (!(await lineItemBelongsToCustomerOrder(itemId, order.id, order.orgId))) {
         reply.code(404); return { data: null, error: `Line item ${itemId} not found` };
       }
     }
@@ -583,9 +585,9 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // verified by walking from the line item back to its order, then to the
   // customer.
 
-  async function customerOwnsLineItem(itemId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+  async function customerOwnsLineItem(itemId: string, customerId: string, orgId: string): Promise<{ id: string; orgId: string } | null> {
     const li = await server.prisma.orderLineItem.findUnique({
-      where: { id: itemId },
+      where: { id: itemId, order: { orgId, customerId } },
       select: { order: { select: { id: true, orgId: true, customerId: true } } },
     });
     if (!li?.order || li.order.customerId !== customerId) return null;
@@ -598,10 +600,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = (req as any).body ?? {};
-    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
     // Optional trackableUnitId must belong to the same order.
-    if (body.trackableUnitId && !(await unitBelongsToCustomerOrder(body.trackableUnitId, id))) {
+    if (body.trackableUnitId && !(await unitBelongsToCustomerOrder(body.trackableUnitId, id, order.orgId))) {
       reply.code(404); return { data: null, error: 'Trackable unit not found' };
     }
 
@@ -622,7 +624,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Line Items'], summary: 'Update fields on a line item (sparse patch)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { itemId } = req.params as { itemId: string };
-    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId);
+    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Line item not found' }; }
     const body = (req as any).body ?? {};
 
@@ -642,7 +644,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Line Items'], summary: 'Delete a line item' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { itemId } = req.params as { itemId: string };
-    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId);
+    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId, req.orgId!);
     if (!order) { reply.code(404); return { data: null, error: 'Line item not found' }; }
 
     const result = await commandBus.dispatch({
@@ -978,7 +980,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     }
 
     const order = await server.prisma.order.findUnique({
-      where: { id: (result.data as any).id },
+      where: { id: (result.data as any).id, orgId: req.orgId! },
       include: { lineItems: true, origin: true, destination: true },
     });
 
@@ -1003,7 +1005,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string; limit?: number };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (query.status === 'active') {
       where.status = { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] };
     } else if (query.status) {
@@ -1033,7 +1035,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
 
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       include: {
         origin: true,
         destination: true,
@@ -1097,7 +1099,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string };
 
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (query.status === 'outstanding') {
       where.status = { in: ['sent', 'partial_paid', 'overdue'] };
     } else if (query.status) {
@@ -1122,7 +1124,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
 
     const invoice = await server.prisma.invoice.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       include: { lineItems: true, payments: true },
     });
 
@@ -1149,7 +1151,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { reason } = (req as any).body;
 
     const invoice = await server.prisma.invoice.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       select: { id: true, invoiceNumber: true, customerId: true },
     });
 
@@ -1159,7 +1161,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const orgId = req.orgId!;
 
     // Create a financial query (dispute)
-    const queryCount = await server.prisma.financialQuery.count();
+    const queryCount = await server.prisma.financialQuery.count({ where: { orgId } });
     const query = await server.prisma.financialQuery.create({
       data: {
         orgId,
@@ -1184,13 +1186,13 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // Anything else (carrier issues, ad-hoc issues with no source) is hidden
   // from the customer portal — there's no chain back to a single customer.
 
-  async function customerScopedIssueIds(customerId: string): Promise<string[]> {
+  async function customerScopedIssueIds(customerId: string, orgId: string): Promise<string[]> {
     const shipments = await server.prisma.shipment.findMany({
-      where: { customerId },
+      where: { customerId, orgId },
       select: { id: true },
     });
     const orders = await server.prisma.order.findMany({
-      where: { customerId },
+      where: { customerId, orgId },
       select: { id: true },
     });
     const shipmentIds = shipments.map(s => s.id);
@@ -1200,6 +1202,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     const issues = await server.prisma.issueReadModel.findMany({
       where: {
+        orgId,
         OR: [
           shipmentIds.length > 0
             ? { sourceEntityType: 'shipment', sourceEntityId: { in: shipmentIds } }
@@ -1227,10 +1230,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const query = req.query as { status?: string };
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (ids.length === 0) return { data: [], error: null };
 
-    const where: any = { id: { in: ids } };
+    const where: any = { id: { in: ids }, orgId: req.orgId! };
     if (query.status === 'open') {
       where.status = { in: ['open', 'in_progress'] };
     } else if (query.status) {
@@ -1252,13 +1255,13 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
     }
 
-    const issue = await server.prisma.issueReadModel.findUnique({ where: { id } });
+    const issue = await server.prisma.issueReadModel.findUnique({ where: { id, orgId: req.orgId! } });
     if (!issue) { reply.code(404); return { data: null, error: 'Issue not found' }; }
     return { data: issue, error: null };
   });
@@ -1270,7 +1273,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
 
-    const ids = await customerScopedIssueIds(customerId);
+    const ids = await customerScopedIssueIds(customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
@@ -1280,6 +1283,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // flagged visible by internal staff.
     const comments = await server.prisma.comment.findMany({
       where: {
+        orgId: req.orgId!,
         entityType: 'issue',
         entityId: id,
         deletedAt: null,
@@ -1308,14 +1312,14 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const user = req.customerUser!;
     const { body } = z.object({ body: z.string().min(1) }).parse((req as any).body);
 
-    const ids = await customerScopedIssueIds(user.customerId);
+    const ids = await customerScopedIssueIds(user.customerId, req.orgId!);
     if (!ids.includes(id)) {
       reply.code(404);
       return { data: null, error: 'Issue not found' };
     }
 
     const customer = await server.prisma.customer.findUnique({
-      where: { id: user.customerId },
+      where: { id: user.customerId, orgId: req.orgId! },
       select: { orgId: true, name: true },
     });
     if (!customer) {
@@ -1366,7 +1370,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const q = req.query as { status?: string; limit?: number; offset?: number };
-    const where: any = { customerId };
+    const where: any = { customerId, orgId: req.orgId! };
     if (q.status) where.status = q.status;
 
     const [rmas, total] = await Promise.all([
@@ -1390,7 +1394,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
     const rma = await server.prisma.rma.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       include: { lines: true },
     });
     if (!rma) { reply.code(404); return { data: null, error: 'RMA not found' }; }
@@ -1443,7 +1447,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     // Verify the order belongs to this customer
     const order = await server.prisma.order.findFirst({
-      where: { id: body.orderId, customerId: user.customerId },
+      where: { id: body.orderId, customerId: user.customerId, orgId: req.orgId! },
       select: { id: true },
     });
     if (!order) {
@@ -1481,7 +1485,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const customerId = req.customerUser!.customerId;
     const rma = await server.prisma.rma.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, orgId: req.orgId! },
       select: { rmaNumber: true, returnLabelStorageKey: true, returnLabelFormat: true },
     });
     if (!rma) { reply.code(404); return { data: null, error: 'RMA not found' }; }
@@ -1510,7 +1514,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const q = req.query as { limit?: number };
     const orders = await server.prisma.order.findMany({
-      where: { customerId, status: { in: ['delivered', 'partially_delivered'] } },
+      where: { customerId, orgId: req.orgId!, status: { in: ['delivered', 'partially_delivered'] } },
       orderBy: { createdAt: 'desc' },
       take: q.limit || 25,
       include: { lineItems: true },

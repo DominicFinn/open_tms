@@ -74,7 +74,7 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const template = await server.prisma.emailTemplate.findUnique({ where: { id } });
+    const template = await server.prisma.emailTemplate.findUnique({ where: { id, organizationId: req.orgId! } });
     if (!template) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
@@ -142,14 +142,14 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
 
     const body = schema.parse((req as any).body);
 
-    const existing = await server.prisma.emailTemplate.findUnique({ where: { id } });
+    const existing = await server.prisma.emailTemplate.findUnique({ where: { id, organizationId: req.orgId! } });
     if (!existing) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
     }
 
     const updated = await server.prisma.emailTemplate.update({
-      where: { id },
+      where: { id, organizationId: req.orgId! },
       data: body,
     });
 
@@ -165,13 +165,13 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
 
-    const existing = await server.prisma.emailTemplate.findUnique({ where: { id } });
+    const existing = await server.prisma.emailTemplate.findUnique({ where: { id, organizationId: req.orgId! } });
     if (!existing) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
     }
 
-    await server.prisma.emailTemplate.delete({ where: { id } });
+    await server.prisma.emailTemplate.delete({ where: { id, organizationId: req.orgId! } });
     return { data: { deleted: true }, error: null };
   });
 

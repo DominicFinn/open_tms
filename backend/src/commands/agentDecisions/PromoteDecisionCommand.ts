@@ -36,7 +36,7 @@ export class PromoteDecisionCommandHandler extends BaseCommandHandler<
     const { id } = command.payload;
 
     const updated = await tx.agentDecision.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         promotedToAutomation: true,
         promotedAt: new Date(),

@@ -89,7 +89,7 @@ export class OrderProjection implements IEventHandler {
   private async onOrderCreated(event: DomainEvent): Promise<void> {
     // Fetch the full order with relations to denormalize
     const order = await this.prisma.order.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         customer: { select: { id: true, name: true } },
         origin: { select: { name: true, city: true, state: true } },
@@ -105,10 +105,10 @@ export class OrderProjection implements IEventHandler {
     }
 
     // Calculate total weight from line items and trackable units
-    const totalWeight = await this.calculateTotalWeight(event.entityId);
+    const totalWeight = await this.calculateTotalWeight(event.entityId, event.orgId);
 
     await this.prisma.orderReadModel.upsert({
-      where: { id: order.id },
+      where: { id: order.id, orgId: event.orgId },
       create: {
         id: order.id,
         orgId: event.orgId,
@@ -147,7 +147,7 @@ export class OrderProjection implements IEventHandler {
   private async onOrderUpdated(event: DomainEvent): Promise<void> {
     // Re-fetch and update the read model
     const order = await this.prisma.order.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         customer: { select: { name: true } },
         origin: { select: { name: true, city: true, state: true } },
@@ -158,7 +158,7 @@ export class OrderProjection implements IEventHandler {
     if (!order) return;
 
     await this.prisma.orderReadModel.update({
-      where: { id: order.id },
+      where: { id: order.id, orgId: event.orgId },
       data: {
         orderNumber: order.orderNumber,
         poNumber: order.poNumber,
@@ -184,7 +184,7 @@ export class OrderProjection implements IEventHandler {
   private async onOrderStatusChanged(event: DomainEvent): Promise<void> {
     const payload = event.payload as { newStatus: string };
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: payload.newStatus, updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
@@ -194,7 +194,7 @@ export class OrderProjection implements IEventHandler {
   private async onDeliveryStatusChanged(event: DomainEvent): Promise<void> {
     const payload = event.payload as { newStatus: string };
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         deliveryStatus: payload.newStatus,
         deliveredAt: payload.newStatus === 'delivered' ? new Date() : undefined,
@@ -209,7 +209,7 @@ export class OrderProjection implements IEventHandler {
   private async onAssignedToShipment(event: DomainEvent): Promise<void> {
     const payload = event.payload as { shipmentId: string; shipmentReference: string };
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         shipmentId: payload.shipmentId,
         shipmentReference: payload.shipmentReference,
@@ -222,7 +222,7 @@ export class OrderProjection implements IEventHandler {
 
   private async onOrderDelivered(event: DomainEvent): Promise<void> {
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         deliveryStatus: 'delivered',
         deliveredAt: new Date(),
@@ -237,7 +237,7 @@ export class OrderProjection implements IEventHandler {
   private async onOrderException(event: DomainEvent): Promise<void> {
     const payload = event.payload as { exceptionType?: string };
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         deliveryStatus: 'exception',
         exceptionType: payload.exceptionType ?? 'unknown',
@@ -250,7 +250,7 @@ export class OrderProjection implements IEventHandler {
 
   private async onExceptionResolved(event: DomainEvent): Promise<void> {
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: {
         deliveryStatus: 'in_transit',
         exceptionType: null,
@@ -266,7 +266,7 @@ export class OrderProjection implements IEventHandler {
     // 'archived' so they remain visible in list views as a filterable status,
     // mirroring CarrierProjection.onCarrierArchived.
     await this.prisma.orderReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[OrderProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
@@ -277,7 +277,7 @@ export class OrderProjection implements IEventHandler {
     // Soft-deleted orders are hidden from every view, same read-model removal
     // as archive.
     await this.prisma.orderReadModel.delete({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     }).catch((err: Error) => {
       console.error(`[OrderProjection] Failed to delete order ${event.entityId}: ${err.message}`);
     });
@@ -305,14 +305,14 @@ export class OrderProjection implements IEventHandler {
    */
   private async refreshAggregates(orderId: string, orgId: string): Promise<void> {
     const [unitCount, lineItemCount, totalWeight] = await Promise.all([
-      this.prisma.trackableUnit.count({ where: { orderId } }),
-      this.prisma.orderLineItem.count({ where: { orderId } }),
-      this.calculateTotalWeight(orderId),
+      this.prisma.trackableUnit.count({ where: { orderId, order: { orgId } } }),
+      this.prisma.orderLineItem.count({ where: { orderId, order: { orgId } } }),
+      this.calculateTotalWeight(orderId, orgId),
     ]);
     const data = { trackableUnitCount: unitCount, lineItemCount, totalWeight, updatedAt: new Date() };
 
     try {
-      await this.prisma.orderReadModel.update({ where: { id: orderId }, data });
+      await this.prisma.orderReadModel.update({ where: { id: orderId, orgId }, data });
     } catch (err: any) {
       if (err?.code !== 'P2025') {
         console.error(`[OrderProjection] Failed to refresh aggregates for order ${orderId}: ${err?.message ?? err}`);
@@ -322,7 +322,7 @@ export class OrderProjection implements IEventHandler {
       // live Order. Then re-apply the aggregates so the upsert's "update" path
       // also reflects the latest counts.
       await this.materialiseFromOrder(orderId, orgId);
-      await this.prisma.orderReadModel.update({ where: { id: orderId }, data }).catch((e: Error) => {
+      await this.prisma.orderReadModel.update({ where: { id: orderId, orgId }, data }).catch((e: Error) => {
         console.error(`[OrderProjection] Recovery upsert succeeded but follow-up aggregate update failed for ${orderId}: ${e.message}`);
       });
     }
@@ -334,7 +334,7 @@ export class OrderProjection implements IEventHandler {
    */
   private async materialiseFromOrder(orderId: string, orgId: string): Promise<void> {
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId },
       include: {
         customer: { select: { id: true, name: true } },
         origin: { select: { name: true, city: true, state: true } },
@@ -344,9 +344,9 @@ export class OrderProjection implements IEventHandler {
       },
     });
     if (!order) return;
-    const totalWeight = await this.calculateTotalWeight(orderId);
+    const totalWeight = await this.calculateTotalWeight(orderId, orgId);
     await this.prisma.orderReadModel.upsert({
-      where: { id: order.id },
+      where: { id: order.id, orgId },
       create: {
         id: order.id,
         orgId,
@@ -388,9 +388,9 @@ export class OrderProjection implements IEventHandler {
    * (sophisticated shipper built mixed-SKU pallets), trust the unit totals
    * rather than re-deriving from lines.
    */
-  private async calculateTotalWeight(orderId: string): Promise<number | null> {
+  private async calculateTotalWeight(orderId: string, orgId: string): Promise<number | null> {
     const units = await this.prisma.trackableUnit.findMany({
-      where: { orderId },
+      where: { orderId, order: { orgId } },
       select: { weight: true },
     });
     const hasUnitOverride = units.some(u => u.weight != null && u.weight > 0);
@@ -400,7 +400,7 @@ export class OrderProjection implements IEventHandler {
     }
 
     const items = await this.prisma.orderLineItem.findMany({
-      where: { orderId },
+      where: { orderId, order: { orgId } },
       select: { weight: true, quantity: true },
     });
     if (items.length === 0) return null;

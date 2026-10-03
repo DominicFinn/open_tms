@@ -239,6 +239,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     // Orders use origin/destination location coordinates
     const orders = await server.prisma.order.findMany({
       where: {
+        orgId: request.orgId!,
         archived: false,
         origin: { lat: { not: null }, lng: { not: null } },
       },
@@ -327,6 +328,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     // Get units that have cargo scans with coordinates
     const scans = await server.prisma.cargoScan.findMany({
       where: {
+        orgId: request.orgId!,
         lat: { not: null },
         lng: { not: null },
       },
@@ -425,9 +427,11 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     const statusFilter = request.query.status?.split(',').filter(Boolean) || ['open', 'in_progress'];
     const priorityFilter = request.query.priority?.split(',').filter(Boolean);
     const slaStatusFilter = request.query.slaStatus?.split(',').filter(Boolean);
+    const orgId = request.orgId!;
 
     // Build issue WHERE clause
     const issueWhere: any = {
+      orgId,
       status: { in: statusFilter },
       sourceEntityType: 'shipment',
       sourceEntityId: { not: null },
@@ -465,6 +469,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     const shipmentIds = [...new Set(issues.map((i) => i.sourceEntityId!))];
     const shipments = await server.prisma.shipmentReadModel.findMany({
       where: {
+        orgId,
         id: { in: shipmentIds },
         currentLat: { not: null },
         currentLng: { not: null },
@@ -485,6 +490,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     let slaByIssue = new Map<string, any[]>();
     const issueIds = issues.map((i) => i.id);
     const slaWhere: any = {
+      orgId,
       entityType: 'issue',
       entityId: { in: issueIds },
     };
@@ -514,6 +520,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
 
     // Also get SLA evaluations directly linked to shipments (e.g., ETA breaches)
     const shipmentSlaWhere: any = {
+      orgId,
       entityType: 'shipment',
       entityId: { in: shipmentIds },
       status: { in: slaStatusFilter?.length ? slaStatusFilter : ['breached', 'warning'] },

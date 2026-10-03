@@ -20,7 +20,7 @@ export class ArchiveLaneCommandHandler extends BaseCommandHandler<{ id: string }
   ): Promise<{ id: string }> {
     const { id } = command.payload;
     const lane = await tx.lane.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date() },
     });
 

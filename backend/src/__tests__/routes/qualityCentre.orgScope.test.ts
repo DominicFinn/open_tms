@@ -53,6 +53,9 @@ function buildPrisma() {
         { id: 'cl-a', orgId: 'org-a', title: 'GDP Annual Review' },
         { id: 'cl-b', orgId: 'org-b', title: 'Cold Chain SOP Check' },
       ]),
+      update: jest.fn().mockImplementation(({ where }: any) =>
+        Promise.resolve({ id: where.id, title: 'updated' }),
+      ),
     },
     sOPAudit: {
       findFirst: orgAwareFindFirst([
@@ -139,5 +142,32 @@ describe('Quality Centre org scoping', () => {
       payload: { notes: 'checked' },
     });
     expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.sOPAuditResponse.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'resp-a', audit: { orgId: 'org-a' } } }),
+    );
+  });
+
+  it('checklist update: org-a cannot modify an org-b checklist', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/quality/sop-checklists/cl-b',
+      headers: { 'x-test-org': 'org-a' },
+      payload: { title: 'tampered' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect((app as any).prisma.sOPChecklist.update).not.toHaveBeenCalled();
+  });
+
+  it('checklist update: scopes the write to the caller org and drops a smuggled orgId', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/quality/sop-checklists/cl-a',
+      headers: { 'x-test-org': 'org-a' },
+      payload: { title: 'renamed', orgId: 'org-b' },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = (app as any).prisma.sOPChecklist.update.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 'cl-a', orgId: 'org-a' });
+    expect(call.data).not.toHaveProperty('orgId');
   });
 });

@@ -70,7 +70,7 @@ Walk this before opening a PR. Not a formality — most of these have bitten us.
 ## Docs & tracking
 
 - [ ] `docs/DOMAIN_BEHAVIOURS.md` updated with commands, events, side effects
-- [ ] `roadmap.md` updated
+- [ ] `docs/roadmap/completed.md` updated and the item removed from `backlog.md` or `finnwms.md`
 - [ ] `README.md` updated if user-facing
 - [ ] `www/` reviewed if user-facing
 - [ ] Issue number in the branch name and commit message

@@ -35,13 +35,13 @@ export class MoveLineItemBetweenUnitsCommandHandler extends BaseCommandHandler<M
     const { lineItemId, targetUnitId } = command.payload;
 
     const lineItem = await tx.orderLineItem.findUniqueOrThrow({
-      where: { id: lineItemId },
+      where: { id: lineItemId, order: { orgId: command.orgId } },
       select: { id: true, orderId: true, trackableUnitId: true, sku: true },
     });
 
     if (targetUnitId) {
       const target = await tx.trackableUnit.findUniqueOrThrow({
-        where: { id: targetUnitId },
+        where: { id: targetUnitId, order: { orgId: command.orgId } },
         select: { orderId: true },
       });
       if (target.orderId !== lineItem.orderId) {
@@ -50,7 +50,7 @@ export class MoveLineItemBetweenUnitsCommandHandler extends BaseCommandHandler<M
     }
 
     await tx.orderLineItem.update({
-      where: { id: lineItemId },
+      where: { id: lineItemId, order: { orgId: command.orgId } },
       data: { trackableUnitId: targetUnitId },
     });
 

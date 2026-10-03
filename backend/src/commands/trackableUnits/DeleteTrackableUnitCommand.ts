@@ -30,11 +30,11 @@ export class DeleteTrackableUnitCommandHandler extends BaseCommandHandler<Delete
     const { id } = command.payload;
 
     const existing = await tx.trackableUnit.findUniqueOrThrow({
-      where: { id },
+      where: { id, order: { orgId: command.orgId } },
       include: { _count: { select: { lineItems: true } } },
     });
 
-    await tx.trackableUnit.delete({ where: { id } });
+    await tx.trackableUnit.delete({ where: { id, order: { orgId: command.orgId } } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.TRACKABLE_UNIT_DELETED,

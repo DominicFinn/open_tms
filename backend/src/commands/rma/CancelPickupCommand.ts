@@ -32,7 +32,7 @@ export class CancelPickupCommandHandler extends BaseCommandHandler<
     emit: EmitFn,
   ) {
     const p = command.payload;
-    const rma = await tx.rma.findUnique({ where: { id: p.rmaId } });
+    const rma = await tx.rma.findUnique({ where: { id: p.rmaId, orgId: command.orgId } });
     if (!rma) throw new Error(`RMA ${p.rmaId} not found`);
     if (!rma.returnPickupConfirmationNumber) {
       throw new Error('No pickup scheduled to cancel');
@@ -46,7 +46,9 @@ export class CancelPickupCommandHandler extends BaseCommandHandler<
 
     let carrierAccountNumber: string | undefined;
     if (rma.returnCarrierId) {
-      const carrier = await tx.carrier.findUnique({ where: { id: rma.returnCarrierId } });
+      const carrier = await tx.carrier.findUnique({
+        where: { id: rma.returnCarrierId, orgId: command.orgId },
+      });
       carrierAccountNumber = carrier?.returnLabelAccountNumber ?? undefined;
     }
 
@@ -58,7 +60,7 @@ export class CancelPickupCommandHandler extends BaseCommandHandler<
 
     const cancelledAt = new Date();
     await tx.rma.update({
-      where: { id: rma.id },
+      where: { id: rma.id, orgId: command.orgId },
       data: {
         returnPickupCancelledAt: cancelledAt,
       },

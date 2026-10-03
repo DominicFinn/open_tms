@@ -66,14 +66,16 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     schema: { tags: ['Customer Portal - Developer'], summary: 'Developer area overview stats' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
+    const orgId = req.orgId!;
     const [apiKeyCount, activeKeyCount, webhookCount, enabledWebhookCount, partnerCount, recentLogCount] = await Promise.all([
-      server.prisma.apiKey.count({ where: { customerId } }),
-      server.prisma.apiKey.count({ where: { customerId, active: true } }),
-      server.prisma.customerWebhook.count({ where: { customerId } }),
-      server.prisma.customerWebhook.count({ where: { customerId, enabled: true } }),
-      server.prisma.tradingPartner.count({ where: { customerId } }),
+      server.prisma.apiKey.count({ where: { customerId, orgId } }),
+      server.prisma.apiKey.count({ where: { customerId, orgId, active: true } }),
+      server.prisma.customerWebhook.count({ where: { customerId, orgId } }),
+      server.prisma.customerWebhook.count({ where: { customerId, orgId, enabled: true } }),
+      server.prisma.tradingPartner.count({ where: { customerId, orgId } }),
       server.prisma.ediTransactionLog.count({
         where: {
+          orgId,
           partner: { customerId },
           createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) },
         },
@@ -98,7 +100,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const keys = await server.prisma.apiKey.findMany({
-      where: { customerId },
+      where: { customerId, orgId: req.orgId! },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, keyPrefix: true, active: true, lastUsedAt: true, createdAt: true, updatedAt: true },
     });
@@ -168,7 +170,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     // command itself is org-scoped via orgId but doesn't know about
     // customerId. Refusing here keeps a malicious customer from updating
     // someone else's key by ID.
-    const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
+    const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
 
     const orgId = req.orgId!;
@@ -193,7 +195,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
-    const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
+    const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
 
     const orgId = req.orgId!;
@@ -220,7 +222,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const hooks = await server.prisma.customerWebhook.findMany({
-      where: { customerId },
+      where: { customerId, orgId: req.orgId! },
       orderBy: { createdAt: 'desc' },
     });
     return { data: hooks, error: null };
@@ -285,7 +287,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     }
 
     const created = await server.prisma.customerWebhook.findUnique({
-      where: { id: (result.data as { id: string }).id },
+      where: { id: (result.data as { id: string }).id, customerId: user.customerId, orgId },
     });
     reply.code(201);
     return { data: created, error: null };
@@ -318,7 +320,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       enabled: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
+    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
     if (body.events) {
@@ -343,7 +345,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       return { data: null, error: result.error ?? 'Failed to update webhook' };
     }
 
-    const updated = await server.prisma.customerWebhook.findUnique({ where: { id } });
+    const updated = await server.prisma.customerWebhook.findUnique({ where: { id, customerId, orgId } });
     return { data: updated, error: null };
   });
 
@@ -353,7 +355,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
-    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
+    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
     const orgId = req.orgId!;
@@ -378,7 +380,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
-    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
+    const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
     const orgId = req.orgId!;
@@ -412,7 +414,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
     const body = (req.body as any) ?? {};
-    const hook = await server.prisma.customerWebhook.findFirst({ where: { id, customerId } });
+    const hook = await server.prisma.customerWebhook.findFirst({ where: { id, customerId, orgId: req.orgId! } });
     if (!hook) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
     const delivery = await deliveryService.deliver({
@@ -437,10 +439,10 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
     const q = req.query as { limit?: number };
-    const hook = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
+    const hook = await server.prisma.customerWebhook.findFirst({ where: { id, customerId, orgId: req.orgId! }, select: { id: true } });
     if (!hook) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
     const deliveries = await server.prisma.customerWebhookDelivery.findMany({
-      where: { webhookId: id },
+      where: { webhookId: id, webhook: { orgId: req.orgId! } },
       orderBy: { createdAt: 'desc' },
       take: q.limit || 50,
     });
@@ -455,7 +457,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const partners = await server.prisma.tradingPartner.findMany({
-      where: { customerId },
+      where: { customerId, orgId: req.orgId! },
       include: {
         transactions: { orderBy: { transactionType: 'asc' } },
       },
@@ -491,7 +493,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
     const q = req.query as { direction?: string; transactionType?: string; limit?: number; offset?: number };
-    const where: any = { partner: { customerId } };
+    const where: any = { orgId: req.orgId!, partner: { customerId } };
     if (q.direction) where.direction = q.direction;
     if (q.transactionType) where.transactionType = q.transactionType;
 

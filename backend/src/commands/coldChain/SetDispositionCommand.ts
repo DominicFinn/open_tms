@@ -34,12 +34,12 @@ export class SetDispositionCommandHandler extends BaseCommandHandler<SetDisposit
     const { shipmentId, disposition, notes } = command.payload;
 
     const previous = await tx.shipment.findUniqueOrThrow({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: command.orgId },
       select: { coldChainDisposition: true, reference: true },
     });
 
     await tx.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId: command.orgId },
       data: {
         coldChainDisposition: disposition,
         dispositionSetBy: command.actorId,

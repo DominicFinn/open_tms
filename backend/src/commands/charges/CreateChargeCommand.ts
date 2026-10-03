@@ -133,7 +133,7 @@ export class CreateChargeCommandHandler extends BaseCommandHandler<CreateChargeP
     const currency = charges.length > 0 ? charges[0].currency : 'USD';
 
     await tx.shipmentFinancialSummary.upsert({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       create: {
         shipmentId,
         orgId,

@@ -110,7 +110,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const rule = await server.prisma.automationRule.findUnique({
-      where: { id: (result.data as { id: string }).id },
+      where: { id: (result.data as { id: string }).id, orgId },
     });
     reply.code(201);
     return { data: rule, error: null };
@@ -120,8 +120,10 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string } }>('/api/v1/automation-rules/:id', {
     schema: { tags: ['Automation Rules'], summary: 'Get automation rule by ID' },
   }, async (request, reply) => {
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Rule not found' }; }
     const rule = await server.prisma.automationRule.findUnique({
-      where: { id: request.params.id },
+      where: { id: request.params.id, orgId },
     });
     if (!rule) { reply.code(404); return { data: null, error: 'Rule not found' }; }
     return { data: rule, error: null };
@@ -161,7 +163,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const rule = await server.prisma.automationRule.findUnique({
-      where: { id: request.params.id },
+      where: { id: request.params.id, orgId },
     });
     return { data: rule, error: null };
   });
@@ -198,7 +200,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     const orgId = await resolveOrgId(request);
     if (!orgId) return { data: null, error: 'Organization not found' };
 
-    const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id } });
+    const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id, orgId } });
     if (!rule) return { data: null, error: 'Rule not found' };
 
     const result = await commandBus.dispatch({
@@ -212,7 +214,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     if (!result.success) return { data: null, error: result.error ?? 'Toggle failed' };
 
     const updated = await server.prisma.automationRule.findUnique({
-      where: { id: request.params.id },
+      where: { id: request.params.id, orgId },
     });
     return { data: updated, error: null };
   });
@@ -221,10 +223,12 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/v1/automation-rules/:id/executions', {
     schema: { tags: ['Automation Rules'], summary: 'Get execution log for a rule' },
   }, async (request) => {
+    const orgId = await resolveOrgId(request);
+    if (!orgId) return { data: [], error: null };
     const limit = request.query.limit ? parseInt(request.query.limit, 10) : 50;
 
     const executions = await server.prisma.automationExecutionLog.findMany({
-      where: { ruleId: request.params.id },
+      where: { ruleId: request.params.id, orgId },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -262,7 +266,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const rule = await server.prisma.automationRule.findUnique({
-      where: { id: (result.data as { ruleId: string }).ruleId },
+      where: { id: (result.data as { ruleId: string }).ruleId, orgId },
     });
     reply.code(201);
     return { data: rule, error: null };
@@ -297,7 +301,9 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id } });
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Rule not found' }; }
+    const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id, orgId } });
     if (!rule) { reply.code(404); return { data: null, error: 'Rule not found' }; }
 
     const conditions = rule.conditions as unknown as RuleCondition[];

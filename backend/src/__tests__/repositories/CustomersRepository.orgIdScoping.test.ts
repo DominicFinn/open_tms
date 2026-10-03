@@ -1,8 +1,7 @@
 /**
  * Repository-level guardrails for the multi-tenancy work in phase 1 of
- * the remediation plan. These tests pin the behaviour I want: passing
- * orgId must always filter by it; omitting orgId must NOT scope (so
- * legacy/admin callers can still reach NULL-orgId rows).
+ * the remediation plan. These tests pin the behaviour I want: every read
+ * takes a required orgId and always filters by it.
  */
 
 import { CustomersRepository } from '../../repositories/CustomersRepository';
@@ -51,13 +50,6 @@ describe('CustomersRepository orgId scoping', () => {
     });
   });
 
-  it('all() omits orgId from the where clause when none supplied', async () => {
-    const prisma = customerPrisma();
-    const repo = new CustomersRepository(prisma);
-    await repo.all();
-    expect(prisma.customer.findMany.mock.calls[0][0].where).toEqual({ archived: false });
-  });
-
   it('findById() scopes by orgId so cross-tenant ID guesses return null', async () => {
     const prisma = customerPrisma();
     const repo = new CustomersRepository(prisma);
@@ -66,16 +58,6 @@ describe('CustomersRepository orgId scoping', () => {
       id: 'cust-1',
       archived: false,
       orgId: 'org-1',
-    });
-  });
-
-  it('findById() with no orgId reads cross-tenant (legacy/admin caller)', async () => {
-    const prisma = customerPrisma();
-    const repo = new CustomersRepository(prisma);
-    await repo.findById('cust-1');
-    expect(prisma.customer.findFirst.mock.calls[0][0].where).toEqual({
-      id: 'cust-1',
-      archived: false,
     });
   });
 
@@ -95,6 +77,15 @@ describe('CustomersRepository orgId scoping', () => {
     // Passing one through still works end-to-end.
     await repo.create({ orgId: 'org-1', name: 'Acme' });
     expect(prisma.customer.create.mock.calls[0][0].data.orgId).toBe('org-1');
+  });
+
+  it('update() and archive() only touch a row in the caller org', async () => {
+    const prisma = customerPrisma();
+    const repo = new CustomersRepository(prisma);
+    await repo.update('c-1', 'org-1', { name: 'Acme' });
+    await repo.archive('c-1', 'org-1');
+    expect(prisma.customer.update.mock.calls[0][0].where).toEqual({ id: 'c-1', orgId: 'org-1' });
+    expect(prisma.customer.update.mock.calls[1][0].where).toEqual({ id: 'c-1', orgId: 'org-1' });
   });
 });
 
@@ -121,13 +112,14 @@ describe('CarriersRepository orgId scoping', () => {
     });
   });
 
-  it('omits orgId when caller passes none — preserves legacy admin behaviour', async () => {
+  it('findArchived() scopes by orgId', async () => {
     const prisma = carrierPrisma();
     const repo = new CarriersRepository(prisma);
-    await repo.findById('car-1');
-    expect(prisma.carrier.findFirst.mock.calls[0][0].where).toEqual({
-      id: 'car-1',
+    await repo.findArchived('org-1');
+    expect(prisma.carrier.findMany.mock.calls[0][0].where).toEqual({
+      archived: true,
       deletedAt: null,
+      orgId: 'org-1',
     });
   });
 });

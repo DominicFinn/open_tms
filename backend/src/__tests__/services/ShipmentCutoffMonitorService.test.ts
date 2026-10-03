@@ -156,6 +156,20 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     expect(result.cutoffAt).toBeNull();
   });
 
+  it('scopes the cutoff and pending work queries to the shipment org', async () => {
+    const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1 });
+    const bus = { publish: jest.fn().mockResolvedValue(undefined) };
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    await svc.evaluateShipment(makeShipment(), now, 'org-1');
+
+    expect(prisma.carrierCutoff.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ orgId: 'org-1', carrierId: 'car-1' }),
+    });
+    expect(prisma.pickTask.count.mock.calls[0][0].where.orgId).toBe('org-1');
+    expect(prisma.packTask.count.mock.calls[0][0].where.orgId).toBe('org-1');
+    expect(prisma.loadPlan.count.mock.calls[0][0].where.orgId).toBe('org-1');
+  });
+
   it('returns no risk when carrier has no cutoff for today', async () => {
     const prisma = makePrisma({ cutoffs: [] });
     const bus = { publish: jest.fn() };

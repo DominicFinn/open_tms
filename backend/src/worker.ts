@@ -81,7 +81,7 @@ async function seedTriageAgentConfigs(prisma: PrismaClient): Promise<void> {
       include: { versions: true },
     });
     await prisma.agentConfig.update({
-      where: { id: config.id },
+      where: { id: config.id, orgId },
       data: { activeVersionId: config.versions[0].id },
     });
     console.log('[Worker] Auto-seeded default triage agent config (version 1)', { orgId });

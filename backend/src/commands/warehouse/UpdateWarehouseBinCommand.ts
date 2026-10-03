@@ -59,7 +59,7 @@ export class UpdateWarehouseBinCommandHandler extends BaseCommandHandler<
     }
 
     const bin = await tx.warehouseBin.update({
-      where: { id: binId },
+      where: { id: binId, orgId: command.orgId },
       data: updates,
     });
 

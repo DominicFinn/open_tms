@@ -158,7 +158,7 @@ describe('DeleteLineItemCommandHandler', () => {
     const result = await handler.execute(createTestCommand(DELETE_LINE_ITEM, { id: 'li-1' }));
 
     expect(result.success).toBe(true);
-    expect(tx.orderLineItem.delete).toHaveBeenCalledWith({ where: { id: 'li-1' } });
+    expect(tx.orderLineItem.delete).toHaveBeenCalledWith({ where: { id: 'li-1', order: { orgId: 'test-org' } } });
     expect(result.events[0].type).toBe(EVENT_TYPES.ORDER_LINE_ITEM_DELETED);
     expect(result.events[0].payload).toEqual(expect.objectContaining({
       orderId: 'order-1', sku: 'WIDGET', trackableUnitId: 'tu-1',

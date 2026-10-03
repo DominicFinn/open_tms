@@ -52,7 +52,7 @@ export interface IQuoteRepository {
   create(data: CreateQuoteDTO): Promise<Quote>;
   findById(id: string, orgId: string): Promise<QuoteWithLineItems | null>;
   findAll(filters: QuoteFilters): Promise<QuoteWithLineItems[]>;
-  update(id: string, data: Partial<Quote>): Promise<Quote>;
+  update(id: string, orgId: string, data: Partial<Quote>): Promise<Quote>;
   addLineItems(data: CreateQuoteLineItemDTO[]): Promise<number>;
   getNextQuoteNumber(orgId: string): Promise<string>;
 }
@@ -108,8 +108,8 @@ export class QuoteRepository implements IQuoteRepository {
     }) as Promise<QuoteWithLineItems[]>;
   }
 
-  async update(id: string, data: Partial<Quote>): Promise<Quote> {
-    return this.prisma.quote.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: Partial<Quote>): Promise<Quote> {
+    return this.prisma.quote.update({ where: { id, orgId }, data });
   }
 
   async addLineItems(data: CreateQuoteLineItemDTO[]): Promise<number> {

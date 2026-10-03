@@ -44,6 +44,7 @@ export class Edi810AutoSendHandler implements IEventHandler {
       // Find customer trading partners with outbound 810 enabled
       const partners = await this.prisma.tradingPartner.findMany({
         where: {
+          orgId: event.orgId,
           active: true,
           outboundEnabled: true,
           customerId,
@@ -61,7 +62,7 @@ export class Edi810AutoSendHandler implements IEventHandler {
 
       // Load full invoice data
       const invoice = await this.prisma.invoice.findUnique({
-        where: { id: invoiceId },
+        where: { id: invoiceId, orgId: event.orgId },
         include: {
           customer: true,
           lineItems: true,
@@ -114,6 +115,7 @@ export class Edi810AutoSendHandler implements IEventHandler {
           });
 
           await this.deliveryService.deliver({
+            orgId: event.orgId,
             partnerId: partner.id,
             transactionType: '810',
             ediContent,

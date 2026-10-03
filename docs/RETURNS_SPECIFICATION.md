@@ -3,7 +3,8 @@
 > A comprehensive specification for the returns workflow in Open TMS. Covers the RMA (Return Merchandise Authorization) model, disposition types, physical handling, refund calculation, customer portal integration, and the downstream distinctions between customer-initiated returns and customer-refused deliveries.
 
 **Status**: v1 design, pre-implementation.
-**Related roadmap item**: Track 7 WMS v1 - Returns / RMA.
+**Related roadmap item**: WMS v1 Returns / RMA (shipped, see `docs/roadmap/completed.md`). Open
+returns work is in `docs/roadmap/finnwms.md`.
 
 ---
 

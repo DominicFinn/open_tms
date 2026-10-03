@@ -43,10 +43,10 @@ export class CreateReplenishmentRuleCommandHandler extends BaseCommandHandler<
     }
 
     // Verify bin and zone exist
-    const bin = await tx.warehouseBin.findUnique({ where: { id: p.pickFaceBinId } });
+    const bin = await tx.warehouseBin.findUnique({ where: { id: p.pickFaceBinId, orgId: command.orgId } });
     if (!bin) throw new Error(`Pick face bin ${p.pickFaceBinId} not found`);
 
-    const zone = await tx.warehouseZone.findUnique({ where: { id: p.bulkZoneId } });
+    const zone = await tx.warehouseZone.findUnique({ where: { id: p.bulkZoneId, orgId: command.orgId } });
     if (!zone) throw new Error(`Bulk zone ${p.bulkZoneId} not found`);
 
     const rule = await tx.replenishmentRule.create({

@@ -41,7 +41,7 @@ export class CompleteCAPAFollowUpCommandHandler extends BaseCommandHandler<Compl
     }
 
     await tx.cAPAFollowUp.update({
-      where: { id: followUpId },
+      where: { id: followUpId, orgId: command.orgId },
       data: {
         status: 'completed',
         completedAt: new Date(),

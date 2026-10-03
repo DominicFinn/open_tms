@@ -27,7 +27,7 @@ export class EscalateIssueCommandHandler extends BaseCommandHandler<EscalateIssu
     const { id, escalatedTo, reason } = command.payload;
 
     const updated = await tx.issue.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         escalatedTo,
         escalatedAt: new Date(),

@@ -33,7 +33,7 @@ export class CreatePromptVersionCommandHandler extends BaseCommandHandler<Create
     const { configId, systemPrompt, changeNote, createdBy } = command.payload;
 
     const config = await tx.agentConfig.findUnique({
-      where: { id: configId },
+      where: { id: configId, orgId: command.orgId },
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
     });
     if (!config) throw new Error('Agent config not found');
@@ -53,7 +53,7 @@ export class CreatePromptVersionCommandHandler extends BaseCommandHandler<Create
     // New versions auto-activate (matches the original route behaviour) so
     // a save-and-test loop in the UI doesn't need a second click.
     await tx.agentConfig.update({
-      where: { id: config.id },
+      where: { id: config.id, orgId: command.orgId },
       data: { activeVersionId: version.id },
     });
 

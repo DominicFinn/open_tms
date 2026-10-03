@@ -29,14 +29,14 @@ export class DeleteCommentCommandHandler extends BaseCommandHandler<DeleteCommen
   ): Promise<DeleteCommentResult> {
     const { id } = command.payload;
 
-    const existing = await tx.comment.findUnique({ where: { id } });
+    const existing = await tx.comment.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing) throw new Error('Comment not found');
     if (existing.deletedAt) {
       return { id, alreadyDeleted: true };
     }
 
     await tx.comment.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         deletedAt: new Date(),
         deletedBy: command.actorId,

@@ -175,7 +175,7 @@ export class ShipmentCutoffMonitorService {
     if (!shipment.carrierId) return base;
 
     const cutoffs = await this.prisma.carrierCutoff.findMany({
-      where: { carrierId: shipment.carrierId, active: true },
+      where: { orgId, carrierId: shipment.carrierId, active: true },
     });
     const resolved = resolveCutoffForNow(cutoffs, now);
     if (!resolved) return base; // carrier has no cutoff for today
@@ -186,13 +186,13 @@ export class ShipmentCutoffMonitorService {
     const [pickCount, packCount, loadPlanCount] = orderIds.length > 0
       ? await Promise.all([
           this.prisma.pickTask.count({
-            where: { orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
           }),
           this.prisma.packTask.count({
-            where: { orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
           }),
           this.prisma.loadPlan.count({
-            where: { shipmentId: shipment.id, status: { notIn: ['completed', 'cancelled'] } },
+            where: { orgId, shipmentId: shipment.id, status: { notIn: ['completed', 'cancelled'] } },
           }),
         ])
       : [0, 0, 0];
@@ -240,7 +240,7 @@ export class ShipmentCutoffMonitorService {
   private async maybeEmitCutoffCleared(shipment: Shipment, now: Date, orgId: string): Promise<void> {
     if (!shipment.lastCutoffRiskSeverity) return;
     await this.prisma.shipment.update({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: shipment.orgId },
       data: { lastCutoffRiskSeverity: null, lastCutoffRiskAt: now },
     });
     await this.eventBus.publish(createEvent({
@@ -282,7 +282,7 @@ export class ShipmentCutoffMonitorService {
     // `shipment_cutoff_risk`). The monitor only records severity for its own
     // event-level dedup so it doesn't re-emit the same severity repeatedly.
     await this.prisma.shipment.update({
-      where: { id: shipment.id },
+      where: { id: shipment.id, orgId: shipment.orgId },
       data: {
         lastCutoffRiskSeverity: result.severity,
         lastCutoffRiskAt: now,

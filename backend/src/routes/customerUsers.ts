@@ -9,6 +9,7 @@ import { container, TOKENS } from '../di/index.js';
 import { ICustomerAuthService } from '../services/CustomerAuthService.js';
 import { ICustomerUserRepository } from '../repositories/CustomerUserRepository.js';
 import { computeLockoutStatus } from '../services/auth/lockout.js';
+import { PortalAccountNotFoundError, PortalUserNotFoundError } from '../services/auth/portalUserErrors.js';
 
 export async function customerUserRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
@@ -22,7 +23,7 @@ export async function customerUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const { customerId } = req.params as { customerId: string };
-    const users = await userRepo.findByCustomerId(customerId);
+    const users = await userRepo.findByCustomerId(customerId, req.orgId!);
     const enriched = users.map((u: any) => ({
       ...u,
       lockoutStatus: computeLockoutStatus(u),
@@ -56,11 +57,11 @@ export async function customerUserRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const user = await authService.register(customerId, body.email, body.password, body.name, body.role);
+      const user = await authService.register(customerId, req.orgId!, body.email, body.password, body.name, body.role);
       reply.code(201);
       return { data: user, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof PortalAccountNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });
@@ -82,8 +83,14 @@ export async function customerUserRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = (req as any).body || {};
 
+    const existing = await userRepo.findById(id, req.orgId!);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+
     try {
-      const updated = await userRepo.update(id, body);
+      const updated = await userRepo.update(id, req.orgId!, body);
       return { data: updated, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -106,10 +113,10 @@ export async function customerUserRoutes(server: FastifyInstance) {
     const { newPassword } = (req as any).body;
 
     try {
-      await authService.adminResetPassword(id, newPassword);
+      await authService.adminResetPassword(id, req.orgId!, newPassword);
       return { data: { success: true }, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof PortalUserNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });
@@ -117,9 +124,14 @@ export async function customerUserRoutes(server: FastifyInstance) {
   // Deactivate customer portal user
   server.delete('/api/v1/customers/:customerId/users/:id', {
     schema: { tags: ['Customer Users'] },
-  }, async (req: FastifyRequest) => {
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    await userRepo.update(id, { active: false });
+    const existing = await userRepo.findById(id, req.orgId!);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+    await userRepo.update(id, req.orgId!, { active: false });
     return { data: { deactivated: true }, error: null };
   });
 
@@ -131,12 +143,12 @@ export async function customerUserRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const user = await userRepo.findById(id);
+    const user = await userRepo.findById(id, req.orgId!);
     if (!user) {
       reply.code(404);
       return { data: null, error: 'User not found' };
     }
-    await authService.unlockAccount(user.id);
+    await authService.unlockAccount(user.id, req.orgId!);
     return { data: { unlocked: true }, error: null };
   });
 }

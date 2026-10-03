@@ -78,6 +78,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: 'nonexistent',
       transactionType: '204',
       ediContent: 'ISA*...',
@@ -88,12 +89,29 @@ describe('OutboundEdiDeliveryService', () => {
     expect(result.errorMessage).toContain('not found');
   });
 
+  it('looks the partner up in the caller org, so a partner from another org is not found', async () => {
+    const repo = createMockRepo(null);
+    const service = new OutboundEdiDeliveryService(repo);
+
+    const result = await service.deliver({
+      orgId: 'org-1',
+      partnerId: 'partner-in-org-2',
+      transactionType: '204',
+      ediContent: 'ISA*...',
+      referenceId: 'REF-001',
+    });
+
+    expect(repo.findById).toHaveBeenCalledWith('partner-in-org-2', 'org-1');
+    expect(result.success).toBe(false);
+  });
+
   it('returns error when outbound not enabled', async () => {
     const partner = makePartner({ outboundEnabled: false });
     const repo = createMockRepo(partner);
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*...',
@@ -110,6 +128,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     const result = await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '810', // not in partner transactions
       ediContent: 'ISA*...',
@@ -127,6 +146,7 @@ describe('OutboundEdiDeliveryService', () => {
 
     // Will fail on SFTP since there's no real server, but log should be created
     await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*test content',
@@ -149,6 +169,7 @@ describe('OutboundEdiDeliveryService', () => {
     const service = new OutboundEdiDeliveryService(repo);
 
     await service.deliver({
+      orgId: 'org-1',
       partnerId: partner.id,
       transactionType: '204',
       ediContent: 'ISA*test',
@@ -167,10 +188,10 @@ describe('OutboundEdiDeliveryService', () => {
 
       // Will still fail on SFTP, but should attempt delivery
       await service.deliverToCarrier(
-        'carrier-001', '204', 'ISA*test', 'REF-001', { shipmentId: 'ship-001' }
+        'carrier-001', 'org-1', '204', 'ISA*test', 'REF-001', { shipmentId: 'ship-001' }
       );
 
-      expect(repo.findByCarrierId).toHaveBeenCalledWith('carrier-001');
+      expect(repo.findByCarrierId).toHaveBeenCalledWith('carrier-001', 'org-1');
     });
 
     it('returns null when no partner found for carrier', async () => {
@@ -179,7 +200,7 @@ describe('OutboundEdiDeliveryService', () => {
       const service = new OutboundEdiDeliveryService(repo);
 
       const result = await service.deliverToCarrier(
-        'nonexistent-carrier', '204', 'ISA*test', 'REF-001'
+        'nonexistent-carrier', 'org-1', '204', 'ISA*test', 'REF-001'
       );
 
       expect(result).toBeNull();
@@ -192,7 +213,7 @@ describe('OutboundEdiDeliveryService', () => {
       const service = new OutboundEdiDeliveryService(repo);
 
       const result = await service.deliverToCarrier(
-        'carrier-001', '204', 'ISA*test', 'REF-001'
+        'carrier-001', 'org-1', '204', 'ISA*test', 'REF-001'
       );
 
       expect(result).toBeNull();

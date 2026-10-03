@@ -161,7 +161,7 @@ export class CartonizationService implements ICartonizationService {
     // Fall back to OrderLineItem dimensions
     if (orderLineItemId) {
       const lineItem = await this.prisma.orderLineItem.findUnique({
-        where: { id: orderLineItemId },
+        where: { id: orderLineItemId, order: { orgId } },
       });
 
       if (lineItem?.length && lineItem?.width && lineItem?.height && lineItem?.weight) {

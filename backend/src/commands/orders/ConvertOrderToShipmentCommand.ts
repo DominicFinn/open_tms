@@ -44,7 +44,7 @@ export class ConvertOrderToShipmentCommandHandler extends BaseCommandHandler<Con
     // Re-read inside the transaction — the caller's own lookup (used only to
     // resolve orgId for the command envelope) is stale by the time we get here.
     const order = await tx.order.findUnique({
-      where: { id: orderId },
+      where: { id: orderId, orgId: command.orgId },
       include: {
         customer: { select: { id: true, name: true } },
         trackableUnits: { include: { lineItems: true } },

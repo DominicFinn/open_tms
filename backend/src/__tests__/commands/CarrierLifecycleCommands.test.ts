@@ -41,7 +41,7 @@ describe('SoftDeleteCarrierCommand', () => {
     expect(tx.carrier.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ deletedAt: expect.any(Date) }),
     }));
-    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({ where: { carrierId: 'car-1' }, data: { active: false } });
+    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({ where: { carrierId: 'car-1', carrier: { orgId: 'test-org' } }, data: { active: false } });
     expect(result.events.some(e => e.type === EVENT_TYPES.CARRIER_DELETED)).toBe(true);
   });
 
@@ -76,7 +76,7 @@ describe('ArchiveCarrierCommand', () => {
     const result = await handler.execute(createTestCommand(ARCHIVE_CARRIER, { id: 'car-1' }));
 
     expect(result.success).toBe(true);
-    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({ where: { carrierId: 'car-1' }, data: { active: false } });
+    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({ where: { carrierId: 'car-1', carrier: { orgId: 'test-org' } }, data: { active: false } });
     expect(result.events.some(e => e.type === EVENT_TYPES.CARRIER_ARCHIVED)).toBe(true);
   });
 });
@@ -89,7 +89,10 @@ describe('UnarchiveCarrierCommand', () => {
     const result = await handler.execute(createTestCommand(UNARCHIVE_CARRIER, { id: 'car-1' }));
 
     expect(result.success).toBe(true);
-    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({ where: { carrierId: 'car-1', anonymizedAt: null }, data: { active: true } });
+    expect(tx.carrierUser.updateMany).toHaveBeenCalledWith({
+      where: { carrierId: 'car-1', anonymizedAt: null, carrier: { orgId: 'test-org' } },
+      data: { active: true },
+    });
     expect(result.events.some(e => e.type === EVENT_TYPES.CARRIER_UNARCHIVED)).toBe(true);
   });
 });

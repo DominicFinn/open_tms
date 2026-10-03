@@ -19,7 +19,7 @@ export class UpdateCustomerCommandHandler extends BaseCommandHandler<{ id: strin
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
-    const updated = await tx.customer.update({ where: { id }, data });
+    const updated = await tx.customer.update({ where: { id, orgId: command.orgId }, data });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CUSTOMER_UPDATED,

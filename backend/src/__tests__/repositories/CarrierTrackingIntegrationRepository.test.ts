@@ -137,10 +137,10 @@ describe('CarrierTrackingIntegrationRepository', () => {
       const prisma = buildPrisma();
       const repo = new CarrierTrackingIntegrationRepository(prisma);
 
-      await repo.incrementRateLimitCounter('int-1');
+      await repo.incrementRateLimitCounter('int-1', 'org-a');
 
       expect(prisma.carrierTrackingIntegration.update).toHaveBeenCalledWith({
-        where: { id: 'int-1' },
+        where: { id: 'int-1', carrier: { orgId: 'org-a' } },
         data: { rateLimitCallsToday: { increment: 1 } },
       });
     });

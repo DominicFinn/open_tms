@@ -146,6 +146,38 @@ describe('CompletePackLineCommandHandler', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('already packed');
   });
+
+  it('refuses a trackable unit from another org and writes nothing', async () => {
+    const tx = {
+      ...facilityMocks(),
+      packLine: {
+        findUnique: jest.fn().mockResolvedValue(mockLine),
+        update: jest.fn().mockResolvedValue({}),
+        count: jest.fn(),
+      },
+      packTask: { update: jest.fn().mockResolvedValue({}) },
+      trackableUnit: { findFirst: jest.fn().mockResolvedValue(null) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new CompletePackLineCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(COMPLETE_PACK_LINE, { packLineId: 'pline-1', packedQuantity: 5, trackableUnitId: 'unit-other-org' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith({
+      where: { id: 'unit-other-org', order: { orgId: 'test-org' } },
+      select: { id: true },
+    });
+    expect(tx.packLine.update).not.toHaveBeenCalled();
+  });
 });
 
 /* ── CreateStagingAssignmentCommandHandler ─────────────────── */
@@ -161,6 +193,8 @@ describe('CreateStagingAssignmentCommandHandler', () => {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
         update: jest.fn().mockResolvedValue({}),
       },
+      order: { findFirst: jest.fn().mockResolvedValue({ id: 'order-1' }) },
+      shipment: { findFirst: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -207,6 +241,46 @@ describe('CreateStagingAssignmentCommandHandler', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
+  });
+
+  function stagingTx(order: any, shipment: any) {
+    return {
+      ...facilityMocks(),
+      warehouseBin: { findFirst: jest.fn().mockResolvedValue({ id: 'bin-staging', label: 'STAGE-01', active: true, zoneId: 'z' }) },
+      stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
+      trackableUnit: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      order: { findFirst: jest.fn().mockResolvedValue(order) },
+      shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+  }
+
+  it.each([
+    ['order', null, { id: 'ship-1' }],
+    ['shipment', { id: 'order-1' }, null],
+  ])('refuses a %s from another org and writes nothing', async (_label, order, shipment) => {
+    const tx = stagingTx(order, shipment);
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new CreateStagingAssignmentCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(CREATE_STAGING_ASSIGNMENT, {
+        facilityId: 'fac-1', orderId: 'order-x',
+        trackableUnitId: 'unit-1', stagingBinId: 'bin-staging', shipmentId: 'ship-x',
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.order.findFirst).toHaveBeenCalledWith({ where: { id: 'order-x', orgId: 'test-org' }, select: { id: true } });
+    expect(tx.stagingAssignment.create).not.toHaveBeenCalled();
   });
 });
 

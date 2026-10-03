@@ -23,6 +23,7 @@ export class OrderAutoArchiveService {
   async runOnce(): Promise<AutoArchiveResult> {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
 
+    // tenancy-exempt: archival cron sweeps every org on purpose; each archive command is dispatched with the org of the row it found.
     const candidates = await this.prisma.order.findMany({
       where: {
         archived: false,

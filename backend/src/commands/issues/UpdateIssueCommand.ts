@@ -45,7 +45,7 @@ export class UpdateIssueCommandHandler extends BaseCommandHandler<UpdateIssuePay
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
-    const previous = await tx.issue.findUniqueOrThrow({ where: { id } });
+    const previous = await tx.issue.findUniqueOrThrow({ where: { id, orgId: command.orgId } });
 
     // Handle status-specific fields
     const updateData: any = { ...data };
@@ -105,7 +105,7 @@ export class UpdateIssueCommandHandler extends BaseCommandHandler<UpdateIssuePay
       updateData.lastActivityAt = new Date();
     }
 
-    const updated = await tx.issue.update({ where: { id }, data: updateData });
+    const updated = await tx.issue.update({ where: { id, orgId: command.orgId }, data: updateData });
 
     let specificEventEmitted = false;
 

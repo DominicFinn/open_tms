@@ -5,7 +5,10 @@ describe('CarrierUserAnonymizationService', () => {
     const updated: any[] = [];
     const prisma = {
       carrierUser: {
-        findMany: jest.fn().mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'u1', carrier: { orgId: 'org-1' } },
+          { id: 'u2', carrier: { orgId: 'org-2' } },
+        ]),
         update: jest.fn().mockImplementation((args: any) => { updated.push(args); return Promise.resolve({}); }),
       },
     } as any;
@@ -26,12 +29,18 @@ describe('CarrierUserAnonymizationService', () => {
     expect(updated[0].data.name).toBe('Anonymized User');
     expect(updated[0].data.active).toBe(false);
     expect(updated[0].data.anonymizedAt).toBeInstanceOf(Date);
+    // Each write is scoped to the org of the carrier the row was found under.
+    expect(updated[0].where).toEqual({ id: 'u1', carrier: { orgId: 'org-1' } });
+    expect(updated[1].where).toEqual({ id: 'u2', carrier: { orgId: 'org-2' } });
   });
 
   it('counts errors without aborting the batch', async () => {
     const prisma = {
       carrierUser: {
-        findMany: jest.fn().mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'u1', carrier: { orgId: 'org-1' } },
+          { id: 'u2', carrier: { orgId: 'org-2' } },
+        ]),
         update: jest.fn()
           .mockRejectedValueOnce(new Error('boom'))
           .mockResolvedValueOnce({}),

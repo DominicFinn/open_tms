@@ -78,8 +78,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
   server.get('/api/v1/agent-configs', {
     schema: { tags: ['Agent Config'], summary: 'List all agent configurations' },
   }, async (req) => {
-    const orgId = req.user?.organizationId
-;
+    const orgId = req.orgId!;
     if (!orgId) return { data: [], error: null };
 
     const configs = await server.prisma.agentConfig.findMany({
@@ -104,8 +103,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
       params: { type: 'object', required: ['agentType'], properties: { agentType: { type: 'string' } } },
     },
   }, async (request, reply) => {
-    const orgId = request.user?.organizationId
-;
+    const orgId = request.orgId!;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     let config = await server.prisma.agentConfig.findFirst({
@@ -182,8 +180,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const orgId = request.user?.organizationId
-;
+    const orgId = request.orgId!;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -206,7 +203,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const updated = await server.prisma.agentConfig.findUnique({
-      where: { id: config.id },
+      where: { id: config.id, orgId },
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
     });
     return { data: updated, error: null };
@@ -231,8 +228,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const orgId = request.user?.organizationId
-;
+    const orgId = request.orgId!;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -260,7 +256,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const version = await server.prisma.agentConfigVersion.findUnique({
-      where: { id: (result.data as { versionId: string }).versionId },
+      where: { id: (result.data as { versionId: string }).versionId, config: { orgId } },
     });
     return { data: version, error: null };
   });
@@ -269,8 +265,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
   server.get<{ Params: { agentType: string } }>('/api/v1/agent-configs/:agentType/versions', {
     schema: { tags: ['Agent Config'], summary: 'List prompt version history' },
   }, async (request) => {
-    const orgId = request.user?.organizationId
-;
+    const orgId = request.orgId!;
     if (!orgId) return { data: [], error: null };
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -280,7 +275,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     if (!config) return { data: [], error: null };
 
     const versions = await server.prisma.agentConfigVersion.findMany({
-      where: { configId: config.id },
+      where: { configId: config.id, config: { orgId } },
       orderBy: { versionNumber: 'desc' },
     });
 
@@ -296,8 +291,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
   }>('/api/v1/agent-configs/:agentType/versions/:versionId/activate', {
     schema: { tags: ['Agent Config'], summary: 'Activate (rollback to) a specific prompt version' },
   }, async (request, reply) => {
-    const orgId = request.user?.organizationId
-;
+    const orgId = request.orgId!;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -321,7 +315,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     }
 
     const version = await server.prisma.agentConfigVersion.findUnique({
-      where: { id: request.params.versionId },
+      where: { id: request.params.versionId, config: { orgId } },
     });
     return { data: version ? { ...version, isActive: true } : null, error: null };
   });

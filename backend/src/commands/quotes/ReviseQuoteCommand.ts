@@ -42,7 +42,7 @@ export class ReviseQuoteCommandHandler extends BaseCommandHandler<ReviseQuotePay
 
     // Supersede the original
     await tx.quote.update({
-      where: { id: original.id },
+      where: { id: original.id, orgId: command.orgId },
       data: { status: 'superseded' },
     });
 

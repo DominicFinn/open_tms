@@ -40,7 +40,7 @@ export class CarrierProjection implements IEventHandler {
 
   private async onCarrierCreated(event: DomainEvent): Promise<void> {
     const carrier = await this.prisma.carrier.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         vehicles: { select: { id: true } },
         drivers: { select: { id: true } },
@@ -54,7 +54,7 @@ export class CarrierProjection implements IEventHandler {
     }
 
     await this.prisma.carrierReadModel.upsert({
-      where: { id: carrier.id },
+      where: { id: carrier.id, orgId: event.orgId },
       create: {
         id: carrier.id,
         orgId: event.orgId,
@@ -80,7 +80,7 @@ export class CarrierProjection implements IEventHandler {
 
   private async onCarrierUpdated(event: DomainEvent): Promise<void> {
     const carrier = await this.prisma.carrier.findUnique({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       include: {
         vehicles: { select: { id: true } },
         drivers: { select: { id: true } },
@@ -91,7 +91,7 @@ export class CarrierProjection implements IEventHandler {
     if (!carrier) return;
 
     await this.prisma.carrierReadModel.update({
-      where: { id: carrier.id },
+      where: { id: carrier.id, orgId: event.orgId },
       data: {
         name: carrier.name,
         mcNumber: carrier.mcNumber,
@@ -110,7 +110,7 @@ export class CarrierProjection implements IEventHandler {
 
   private async onCarrierArchived(event: DomainEvent): Promise<void> {
     await this.prisma.carrierReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[CarrierProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
@@ -119,7 +119,7 @@ export class CarrierProjection implements IEventHandler {
 
   private async onCarrierUnarchived(event: DomainEvent): Promise<void> {
     await this.prisma.carrierReadModel.update({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
       data: { status: 'active', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[CarrierProjection] Failed to unarchive read model for ${event.entityId}: ${err.message}`);
@@ -129,7 +129,7 @@ export class CarrierProjection implements IEventHandler {
   private async onCarrierDeleted(event: DomainEvent): Promise<void> {
     // Soft-deleted carriers drop out of the read model entirely.
     await this.prisma.carrierReadModel.delete({
-      where: { id: event.entityId },
+      where: { id: event.entityId, orgId: event.orgId },
     }).catch((err: Error) => {
       console.error(`[CarrierProjection] Failed to delete read model for ${event.entityId}: ${err.message}`);
     });

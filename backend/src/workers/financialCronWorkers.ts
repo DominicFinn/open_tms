@@ -18,12 +18,13 @@ export function createQuoteExpirationWorker(prisma: PrismaClient) {
       const now = new Date();
 
       // Find quotes that are still in draft or sent status but past validUntil
+      // tenancy-exempt: the expiry cron sweeps every org, and each expiry write is keyed on the orgId of the quotes it found.
       const expired = await prisma.quote.findMany({
         where: {
           status: { in: ['draft', 'sent'] },
           validUntil: { lt: now },
         },
-        select: { id: true, quoteNumber: true },
+        select: { id: true, orgId: true, quoteNumber: true },
       });
 
       if (expired.length === 0) {
@@ -31,14 +32,18 @@ export function createQuoteExpirationWorker(prisma: PrismaClient) {
         return;
       }
 
-      // Batch update to expired
-      await prisma.quote.updateMany({
-        where: {
-          id: { in: expired.map(q => q.id) },
-          status: { in: ['draft', 'sent'] },
-        },
-        data: { status: 'expired' },
-      });
+      // Batch update to expired, one org at a time
+      const orgIds = [...new Set(expired.map(q => q.orgId))];
+      for (const orgId of orgIds) {
+        await prisma.quote.updateMany({
+          where: {
+            orgId,
+            id: { in: expired.filter(q => q.orgId === orgId).map(q => q.id) },
+            status: { in: ['draft', 'sent'] },
+          },
+          data: { status: 'expired' },
+        });
+      }
 
       console.log(
         `[QuoteExpirationWorker] Expired ${expired.length} quotes: ` +
@@ -86,6 +91,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
       const now = new Date();
 
       // Find invoices that are sent or partial_paid but past due date
+      // tenancy-exempt: the overdue cron sweeps every org, and each follow-up write uses the orgId of the invoice it found.
       const overdue = await prisma.invoice.findMany({
         where: {
           status: { in: ['sent', 'partial_paid'] },
@@ -93,6 +99,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         },
         select: {
           id: true,
+          orgId: true,
           invoiceNumber: true,
           customerId: true,
           totalCents: true,
@@ -116,7 +123,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         // Update status to overdue if not already
         // (We check via query but the status column might still be 'sent')
         await prisma.invoice.update({
-          where: { id: invoice.id },
+          where: { id: invoice.id, orgId: invoice.orgId },
           data: { status: 'overdue' },
         });
         statusUpdated++;
@@ -124,7 +131,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
         // Update InvoiceReadModel daysPastDue
         const daysPastDue = Math.floor((now.getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24));
         await prisma.invoiceReadModel.update({
-          where: { id: invoice.id },
+          where: { id: invoice.id, orgId: invoice.orgId },
           data: { status: 'overdue', daysPastDue },
         }).catch(() => {
           // Read model might not exist
@@ -138,7 +145,7 @@ export function createInvoiceOverdueWorker(prisma: PrismaClient) {
 
         if (lastReminder < sevenDaysAgo) {
           await prisma.invoice.update({
-            where: { id: invoice.id },
+            where: { id: invoice.id, orgId: invoice.orgId },
             data: {
               lastReminderSentAt: now,
               reminderCount: { increment: 1 },
@@ -216,6 +223,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         return;
       }
 
+      // tenancy-exempt: the consolidation cron sweeps every org, and each follow-up read and write is keyed on the orgId of the customer it found.
       const customers = await prisma.customer.findMany({
         where: {
           archived: false,
@@ -223,6 +231,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         },
         select: {
           id: true,
+          orgId: true,
           name: true,
           paymentTermsDays: true,
           invoiceConsolidation: true,
@@ -244,7 +253,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
 
         // Find all ready-to-invoice shipments for this customer
         const summaries = await prisma.shipmentFinancialSummary.findMany({
-          where: { billingStatus: 'ready_to_invoice' },
+          where: { orgId: customer.orgId, billingStatus: 'ready_to_invoice' },
           select: { shipmentId: true },
         });
 
@@ -256,6 +265,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         const customerShipments = await prisma.shipment.findMany({
           where: {
             id: { in: shipmentIds },
+            orgId: customer.orgId,
             customerId: customer.id,
           },
           select: { id: true, reference: true },
@@ -268,6 +278,7 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         // Collect all approved revenue charges
         const charges = await prisma.charge.findMany({
           where: {
+            orgId: customer.orgId,
             shipmentId: { in: custShipmentIds },
             chargeCategory: 'revenue',
             status: 'approved',
@@ -283,8 +294,9 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
         const today = new Date();
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
         const prefix = `INV-${dateStr}-`;
+        // Invoice numbers are unique within an org, so each org runs its own daily sequence.
         const latest = await prisma.invoice.findFirst({
-          where: { invoiceNumber: { startsWith: prefix } },
+          where: { orgId: customer.orgId, invoiceNumber: { startsWith: prefix } },
           orderBy: { invoiceNumber: 'desc' },
           select: { invoiceNumber: true },
         });
@@ -334,13 +346,13 @@ export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
 
         // Mark charges as invoiced
         await prisma.charge.updateMany({
-          where: { id: { in: charges.map(c => c.id) } },
+          where: { orgId: customer.orgId, id: { in: charges.map(c => c.id) } },
           data: { status: 'invoiced' },
         });
 
         // Update shipment billing status
         await prisma.shipmentFinancialSummary.updateMany({
-          where: { shipmentId: { in: custShipmentIds } },
+          where: { orgId: customer.orgId, shipmentId: { in: custShipmentIds } },
           data: { billingStatus: 'invoiced' },
         });
 
@@ -400,6 +412,7 @@ export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
       const today = new Date();
       today.setHours(23, 59, 59, 999); // End of day
 
+      // tenancy-exempt: the payment batch cron sweeps every org, and each follow-up write uses the orgId of the carrier invoice it found.
       const scheduled = await prisma.carrierInvoice.findMany({
         where: {
           status: 'scheduled',
@@ -423,7 +436,7 @@ export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
         const amount = inv.approvedCents ?? inv.totalCents;
 
         await prisma.carrierInvoice.update({
-          where: { id: inv.id },
+          where: { id: inv.id, orgId: inv.orgId },
           data: {
             status: 'paid',
             paidCents: amount,
@@ -436,7 +449,7 @@ export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
         const shipmentIds = [...new Set(inv.lineItems.map((l: { shipmentId: string | null }) => l.shipmentId).filter(Boolean) as string[])];
         if (shipmentIds.length > 0) {
           await prisma.shipmentFinancialSummary.updateMany({
-            where: { shipmentId: { in: shipmentIds } },
+            where: { orgId: inv.orgId, shipmentId: { in: shipmentIds } },
             data: { carrierPaymentStatus: 'paid' },
           });
         }

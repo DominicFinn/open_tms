@@ -502,7 +502,7 @@ describe('Order Command Handlers', () => {
 
       expect(result.success).toBe(true);
       expect(mockTx.order.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'order-1' },
+        where: { id: 'order-1', orgId: 'test-org' },
         data: expect.objectContaining({ status: 'archived', statusBeforeArchive: 'validated' }),
       }));
       expect(result.events).toHaveLength(1);

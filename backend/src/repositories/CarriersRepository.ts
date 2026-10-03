@@ -52,48 +52,43 @@ export interface UpdateCarrierDTO {
 }
 
 export interface ICarriersRepository {
-  all(orgId?: string | null, opts?: { includeArchived?: boolean }): Promise<Carrier[]>;
+  all(orgId: string, opts?: { includeArchived?: boolean }): Promise<Carrier[]>;
   // Mirrors OrdersRepository.findArchived / ShipmentsRepository — backs the
   // Archives admin page's Carriers tab.
-  findArchived(orgId?: string | null): Promise<Carrier[]>;
-  findById(id: string, orgId?: string | null): Promise<Carrier | null>;
+  findArchived(orgId: string): Promise<Carrier[]>;
+  findById(id: string, orgId: string): Promise<Carrier | null>;
   create(data: CreateCarrierDTO): Promise<Carrier>;
-  update(id: string, data: UpdateCarrierDTO): Promise<Carrier>;
-  archive(id: string): Promise<Carrier>;
+  update(id: string, orgId: string, data: UpdateCarrierDTO): Promise<Carrier>;
+  archive(id: string, orgId: string): Promise<Carrier>;
 }
 
 export class CarriersRepository implements ICarriersRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null, opts?: { includeArchived?: boolean }): Promise<Carrier[]> {
+  async all(orgId: string, opts?: { includeArchived?: boolean }): Promise<Carrier[]> {
     // Never surface soft-deleted carriers. Archived ones are excluded by default
     // (so selection dropdowns don't offer them) but can be included for the
     // management list where they show with an "Inactive" badge.
-    const where: any = { deletedAt: null };
+    const where: any = { deletedAt: null, orgId };
     if (!opts?.includeArchived) where.archived = false;
-    // Scope to the requesting tenant when supplied. NULL orgId rows
-    // are legacy and excluded from scoped queries.
-    if (orgId) where.orgId = orgId;
     return this.prisma.carrier.findMany({
       where,
       orderBy: { name: 'asc' }
     });
   }
 
-  async findArchived(orgId?: string | null): Promise<Carrier[]> {
-    const where: any = { archived: true, deletedAt: null };
-    if (orgId) where.orgId = orgId;
+  async findArchived(orgId: string): Promise<Carrier[]> {
+    const where: any = { archived: true, deletedAt: null, orgId };
     return this.prisma.carrier.findMany({
       where,
       orderBy: { archivedAt: 'desc' },
     });
   }
 
-  async findById(id: string, orgId?: string | null): Promise<Carrier | null> {
+  async findById(id: string, orgId: string): Promise<Carrier | null> {
     // Archived carriers are still reachable (detail page shows a banner);
     // soft-deleted carriers 404.
-    const where: any = { id, deletedAt: null };
-    if (orgId) where.orgId = orgId;
+    const where: any = { id, deletedAt: null, orgId };
     return this.prisma.carrier.findFirst({ where });
   }
 
@@ -101,16 +96,16 @@ export class CarriersRepository implements ICarriersRepository {
     return this.prisma.carrier.create({ data });
   }
 
-  async update(id: string, data: UpdateCarrierDTO): Promise<Carrier> {
+  async update(id: string, orgId: string, data: UpdateCarrierDTO): Promise<Carrier> {
     return this.prisma.carrier.update({
-      where: { id },
+      where: { id, orgId },
       data
     });
   }
 
-  async archive(id: string): Promise<Carrier> {
+  async archive(id: string, orgId: string): Promise<Carrier> {
     return this.prisma.carrier.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()

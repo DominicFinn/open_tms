@@ -33,7 +33,7 @@ export class AcknowledgeExcursionCommandHandler extends BaseCommandHandler<Ackno
     const { id, notes } = command.payload;
 
     const excursion = await tx.coldChainExcursion.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: {
         status: 'acknowledged',
         acknowledgedBy: command.actorId,

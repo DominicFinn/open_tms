@@ -33,7 +33,7 @@ export class VoidInvoiceCommandHandler extends BaseCommandHandler<VoidInvoicePay
     }
 
     await tx.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: { status: 'void' },
     });
 
@@ -53,7 +53,7 @@ export class VoidInvoiceCommandHandler extends BaseCommandHandler<VoidInvoicePay
     const shipmentIds = [...new Set(invoice.lineItems.map((li: any) => li.shipmentId).filter(Boolean) as string[])];
     if (shipmentIds.length > 0) {
       await tx.shipmentFinancialSummary.updateMany({
-        where: { shipmentId: { in: shipmentIds } },
+        where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
         data: { billingStatus: 'ready_to_invoice' },
       });
     }

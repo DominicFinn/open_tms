@@ -25,16 +25,16 @@ export interface UnitAttributes {
 }
 
 export interface IPutawayRuleEvaluator {
-  evaluate(locationId: string, unit: UnitAttributes): Promise<PutawayTarget | null>;
+  evaluate(orgId: string, locationId: string, unit: UnitAttributes): Promise<PutawayTarget | null>;
 }
 
 export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
   constructor(private prisma: PrismaClient) {}
 
-  async evaluate(locationId: string, unit: UnitAttributes): Promise<PutawayTarget | null> {
+  async evaluate(orgId: string, locationId: string, unit: UnitAttributes): Promise<PutawayTarget | null> {
     // Fetch active rules for this location, ordered by priority
     const rules = await this.prisma.putawayRule.findMany({
-      where: { locationId, active: true },
+      where: { orgId, locationId, active: true },
       orderBy: { priority: 'asc' },
     });
 
@@ -55,6 +55,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
     // Fallback: first available bin in any bulk_storage zone
     const fallbackBin = await this.prisma.warehouseBin.findFirst({
       where: {
+        orgId,
         locationId,
         active: true,
         zone: { zoneType: 'bulk_storage', active: true },
@@ -95,19 +96,19 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
   private async resolveTarget(rule: PutawayRule, unit?: UnitAttributes): Promise<WarehouseBin | null> {
     if (rule.targetType === 'specific_bin' && rule.targetBinId) {
       return this.prisma.warehouseBin.findFirst({
-        where: { id: rule.targetBinId, active: true },
+        where: { id: rule.targetBinId, orgId: rule.orgId, active: true },
       });
     }
 
     if (rule.targetType === 'zone' && rule.targetZoneId) {
       // Consolidation: prefer a bin where this SKU already has inventory
       if (unit?.consolidate && unit.sku) {
-        const consolidatedBin = await this.findConsolidationBin(rule.targetZoneId, unit.sku);
+        const consolidatedBin = await this.findConsolidationBin(rule.orgId, rule.targetZoneId, unit.sku);
         if (consolidatedBin) return consolidatedBin;
       }
       // First available bin in zone
       return this.prisma.warehouseBin.findFirst({
-        where: { zoneId: rule.targetZoneId, active: true },
+        where: { orgId: rule.orgId, zoneId: rule.targetZoneId, active: true },
         orderBy: { walkSequence: 'asc' },
       });
     }
@@ -115,7 +116,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
     if (rule.targetType === 'next_available_in_zone' && rule.targetZoneId) {
       // Consolidation: prefer a bin where this SKU already has inventory
       if (unit?.consolidate && unit.sku) {
-        const consolidatedBin = await this.findConsolidationBin(rule.targetZoneId, unit.sku);
+        const consolidatedBin = await this.findConsolidationBin(rule.orgId, rule.targetZoneId, unit.sku);
         if (consolidatedBin) return consolidatedBin;
       }
 
@@ -127,7 +128,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
 
       // Fetch candidate bins and filter for capacity in application code
       const candidates = await this.prisma.warehouseBin.findMany({
-        where: { zoneId: rule.targetZoneId, active: true },
+        where: { orgId: rule.orgId, zoneId: rule.targetZoneId, active: true },
         orderBy,
         take: 50,
       });
@@ -145,10 +146,11 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
    * with available capacity. This keeps the same products together physically,
    * making picking faster and cycle counting easier.
    */
-  private async findConsolidationBin(zoneId: string, sku: string): Promise<WarehouseBin | null> {
+  private async findConsolidationBin(orgId: string, zoneId: string, sku: string): Promise<WarehouseBin | null> {
     // Find inventory records for this SKU in this zone's bins
     const existingInventory = await this.prisma.inventoryRecord.findMany({
       where: {
+        orgId,
         sku,
         bin: { zoneId, active: true },
         quantityOnHand: { gt: 0 },

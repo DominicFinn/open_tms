@@ -29,7 +29,7 @@ export class DeleteAutomationRuleCommandHandler extends BaseCommandHandler<Delet
   ): Promise<DeleteAutomationRuleResult> {
     const { id } = command.payload;
 
-    const existing = await tx.automationRule.findUnique({ where: { id } });
+    const existing = await tx.automationRule.findUnique({ where: { id, orgId: command.orgId } });
     if (!existing) {
       // Idempotent: no row to delete is fine, the route used to swallow this
       // silently. Skip emitting an event so consumers don't see a phantom
@@ -37,7 +37,7 @@ export class DeleteAutomationRuleCommandHandler extends BaseCommandHandler<Delet
       return { id, deleted: false };
     }
 
-    await tx.automationRule.delete({ where: { id } });
+    await tx.automationRule.delete({ where: { id, orgId: command.orgId } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.AUTOMATION_RULE_DELETED,

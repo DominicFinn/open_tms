@@ -55,9 +55,9 @@ export class ColdChainService {
    * Takes the widest bounds (lowest min, highest max) from all orders that
    * have temperature requirements (refrigerated or frozen).
    */
-  async computeEffectiveRange(shipmentId: string): Promise<EffectiveRange> {
+  async computeEffectiveRange(orgId: string, shipmentId: string): Promise<EffectiveRange> {
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       include: {
         orderShipments: {
           include: { order: true },
@@ -111,8 +111,8 @@ export class ColdChainService {
    * Update the shipment with computed effective temperature range.
    * Called when orders are added/removed.
    */
-  async updateShipmentEffectiveRange(shipmentId: string): Promise<void> {
-    const range = await this.computeEffectiveRange(shipmentId);
+  async updateShipmentEffectiveRange(orgId: string, shipmentId: string): Promise<void> {
+    const range = await this.computeEffectiveRange(orgId, shipmentId);
 
     const updateData: Record<string, any> = {
       effectiveMinTemp: range.effectiveMinTemp,
@@ -125,7 +125,7 @@ export class ColdChainService {
     // "not_applicable", transition to "monitoring" automatically.
     if (range.effectiveMinTemp !== null || range.effectiveMaxTemp !== null) {
       const shipment = await this.prisma.shipment.findUnique({
-        where: { id: shipmentId },
+        where: { id: shipmentId, orgId },
         select: { coldChainDisposition: true },
       });
       if (shipment && shipment.coldChainDisposition === 'not_applicable') {
@@ -134,7 +134,7 @@ export class ColdChainService {
     }
 
     await this.prisma.shipment.update({
-      where: { id: shipmentId },
+      where: { id: shipmentId, orgId },
       data: updateData,
     });
   }
@@ -147,7 +147,7 @@ export class ColdChainService {
    */
   async processTemperatureReading(params: TemperatureReadingParams): Promise<TemperatureReadingResult> {
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: params.shipmentId },
+      where: { id: params.shipmentId, orgId: params.orgId },
       select: {
         id: true,
         effectiveMinTemp: true,
@@ -242,6 +242,7 @@ export class ColdChainService {
       // Look for an existing active excursion for this device+shipment+type.
       const activeExcursion = await this.prisma.coldChainExcursion.findFirst({
         where: {
+          orgId: params.orgId,
           shipmentId: params.shipmentId,
           deviceId: params.deviceId ?? null,
           excursionType,
@@ -258,7 +259,7 @@ export class ColdChainService {
           : activeExcursion.peakValue;
 
         await this.prisma.coldChainExcursion.update({
-          where: { id: activeExcursion.id },
+          where: { id: activeExcursion.id, orgId: params.orgId },
           data: {
             readingCount: activeExcursion.readingCount + 1,
             peakValue: newPeak,
@@ -288,6 +289,7 @@ export class ColdChainService {
       // Reading is in range — close any active excursions for this device+shipment.
       const activeExcursions = await this.prisma.coldChainExcursion.findMany({
         where: {
+          orgId: params.orgId,
           shipmentId: params.shipmentId,
           deviceId: params.deviceId ?? null,
           status: 'active',
@@ -300,7 +302,7 @@ export class ColdChainService {
         const durationMinutes = Math.round(durationMs / 60000);
 
         await this.prisma.coldChainExcursion.update({
-          where: { id: excursion.id },
+          where: { id: excursion.id, orgId: params.orgId },
           data: {
             endedAt: params.recordedAt,
             durationMinutes,
@@ -343,9 +345,9 @@ export class ColdChainService {
   /**
    * Get temperature summary for a shipment (for compliance reports).
    */
-  async getTemperatureSummary(shipmentId: string): Promise<TemperatureSummary> {
+  async getTemperatureSummary(orgId: string, shipmentId: string): Promise<TemperatureSummary> {
     const aggregates = await this.prisma.immutableTemperatureLog.aggregate({
-      where: { shipmentId },
+      where: { orgId, shipmentId },
       _count: { id: true },
       _min: { temperature: true, recordedAt: true },
       _max: { temperature: true, recordedAt: true },
@@ -370,15 +372,15 @@ export class ColdChainService {
     }
 
     const excursionCount = await this.prisma.immutableTemperatureLog.count({
-      where: { shipmentId, isExcursion: true },
+      where: { orgId, shipmentId, isExcursion: true },
     });
 
     const alertCount = await this.prisma.immutableTemperatureLog.count({
-      where: { shipmentId, isAlert: true },
+      where: { orgId, shipmentId, isAlert: true },
     });
 
     const inRangeCount = await this.prisma.immutableTemperatureLog.count({
-      where: { shipmentId, isWithinRange: true },
+      where: { orgId, shipmentId, isWithinRange: true },
     });
 
     const firstReading = aggregates._min.recordedAt;

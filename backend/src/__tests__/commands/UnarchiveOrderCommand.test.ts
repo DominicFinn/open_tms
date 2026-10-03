@@ -45,7 +45,7 @@ describe('UnarchiveOrderCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(update).toHaveBeenCalledWith({
-      where: { id: 'order-1' },
+      where: { id: 'order-1', orgId: 'test-org' },
       data: { archived: false, archivedAt: null, status: 'converted', statusBeforeArchive: null },
     });
     expect(result.events).toHaveLength(1);
@@ -67,7 +67,7 @@ describe('UnarchiveOrderCommandHandler', () => {
     await handler.execute(createTestCommand(UNARCHIVE_ORDER, { id: 'order-1' }));
 
     expect(update).toHaveBeenCalledWith({
-      where: { id: 'order-1' },
+      where: { id: 'order-1', orgId: 'test-org' },
       data: { archived: false, archivedAt: null, status: 'pending', statusBeforeArchive: null },
     });
   });

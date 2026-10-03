@@ -95,7 +95,7 @@ describe('Facility command handlers', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(tx.facility.update).toHaveBeenCalledWith({ where: { id: 'fac-1' }, data: { name: 'Leeds DC North' } });
+      expect(tx.facility.update).toHaveBeenCalledWith({ where: { id: 'fac-1', orgId: 'test-org' }, data: { name: 'Leeds DC North' } });
       expect(result.events![0].type).toBe(EVENT_TYPES.FACILITY_UPDATED);
       expect((result.events![0].payload as any).changes).toEqual(['name']);
     });

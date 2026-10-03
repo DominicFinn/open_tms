@@ -8,12 +8,8 @@ import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
 export async function tradingPartnerRoutes(server: FastifyInstance) {
   const partnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
 
-  // Multi-tenancy: chained hooks cover all three shapes used here:
-  //  - admin reads with a JWT (req.user.organizationId)
-  //  - per-partner lookups via /trading-partners/:id/... that derive
-  //    orgId from the partner row when the JWT is absent
-  //  - create-partner / unauthed seed flows that have neither — fall
-  //    through to the default Organization
+  // Multi-tenancy: registerOrgScopeForEdi sets req.orgId from the admin token, or from the
+  // partner row on per-partner EDI calls. Every handler reads req.orgId, never the token directly.
   await registerOrgScopeForEdi(server);
 
   // List all trading partners
@@ -33,6 +29,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { entityType, active, includeDeleted } = req.query as any;
     const partners = await partnerRepo.findAll({
+      orgId: req.orgId!,
       entityType,
       active: active !== undefined ? active === 'true' || active === true : undefined,
       includeDeleted: includeDeleted === 'true' || includeDeleted === true,
@@ -45,7 +42,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     schema: { tags: ['Trading Partners'], summary: 'Get trading partner details' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const partner = await partnerRepo.findById(id);
+    const partner = await partnerRepo.findById(id, req.orgId!);
     if (!partner) {
       reply.code(404);
       return { data: null, error: 'Trading partner not found' };
@@ -162,7 +159,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const updated = await partnerRepo.update(id, body as any);
+      const updated = await partnerRepo.update(id, req.orgId!, body as any);
       return { data: updated, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -182,7 +179,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const existing = await partnerRepo.findById(id);
+    const existing = await partnerRepo.findById(id, req.orgId!);
     if (!existing) {
       reply.code(404);
       return { data: null, error: 'Trading partner not found' };
@@ -193,7 +190,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }
 
     const deletedBy = req.user?.sub ?? null;
-    const updated = await partnerRepo.softDelete(id, deletedBy);
+    const updated = await partnerRepo.softDelete(id, req.orgId!, deletedBy);
     return { data: { id: updated.id, deletedAt: updated.deletedAt }, error: null };
   });
 
@@ -230,6 +227,12 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
       filePattern: z.string().optional(),
     }).parse((req as any).body);
 
+    const partner = await partnerRepo.findById(id, req.orgId!);
+    if (!partner) {
+      reply.code(404);
+      return { data: null, error: 'Trading partner not found' };
+    }
+
     try {
       const txn = await partnerRepo.addTransaction({ partnerId: id, ...body });
       reply.code(201);
@@ -254,7 +257,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const txn = await partnerRepo.updateTransaction(txnId, body as any);
+      const txn = await partnerRepo.updateTransaction(txnId, req.orgId!, body as any);
       return { data: txn, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -268,7 +271,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { txnId } = req.params as { id: string; txnId: string };
     try {
-      await partnerRepo.removeTransaction(txnId);
+      await partnerRepo.removeTransaction(txnId, req.orgId!);
       return { data: { removed: true }, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -285,7 +288,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const partner = await partnerRepo.findById(id);
+    const partner = await partnerRepo.findById(id, req.orgId!);
     if (!partner) {
       reply.code(404);
       return { data: null, error: 'Trading partner not found' };
@@ -377,7 +380,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const { transactionType, direction, status } = req.query as any;
-    const orgId = req.user?.organizationId ?? undefined;
+    const orgId = req.orgId!;
     const logs = await partnerRepo.findLogs({ orgId, partnerId: id, transactionType, direction, status });
     return { data: logs, error: null };
   });
@@ -403,7 +406,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { transactionType, direction, status, partnerId, source, search, limit, offset } = req.query as any;
-    const orgId = req.user?.organizationId ?? undefined;
+    const orgId = req.orgId!;
     const result = await partnerRepo.findLogsWithPagination(
       { orgId, partnerId, transactionType, direction, status, source, search },
       parseInt(limit) || 50,
@@ -420,14 +423,14 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const log = await partnerRepo.findLogById(id);
+    const log = await partnerRepo.findLogById(id, req.orgId!);
     if (!log) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
     }
     // Cross-tenant guard: a log row's orgId may be null for legacy/manual
     // imports — return 404 (rather than 403) so we don't leak existence.
-    const orgId = req.user?.organizationId ?? null;
+    const orgId = req.orgId!;
     if (orgId && log.orgId && log.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
@@ -451,7 +454,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { partnerId, transactionType, direction } = req.query as any;
-    const orgId = req.user?.organizationId ?? undefined;
+    const orgId = req.orgId!;
     const stats = await partnerRepo.getLogStats({ orgId, partnerId, transactionType, direction });
     return { data: stats, error: null };
   });
@@ -464,13 +467,13 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const log = await partnerRepo.findLogById(id);
+    const log = await partnerRepo.findLogById(id, req.orgId!);
     if (!log) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
     }
     // Same cross-tenant guard as the read endpoint.
-    const orgId = req.user?.organizationId ?? null;
+    const orgId = req.orgId!;
     if (orgId && log.orgId && log.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
@@ -485,7 +488,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }
 
     // Mark as pending for retry
-    await partnerRepo.updateLog(id, {
+    await partnerRepo.updateLog(id, req.orgId!, {
       status: 'pending',
       retryCount: log.retryCount + 1,
       lastRetryAt: new Date(),

@@ -97,7 +97,7 @@ model ShipmentFinancialSummary {
 model Invoice {
   id            String @id @default(uuid())
   orgId         String
-  invoiceNumber String @unique // INV-20260401-0001
+  invoiceNumber String // INV-20260401-0001
 
   customer   Customer @relation(fields: [customerId], references: [id])
   customerId String
@@ -137,7 +137,7 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([orgId])
+  @@unique([orgId, invoiceNumber])
   @@index([customerId])
   @@index([status])
   @@index([dueDate])
@@ -300,7 +300,7 @@ model CarrierInvoiceLineItem {
 model FinancialQuery {
   id          String @id @default(uuid())
   orgId       String
-  queryNumber String @unique // QRY-0001
+  queryNumber String // QRY-0001
 
   // Source: customer or carrier
   queryType String // customer_dispute, carrier_dispute
@@ -337,7 +337,7 @@ model FinancialQuery {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([orgId])
+  @@unique([orgId, queryNumber])
   @@index([status])
   @@index([queryType])
   @@index([invoiceId])
@@ -349,7 +349,7 @@ model FinancialQuery {
 model CreditNote {
   id               String @id @default(uuid())
   orgId            String
-  creditNoteNumber String @unique // CN-0001
+  creditNoteNumber String // CN-0001
 
   noteType String // credit, debit
 
@@ -380,7 +380,7 @@ model CreditNote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([orgId])
+  @@unique([orgId, creditNoteNumber])
   @@index([invoiceId])
   @@index([customerId])
   @@index([carrierId])
@@ -426,7 +426,7 @@ model Commission {
 model InvoiceReadModel {
   id            String   @id
   orgId         String
-  invoiceNumber String   @unique
+  invoiceNumber String   
   customerId    String
   customerName  String
   status        String
@@ -442,7 +442,7 @@ model InvoiceReadModel {
   createdAt     DateTime
   updatedAt     DateTime
 
-  @@index([orgId])
+  @@unique([orgId, invoiceNumber])
   @@index([status])
   @@index([customerId])
   @@index([dueDate])

@@ -51,7 +51,7 @@ export class CheckInAppointmentCommandHandler extends BaseCommandHandler<
     }
 
     const updated = await tx.receivingAppointment.update({
-      where: { id: p.appointmentId },
+      where: { id: p.appointmentId, orgId: command.orgId },
       data: {
         status: 'checked_in',
         dockBinId: p.dockBinId ?? existing.dockBinId,

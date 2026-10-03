@@ -102,12 +102,12 @@ export class IssueEngineHandler implements IEventHandler {
     // 2. If an issue is already open for this (type, entity), attach + escalate.
     const open = await this.findOpenIssue(orgId, type.key, entityId);
     if (open) {
-      await this.prisma.issueSignal.update({ where: { id: signal.id }, data: { issueId: open.id } });
+      await this.prisma.issueSignal.update({ where: { id: signal.id, orgId }, data: { issueId: open.id } });
 
       // Corroboration: each additional signal raises confidence, which can lift
       // an issue back out of noise. Recomputed from the ledger rather than
       // incremented, so a replayed event can't inflate the score.
-      const signalCount = await this.prisma.issueSignal.count({ where: { issueId: open.id } });
+      const signalCount = await this.prisma.issueSignal.count({ where: { issueId: open.id, orgId } });
       const score = computeSignalScore(type, signalCount);
       const update: Record<string, unknown> = {
         signalCount,
@@ -124,12 +124,12 @@ export class IssueEngineHandler implements IEventHandler {
     }
 
     // 3. Raise rule: immediate on severity floor, else N signals within the window.
-    if (!(await this.shouldRaise(type, entityId, priority))) return;
+    if (!(await this.shouldRaise(orgId, type, entityId, priority))) return;
 
     // 4. Score the issue from the signals that justified raising it.
     const since = new Date(Date.now() - type.raise.windowMinutes * 60_000);
     const contributing = await this.prisma.issueSignal.count({
-      where: { issueType: type.key, sourceEntityId: entityId, occurredAt: { gte: since } },
+      where: { orgId, issueType: type.key, sourceEntityId: entityId, occurredAt: { gte: since } },
     });
     const score = computeSignalScore(type, contributing);
     const noise = isNoise(type, score);
@@ -166,7 +166,7 @@ export class IssueEngineHandler implements IEventHandler {
       return;
     }
     await this.prisma.issueSignal.updateMany({
-      where: { issueType: type.key, sourceEntityId: entityId, issueId: null, occurredAt: { gte: since } },
+      where: { orgId, issueType: type.key, sourceEntityId: entityId, issueId: null, occurredAt: { gte: since } },
       data: { issueId },
     });
   }
@@ -192,12 +192,12 @@ export class IssueEngineHandler implements IEventHandler {
     });
   }
 
-  private async shouldRaise(type: IssueTypeDef, entityId: string, priority: string): Promise<boolean> {
+  private async shouldRaise(orgId: string, type: IssueTypeDef, entityId: string, priority: string): Promise<boolean> {
     const floor = type.raise.priorityFloor;
     if (floor && priorityRank(priority) >= priorityRank(floor)) return true;
     const since = new Date(Date.now() - type.raise.windowMinutes * 60_000);
     const count = await this.prisma.issueSignal.count({
-      where: { issueType: type.key, sourceEntityId: entityId, occurredAt: { gte: since } },
+      where: { orgId, issueType: type.key, sourceEntityId: entityId, occurredAt: { gte: since } },
     });
     return count >= type.raise.thresholdCount;
   }

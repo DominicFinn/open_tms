@@ -158,7 +158,7 @@ describe('DeleteReplenishmentRuleCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(tx.replenishmentRule.delete).toHaveBeenCalledWith({ where: { id: 'rule-1' } });
+    expect(tx.replenishmentRule.delete).toHaveBeenCalledWith({ where: { id: 'rule-1', orgId: 'test-org' } });
     expect(result.events![0].type).toBe(EVENT_TYPES.REPLENISHMENT_RULE_DELETED);
   });
 
@@ -240,7 +240,7 @@ describe('DeleteWaveTemplateCommandHandler', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(tx.waveTemplate.delete).toHaveBeenCalledWith({ where: { id: 'tpl-1' } });
+    expect(tx.waveTemplate.delete).toHaveBeenCalledWith({ where: { id: 'tpl-1', orgId: 'test-org' } });
     expect(result.events![0].type).toBe(EVENT_TYPES.WAVE_TEMPLATE_DELETED);
   });
 

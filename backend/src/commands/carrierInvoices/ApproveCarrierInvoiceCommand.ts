@@ -34,7 +34,7 @@ export class ApproveCarrierInvoiceCommandHandler extends BaseCommandHandler<Appr
     const approvedCents = payload.approvedCents ?? invoice.totalCents;
 
     await tx.carrierInvoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, orgId: command.orgId },
       data: {
         status: 'approved',
         approvedCents,
@@ -47,7 +47,7 @@ export class ApproveCarrierInvoiceCommandHandler extends BaseCommandHandler<Appr
     const shipmentIds = [...new Set(invoice.lineItems.map(l => l.shipmentId).filter(Boolean) as string[])];
     if (shipmentIds.length > 0) {
       await tx.shipmentFinancialSummary.updateMany({
-        where: { shipmentId: { in: shipmentIds } },
+        where: { shipmentId: { in: shipmentIds }, orgId: command.orgId },
         data: { carrierPaymentStatus: 'approved' },
       });
     }

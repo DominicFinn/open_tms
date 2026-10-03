@@ -35,10 +35,10 @@ export class UpdateApiKeyCommandHandler extends BaseCommandHandler<UpdateApiKeyP
   ): Promise<UpdateApiKeyResult> {
     const { id, data } = command.payload;
 
-    const previous = await tx.apiKey.findUnique({ where: { id } });
+    const previous = await tx.apiKey.findUnique({ where: { id, orgId: command.orgId } });
     if (!previous) throw new Error('API key not found');
 
-    const updated = await tx.apiKey.update({ where: { id }, data });
+    const updated = await tx.apiKey.update({ where: { id, orgId: command.orgId }, data });
 
     // Emit a more specific event when this update flips active->false so
     // downstream audit / notifications can distinguish revocation from a

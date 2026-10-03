@@ -20,12 +20,12 @@ export class ArchiveCarrierCommandHandler extends BaseCommandHandler<{ id: strin
   ): Promise<{ id: string }> {
     const { id } = command.payload;
     const carrier = await tx.carrier.update({
-      where: { id },
+      where: { id, orgId: command.orgId },
       data: { archived: true, archivedAt: new Date() },
     });
 
     // Archived carriers can no longer be used, so their portal users lose access.
-    await tx.carrierUser.updateMany({ where: { carrierId: id }, data: { active: false } });
+    await tx.carrierUser.updateMany({ where: { carrierId: id, carrier: { orgId: command.orgId } }, data: { active: false } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_ARCHIVED,

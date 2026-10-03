@@ -12,7 +12,7 @@ export class UpdateTradingPartnerCommandHandler extends BaseCommandHandler<{ id:
 
   protected async handle(command: Command<{ id: string; data: Record<string, any> }>, tx: TransactionClient, emit: EmitFn) {
     const partner = await tx.tradingPartner.update({
-      where: { id: command.payload.id },
+      where: { id: command.payload.id, orgId: command.orgId },
       data: command.payload.data,
     });
 

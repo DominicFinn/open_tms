@@ -50,6 +50,8 @@ const B = {
 };
 const A = {
   inventory: '00000000-0000-4000-8000-0000000000a1',
+  carton: '00000000-0000-4000-8000-0000000000a5',
+  uom: 'uom-a',
   packTask: '00000000-0000-4000-8000-0000000000a4',
 };
 
@@ -72,8 +74,8 @@ function buildPrisma() {
     inventoryRecord: orgAwareModel([{ id: B.inventory, orgId: ORG_B }, { id: A.inventory, orgId: ORG_A }]),
     inventoryTransaction: orgAwareModel([]),
     warehouseBin: orgAwareModel([{ id: B.bin, orgId: ORG_B }]),
-    productUom: orgAwareModel([{ id: B.uom, orgId: ORG_B }]),
-    cartonCatalogue: orgAwareModel([{ id: B.carton, orgId: ORG_B }]),
+    productUom: orgAwareModel([{ id: B.uom, orgId: ORG_B }, { id: A.uom, orgId: ORG_A }]),
+    cartonCatalogue: orgAwareModel([{ id: B.carton, orgId: ORG_B }, { id: A.carton, orgId: ORG_A }]),
     packAudit: orgAwareModel([{ id: B.packAudit, orgId: ORG_B }]),
     packTask: {
       ...orgAwareModel([{ id: B.packTask, orgId: ORG_B }, { id: A.packTask, orgId: ORG_A }]),
@@ -208,5 +210,18 @@ describe('WMS and inventory routes: cross-tenant ids read as 404 (#303)', () => 
     expect(mockDeps.bus.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: ORG_A, actorId: 'user-a' }),
     );
+  });
+
+  it('writes to the caller org rows keep the org in the where', async () => {
+    await app.inject({ method: 'PUT', url: `/api/v1/product-uom/${A.uom}`, payload: { weightGrams: 1 } });
+    await app.inject({ method: 'DELETE', url: `/api/v1/product-uom/${A.uom}` });
+    await app.inject({ method: 'PUT', url: `/api/v1/carton-catalogue/${A.carton}`, payload: { name: 'x' } });
+    await app.inject({ method: 'DELETE', url: `/api/v1/carton-catalogue/${A.carton}` });
+
+    const { productUom, cartonCatalogue } = mockDeps.prisma;
+    expect(productUom.update.mock.calls[0][0].where).toEqual({ id: A.uom, orgId: ORG_A });
+    expect(productUom.delete.mock.calls[0][0].where).toEqual({ id: A.uom, orgId: ORG_A });
+    expect(cartonCatalogue.update.mock.calls[0][0].where).toEqual({ id: A.carton, orgId: ORG_A });
+    expect(cartonCatalogue.delete.mock.calls[0][0].where).toEqual({ id: A.carton, orgId: ORG_A });
   });
 });

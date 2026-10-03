@@ -38,10 +38,10 @@ export class MergeTrackableUnitsCommandHandler extends BaseCommandHandler<MergeU
 
     const [source, target] = await Promise.all([
       tx.trackableUnit.findUniqueOrThrow({
-        where: { id: sourceUnitId },
+        where: { id: sourceUnitId, order: { orgId: command.orgId } },
         include: { _count: { select: { lineItems: true } } },
       }),
-      tx.trackableUnit.findUniqueOrThrow({ where: { id: targetUnitId } }),
+      tx.trackableUnit.findUniqueOrThrow({ where: { id: targetUnitId, order: { orgId: command.orgId } } }),
     ]);
 
     if (source.orderId !== target.orderId) {
@@ -49,11 +49,11 @@ export class MergeTrackableUnitsCommandHandler extends BaseCommandHandler<MergeU
     }
 
     const moved = await tx.orderLineItem.updateMany({
-      where: { trackableUnitId: sourceUnitId },
+      where: { trackableUnitId: sourceUnitId, order: { orgId: command.orgId } },
       data: { trackableUnitId: targetUnitId },
     });
 
-    await tx.trackableUnit.delete({ where: { id: sourceUnitId } });
+    await tx.trackableUnit.delete({ where: { id: sourceUnitId, order: { orgId: command.orgId } } });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.TRACKABLE_UNITS_MERGED,

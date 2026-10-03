@@ -31,7 +31,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     const line = await tx.packLine.findUnique({
-      where: { id: p.packLineId },
+      where: { id: p.packLineId, packTask: { orgId: command.orgId } },
       include: { packTask: true },
     });
     if (!line) throw new Error(`Pack line ${p.packLineId} not found`);
@@ -42,10 +42,18 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Pack task is ${task.status}`);
     }
 
+    if (p.trackableUnitId) {
+      const unit = await tx.trackableUnit.findFirst({
+        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
+        select: { id: true },
+      });
+      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+    }
+
     // Auto-start task if pending
     if (task.status === 'pending') {
       await tx.packTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: { status: 'in_progress' },
       });
     }
@@ -55,7 +63,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     const lineStatus = verified ? 'packed' : 'verified';
 
     await tx.packLine.update({
-      where: { id: line.id },
+      where: { id: line.id, packTask: { orgId: command.orgId } },
       data: {
         packedQuantity: p.packedQuantity,
         status: p.packedQuantity > 0 ? 'packed' : 'verified',
@@ -77,15 +85,15 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
     }));
 
     // Check if all lines are done
-    const totalLines = await tx.packLine.count({ where: { packTaskId: task.id } });
+    const totalLines = await tx.packLine.count({ where: { packTaskId: task.id, packTask: { orgId: command.orgId } } });
     const completedLines = await tx.packLine.count({
-      where: { packTaskId: task.id, status: { in: ['packed', 'verified'] } },
+      where: { packTaskId: task.id, status: { in: ['packed', 'verified'] }, packTask: { orgId: command.orgId } },
     });
 
     const taskComplete = completedLines >= totalLines;
     if (taskComplete) {
       await tx.packTask.update({
-        where: { id: task.id },
+        where: { id: task.id, orgId: command.orgId },
         data: { status: 'completed' },
       });
 

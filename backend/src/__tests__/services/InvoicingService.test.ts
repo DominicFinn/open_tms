@@ -66,7 +66,7 @@ describe('InvoicingService — batching', () => {
 
       // updateMany batches the status flip rather than calling update() per charge
       expect(chargeRepo.update).not.toHaveBeenCalled();
-      expect(chargeRepo.updateMany).toHaveBeenCalledWith(['c1', 'c2', 'c3'], { status: 'invoiced' });
+      expect(chargeRepo.updateMany).toHaveBeenCalledWith(['c1', 'c2', 'c3'], 'org-1', { status: 'invoiced' });
 
       // ShipmentFinancialSummary update is also batched via `in:`
       expect(prisma.shipmentFinancialSummary.updateMany).toHaveBeenCalledTimes(1);

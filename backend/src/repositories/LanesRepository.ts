@@ -70,30 +70,29 @@ export interface UpdateLaneCarrierDTO {
 }
 
 export interface ILanesRepository {
-  all(orgId?: string | null): Promise<LaneWithRelations[]>;
-  findById(id: string, orgId?: string | null): Promise<LaneWithRelations | null>;
-  findByIdSimple(id: string, orgId?: string | null): Promise<Lane | null>;
-  findByIdWithOriginDestination(id: string, orgId?: string | null): Promise<any>;
+  all(orgId: string): Promise<LaneWithRelations[]>;
+  findById(id: string, orgId: string): Promise<LaneWithRelations | null>;
+  findByIdSimple(id: string, orgId: string): Promise<Lane | null>;
+  findByIdWithOriginDestination(id: string, orgId: string): Promise<any>;
   createWithTransaction(laneData: CreateLaneDTO, stops: CreateLaneStopDTO[]): Promise<LaneWithBasicRelations>;
-  updateWithTransaction(id: string, laneData: UpdateLaneDTO, stops?: CreateLaneStopDTO[]): Promise<LaneWithRelations>;
-  archive(id: string): Promise<Lane>;
+  updateWithTransaction(id: string, orgId: string, laneData: UpdateLaneDTO, stops?: CreateLaneStopDTO[]): Promise<LaneWithRelations>;
+  archive(id: string, orgId: string): Promise<Lane>;
   createCustomerLane(laneId: string, customerId: string): Promise<any>;
-  findCustomerLane(laneId: string, customerId: string): Promise<CustomerLane | null>;
-  deleteCustomerLane(customerLaneId: string): Promise<void>;
+  findCustomerLane(laneId: string, customerId: string, orgId: string): Promise<CustomerLane | null>;
+  deleteCustomerLane(customerLaneId: string, orgId: string): Promise<void>;
   createLaneCarrier(data: CreateLaneCarrierDTO): Promise<any>;
-  findLaneCarrier(laneId: string, carrierId: string): Promise<LaneCarrier | null>;
-  updateLaneCarrier(laneCarrierId: string, data: UpdateLaneCarrierDTO): Promise<any>;
-  deleteLaneCarrier(laneCarrierId: string): Promise<void>;
+  findLaneCarrier(laneId: string, carrierId: string, orgId: string): Promise<LaneCarrier | null>;
+  updateLaneCarrier(laneCarrierId: string, orgId: string, data: UpdateLaneCarrierDTO): Promise<any>;
+  deleteLaneCarrier(laneCarrierId: string, orgId: string): Promise<void>;
   createMany(data: CreateLaneDTO[]): Promise<void>;
-  count(): Promise<number>;
+  count(orgId: string): Promise<number>;
 }
 
 export class LanesRepository implements ILanesRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null): Promise<LaneWithRelations[]> {
-    const where: any = { archived: false };
-    if (orgId) where.orgId = orgId;
+  async all(orgId: string): Promise<LaneWithRelations[]> {
+    const where: any = { archived: false, orgId };
     return this.prisma.lane.findMany({
       where,
       include: {
@@ -114,9 +113,8 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findById(id: string, orgId?: string | null): Promise<LaneWithRelations | null> {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findById(id: string, orgId: string): Promise<LaneWithRelations | null> {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.lane.findFirst({
       where,
       include: {
@@ -136,15 +134,13 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findByIdSimple(id: string, orgId?: string | null): Promise<Lane | null> {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findByIdSimple(id: string, orgId: string): Promise<Lane | null> {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.lane.findFirst({ where });
   }
 
-  async findByIdWithOriginDestination(id: string, orgId?: string | null) {
-    const where: any = { id, archived: false };
-    if (orgId) where.orgId = orgId;
+  async findByIdWithOriginDestination(id: string, orgId: string) {
+    const where: any = { id, archived: false, orgId };
     return this.prisma.lane.findFirst({
       where,
       include: { origin: true, destination: true }
@@ -174,7 +170,7 @@ export class LanesRepository implements ILanesRepository {
 
       // Return the complete lane with relationships
       return tx.lane.findUnique({
-        where: { id: lane.id },
+        where: { id: lane.id, orgId: lane.orgId },
         include: {
           origin: true,
           destination: true,
@@ -189,6 +185,7 @@ export class LanesRepository implements ILanesRepository {
 
   async updateWithTransaction(
     id: string,
+    orgId: string,
     laneData: UpdateLaneDTO,
     stops?: CreateLaneStopDTO[]
   ): Promise<LaneWithRelations> {
@@ -200,7 +197,7 @@ export class LanesRepository implements ILanesRepository {
 
       // Update the lane
       await tx.lane.update({
-        where: { id },
+        where: { id, orgId },
         data: cleanedData
       });
 
@@ -208,7 +205,7 @@ export class LanesRepository implements ILanesRepository {
       if (stops !== undefined) {
         // Delete existing stops
         await tx.laneStop.deleteMany({
-          where: { laneId: id }
+          where: { laneId: id, lane: { orgId } }
         });
 
         // Create new stops if any
@@ -224,7 +221,7 @@ export class LanesRepository implements ILanesRepository {
 
       // Return the complete updated lane
       return tx.lane.findUnique({
-        where: { id },
+        where: { id, orgId },
         include: {
           origin: true,
           destination: true,
@@ -243,9 +240,9 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async archive(id: string): Promise<Lane> {
+  async archive(id: string, orgId: string): Promise<Lane> {
     return this.prisma.lane.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         archived: true,
         archivedAt: new Date()
@@ -265,15 +262,15 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findCustomerLane(laneId: string, customerId: string): Promise<CustomerLane | null> {
+  async findCustomerLane(laneId: string, customerId: string, orgId: string): Promise<CustomerLane | null> {
     return this.prisma.customerLane.findFirst({
-      where: { laneId, customerId }
+      where: { laneId, customerId, customer: { orgId } }
     });
   }
 
-  async deleteCustomerLane(customerLaneId: string): Promise<void> {
+  async deleteCustomerLane(customerLaneId: string, orgId: string): Promise<void> {
     await this.prisma.customerLane.delete({
-      where: { id: customerLaneId }
+      where: { id: customerLaneId, customer: { orgId } }
     });
   }
 
@@ -292,15 +289,15 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findLaneCarrier(laneId: string, carrierId: string): Promise<LaneCarrier | null> {
+  async findLaneCarrier(laneId: string, carrierId: string, orgId: string): Promise<LaneCarrier | null> {
     return this.prisma.laneCarrier.findFirst({
-      where: { laneId, carrierId }
+      where: { laneId, carrierId, lane: { orgId } }
     });
   }
 
-  async updateLaneCarrier(laneCarrierId: string, data: UpdateLaneCarrierDTO) {
+  async updateLaneCarrier(laneCarrierId: string, orgId: string, data: UpdateLaneCarrierDTO) {
     return this.prisma.laneCarrier.update({
-      where: { id: laneCarrierId },
+      where: { id: laneCarrierId, lane: { orgId } },
       data,
       include: {
         carrier: true,
@@ -311,9 +308,9 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async deleteLaneCarrier(laneCarrierId: string): Promise<void> {
+  async deleteLaneCarrier(laneCarrierId: string, orgId: string): Promise<void> {
     await this.prisma.laneCarrier.delete({
-      where: { id: laneCarrierId }
+      where: { id: laneCarrierId, lane: { orgId } }
     });
   }
 
@@ -323,7 +320,7 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async count(): Promise<number> {
-    return this.prisma.lane.count();
+  async count(orgId: string): Promise<number> {
+    return this.prisma.lane.count({ where: { orgId } });
   }
 }

@@ -42,14 +42,14 @@ async function resolveAuthor(
 ): Promise<{ authorId: string | null; authorName: string; orgId: string }> {
   const sub = req.user?.sub ?? null;
   const email = req.user?.email ?? null;
-  const orgId = req.user?.organizationId ?? 'default-org';
+  const orgId = req.orgId!;
 
   if (!sub) {
     return { authorId: null, authorName: 'System', orgId };
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: sub },
+    where: { id: sub, organizationId: orgId },
     select: { firstName: true, lastName: true, email: true },
   });
 
@@ -103,6 +103,7 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
     const wantDeleted = String(query.includeDeleted) === 'true' && isAdmin(req);
 
     const where: Record<string, unknown> = {
+      orgId: req.orgId!,
       entityType: query.entityType,
       entityId: query.entityId,
     };
@@ -205,7 +206,7 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
 
     // Author-only authorisation: keep the permission check in the route so
     // the command handler stays focused on the data write.
-    const existing = await prisma.comment.findUnique({ where: { id } });
+    const existing = await prisma.comment.findUnique({ where: { id, orgId: req.orgId! } });
     if (!existing) {
       reply.code(404);
       return { data: null, error: 'Comment not found' };
@@ -254,7 +255,7 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const existing = await prisma.comment.findUnique({ where: { id } });
+    const existing = await prisma.comment.findUnique({ where: { id, orgId: req.orgId! } });
     if (!existing) {
       reply.code(404);
       return { data: null, error: 'Comment not found' };

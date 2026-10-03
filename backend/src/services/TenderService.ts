@@ -30,15 +30,15 @@ export interface SubmitBidInput {
 }
 
 export interface ITenderService {
-  createTender(input: CreateTenderInput): Promise<TenderWithRelations>;
-  openTender(tenderId: string): Promise<TenderWithRelations>;
-  submitBid(input: SubmitBidInput): Promise<any>;
-  awardTender(tenderId: string, bidId: string): Promise<TenderWithRelations>;
-  cancelTender(tenderId: string): Promise<TenderWithRelations>;
-  declineTenderOffer(tenderOfferId: string, carrierId: string): Promise<void>;
+  createTender(input: CreateTenderInput, orgId: string): Promise<TenderWithRelations>;
+  openTender(tenderId: string, orgId: string): Promise<TenderWithRelations>;
+  submitBid(input: SubmitBidInput, orgId: string): Promise<any>;
+  awardTender(tenderId: string, bidId: string, orgId: string): Promise<TenderWithRelations>;
+  cancelTender(tenderId: string, orgId: string): Promise<TenderWithRelations>;
+  declineTenderOffer(tenderOfferId: string, carrierId: string, orgId: string): Promise<void>;
   checkExpiredOffers(): Promise<number>;
-  getActiveTendersForCarrier(carrierId: string): Promise<any[]>;
-  getTenderForCarrier(tenderId: string, carrierId: string): Promise<any>;
+  getActiveTendersForCarrier(carrierId: string, orgId: string): Promise<any[]>;
+  getTenderForCarrier(tenderId: string, carrierId: string, orgId: string): Promise<any>;
 }
 
 export class TenderService implements ITenderService {
@@ -50,12 +50,12 @@ export class TenderService implements ITenderService {
     private outboundDelivery?: IOutboundEdiDeliveryService,
   ) {}
 
-  async createTender(input: CreateTenderInput): Promise<TenderWithRelations> {
+  async createTender(input: CreateTenderInput, orgId: string): Promise<TenderWithRelations> {
     const reference = await this.tenderRepo.getNextReference();
 
     // Validate shipment exists
     const shipment = await this.prisma.shipment.findUnique({
-      where: { id: input.shipmentId },
+      where: { id: input.shipmentId, orgId },
     });
     if (!shipment) throw new Error('Shipment not found');
 
@@ -82,11 +82,11 @@ export class TenderService implements ITenderService {
       });
     }
 
-    return (await this.tenderRepo.findById(tender.id))!;
+    return (await this.tenderRepo.findById(tender.id, orgId))!;
   }
 
-  async openTender(tenderId: string): Promise<TenderWithRelations> {
-    const tender = await this.tenderRepo.findById(tenderId);
+  async openTender(tenderId: string, orgId: string): Promise<TenderWithRelations> {
+    const tender = await this.tenderRepo.findById(tenderId, orgId);
     if (!tender) throw new Error('Tender not found');
     if (tender.status !== 'draft') throw new Error('Tender can only be opened from draft status');
 
@@ -94,7 +94,7 @@ export class TenderService implements ITenderService {
     const expiresAt = new Date(now.getTime() + tender.tenderDurationMinutes * 60 * 1000);
 
     // Update tender status
-    await this.tenderRepo.update(tenderId, {
+    await this.tenderRepo.update(tenderId, orgId, {
       status: 'open',
       openedAt: now,
     } as any);
@@ -102,40 +102,40 @@ export class TenderService implements ITenderService {
     if (tender.strategy === 'broadcast') {
       // Broadcast: send to all carriers at once
       for (const offer of tender.offers) {
-        await this.tenderRepo.updateOffer(offer.id, {
+        await this.tenderRepo.updateOffer(offer.id, orgId, {
           status: 'sent',
           sentAt: now,
           expiresAt,
         } as any);
         // Auto-deliver EDI 204 if carrier has a trading partner configured
-        await this.autoDeliverEdi204(tender, offer);
+        await this.autoDeliverEdi204(orgId, tender, offer);
       }
     } else {
       // Waterfall: only send to first carrier
       const firstOffer = tender.offers.find(o => o.sequence === 1);
       if (firstOffer) {
-        await this.tenderRepo.updateOffer(firstOffer.id, {
+        await this.tenderRepo.updateOffer(firstOffer.id, orgId, {
           status: 'sent',
           sentAt: now,
           expiresAt,
         } as any);
-        await this.autoDeliverEdi204(tender, firstOffer);
+        await this.autoDeliverEdi204(orgId, tender, firstOffer);
       }
     }
 
-    return (await this.tenderRepo.findById(tenderId))!;
+    return (await this.tenderRepo.findById(tenderId, orgId))!;
   }
 
-  async submitBid(input: SubmitBidInput): Promise<any> {
+  async submitBid(input: SubmitBidInput, orgId: string): Promise<any> {
     // Validate the offer exists and is active
-    const offer = await this.tenderRepo.findOfferById(input.tenderOfferId);
+    const offer = await this.tenderRepo.findOfferById(input.tenderOfferId, orgId);
     if (!offer) throw new Error('Tender offer not found');
     if (!['sent', 'viewed'].includes(offer.status)) {
       throw new Error('This tender offer is no longer accepting bids');
     }
 
     // Check tender is still open
-    const tender = await this.tenderRepo.findById((offer as any).tenderId);
+    const tender = await this.tenderRepo.findById((offer as any).tenderId, orgId);
     if (!tender || tender.status !== 'open') {
       throw new Error('Tender is no longer open');
     }
@@ -163,21 +163,21 @@ export class TenderService implements ITenderService {
     return bid;
   }
 
-  async awardTender(tenderId: string, bidId: string): Promise<TenderWithRelations> {
-    const tender = await this.tenderRepo.findById(tenderId);
+  async awardTender(tenderId: string, bidId: string, orgId: string): Promise<TenderWithRelations> {
+    const tender = await this.tenderRepo.findById(tenderId, orgId);
     if (!tender) throw new Error('Tender not found');
     if (!['open', 'evaluating'].includes(tender.status)) {
       throw new Error('Tender is not in a state that can be awarded');
     }
 
-    const winningBid = await this.tenderRepo.findBidById(bidId);
+    const winningBid = await this.tenderRepo.findBidById(bidId, orgId);
     if (!winningBid) throw new Error('Bid not found');
     if ((winningBid as any).tenderId !== tenderId) throw new Error('Bid does not belong to this tender');
 
     const now = new Date();
 
     // Accept the winning bid
-    await this.tenderRepo.updateBid(bidId, {
+    await this.tenderRepo.updateBid(bidId, orgId, {
       status: 'accepted',
       respondedAt: now,
     } as any);
@@ -185,7 +185,7 @@ export class TenderService implements ITenderService {
     // Reject all other bids
     for (const bid of tender.bids) {
       if (bid.id !== bidId && bid.status === 'submitted') {
-        await this.tenderRepo.updateBid(bid.id, {
+        await this.tenderRepo.updateBid(bid.id, orgId, {
           status: 'rejected',
           respondedAt: now,
         } as any);
@@ -195,14 +195,14 @@ export class TenderService implements ITenderService {
     // Cancel any pending/sent offers that haven't bid
     for (const offer of tender.offers) {
       if (['pending', 'sent', 'viewed'].includes(offer.status)) {
-        await this.tenderRepo.updateOffer(offer.id, {
+        await this.tenderRepo.updateOffer(offer.id, orgId, {
           status: 'cancelled',
         } as any);
       }
     }
 
     // Update tender status
-    await this.tenderRepo.update(tenderId, {
+    await this.tenderRepo.update(tenderId, orgId, {
       status: 'awarded',
       awardedAt: now,
       closedAt: now,
@@ -210,15 +210,15 @@ export class TenderService implements ITenderService {
 
     // Assign carrier to shipment
     await this.prisma.shipment.update({
-      where: { id: tender.shipmentId },
+      where: { id: tender.shipmentId, orgId },
       data: { carrierId: winningBid.carrierId },
     });
 
-    return (await this.tenderRepo.findById(tenderId))!;
+    return (await this.tenderRepo.findById(tenderId, orgId))!;
   }
 
-  async cancelTender(tenderId: string): Promise<TenderWithRelations> {
-    const tender = await this.tenderRepo.findById(tenderId);
+  async cancelTender(tenderId: string, orgId: string): Promise<TenderWithRelations> {
+    const tender = await this.tenderRepo.findById(tenderId, orgId);
     if (!tender) throw new Error('Tender not found');
     if (['awarded', 'cancelled'].includes(tender.status)) {
       throw new Error('Tender cannot be cancelled in current state');
@@ -229,7 +229,7 @@ export class TenderService implements ITenderService {
     // Cancel all pending offers
     for (const offer of tender.offers) {
       if (['pending', 'sent', 'viewed'].includes(offer.status)) {
-        await this.tenderRepo.updateOffer(offer.id, {
+        await this.tenderRepo.updateOffer(offer.id, orgId, {
           status: 'cancelled',
         } as any);
       }
@@ -238,33 +238,33 @@ export class TenderService implements ITenderService {
     // Expire all submitted bids
     for (const bid of tender.bids) {
       if (bid.status === 'submitted') {
-        await this.tenderRepo.updateBid(bid.id, {
+        await this.tenderRepo.updateBid(bid.id, orgId, {
           status: 'expired',
         } as any);
       }
     }
 
-    await this.tenderRepo.update(tenderId, {
+    await this.tenderRepo.update(tenderId, orgId, {
       status: 'cancelled',
       closedAt: now,
     } as any);
 
-    return (await this.tenderRepo.findById(tenderId))!;
+    return (await this.tenderRepo.findById(tenderId, orgId))!;
   }
 
-  async declineTenderOffer(tenderOfferId: string, carrierId: string): Promise<void> {
-    const offer = await this.tenderRepo.findOfferById(tenderOfferId);
+  async declineTenderOffer(tenderOfferId: string, carrierId: string, orgId: string): Promise<void> {
+    const offer = await this.tenderRepo.findOfferById(tenderOfferId, orgId);
     if (!offer) throw new Error('Tender offer not found');
     if (offer.carrierId !== carrierId) throw new Error('Carrier does not match this offer');
 
-    await this.tenderRepo.updateOffer(tenderOfferId, {
+    await this.tenderRepo.updateOffer(tenderOfferId, orgId, {
       status: 'expired',
     } as any);
 
     // For waterfall tenders, progress to next carrier
-    const tender = await this.tenderRepo.findById((offer as any).tenderId);
+    const tender = await this.tenderRepo.findById((offer as any).tenderId, orgId);
     if (tender && tender.strategy === 'waterfall') {
-      await this.progressWaterfall(tender.id);
+      await this.progressWaterfall(tender.id, orgId);
     }
   }
 
@@ -273,15 +273,16 @@ export class TenderService implements ITenderService {
     let count = 0;
 
     for (const offer of expiredOffers) {
-      await this.tenderRepo.updateOffer(offer.id, {
+      // The sweep runs across every org, so each offer carries its own org from its shipment.
+      const orgId = offer.tender.shipment.orgId;
+      await this.tenderRepo.updateOffer(offer.id, orgId, {
         status: 'expired',
       } as any);
       count++;
 
       // For waterfall tenders, activate next carrier
-      const tender = offer as any;
-      if (tender.tender?.strategy === 'waterfall') {
-        await this.progressWaterfall(tender.tender.id);
+      if (offer.tender.strategy === 'waterfall') {
+        await this.progressWaterfall(offer.tender.id, orgId);
       }
     }
 
@@ -293,8 +294,8 @@ export class TenderService implements ITenderService {
     return count;
   }
 
-  private async progressWaterfall(tenderId: string): Promise<void> {
-    const tender = await this.tenderRepo.findById(tenderId);
+  private async progressWaterfall(tenderId: string, orgId: string): Promise<void> {
+    const tender = await this.tenderRepo.findById(tenderId, orgId);
     if (!tender || tender.status !== 'open') return;
 
     // Find next pending offer in sequence
@@ -305,19 +306,19 @@ export class TenderService implements ITenderService {
     if (nextOffer) {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + tender.tenderDurationMinutes * 60 * 1000);
-      await this.tenderRepo.updateOffer(nextOffer.id, {
+      await this.tenderRepo.updateOffer(nextOffer.id, orgId, {
         status: 'sent',
         sentAt: now,
         expiresAt,
       } as any);
-      await this.autoDeliverEdi204(tender, nextOffer);
+      await this.autoDeliverEdi204(orgId, tender, nextOffer);
     } else {
       // No more carriers to try — check if we have any bids
       const hasBids = tender.bids.some(b => b.status === 'submitted');
       if (hasBids) {
-        await this.tenderRepo.update(tenderId, { status: 'evaluating' } as any);
+        await this.tenderRepo.update(tenderId, orgId, { status: 'evaluating' } as any);
       } else {
-        await this.tenderRepo.update(tenderId, {
+        await this.tenderRepo.update(tenderId, orgId, {
           status: 'expired',
           closedAt: new Date(),
         } as any);
@@ -338,9 +339,9 @@ export class TenderService implements ITenderService {
 
       if (allExpiredOrCancelled) {
         if (hasSubmittedBids) {
-          await this.tenderRepo.update(tender.id, { status: 'evaluating' } as any);
+          await this.tenderRepo.update(tender.id, tender.shipment.orgId, { status: 'evaluating' } as any);
         } else {
-          await this.tenderRepo.update(tender.id, {
+          await this.tenderRepo.update(tender.id, tender.shipment.orgId, {
             status: 'expired',
             closedAt: new Date(),
           } as any);
@@ -349,12 +350,12 @@ export class TenderService implements ITenderService {
     }
   }
 
-  async getActiveTendersForCarrier(carrierId: string): Promise<any[]> {
-    return this.tenderRepo.findActiveOffersForCarrier(carrierId);
+  async getActiveTendersForCarrier(carrierId: string, orgId: string): Promise<any[]> {
+    return this.tenderRepo.findActiveOffersForCarrier(carrierId, orgId);
   }
 
-  async getTenderForCarrier(tenderId: string, carrierId: string): Promise<any> {
-    const tender = await this.tenderRepo.findById(tenderId);
+  async getTenderForCarrier(tenderId: string, carrierId: string, orgId: string): Promise<any> {
+    const tender = await this.tenderRepo.findById(tenderId, orgId);
     if (!tender) throw new Error('Tender not found');
 
     const offer = tender.offers.find(o => o.carrierId === carrierId);
@@ -362,7 +363,7 @@ export class TenderService implements ITenderService {
 
     // Mark as viewed if first time
     if (offer.status === 'sent') {
-      await this.tenderRepo.updateOffer(offer.id, {
+      await this.tenderRepo.updateOffer(offer.id, orgId, {
         status: 'viewed',
         viewedAt: new Date(),
       } as any);
@@ -375,13 +376,13 @@ export class TenderService implements ITenderService {
    * Auto-deliver EDI 204 to a carrier if they have a TradingPartner with outbound 204 enabled.
    * Called automatically when a tender offer is sent (broadcast or waterfall).
    */
-  private async autoDeliverEdi204(tender: TenderWithRelations, offer: any): Promise<void> {
+  private async autoDeliverEdi204(orgId: string, tender: TenderWithRelations, offer: any): Promise<void> {
     if (!this.outboundDelivery) return;
 
     try {
       // Load shipment details for EDI 204 generation
       const shipment: any = await this.prisma.shipment.findUnique({
-        where: { id: tender.shipmentId },
+        where: { id: tender.shipmentId, orgId },
         include: {
           origin: true,
           destination: true,
@@ -426,6 +427,7 @@ export class TenderService implements ITenderService {
       // Attempt delivery via TradingPartner
       const result = await this.outboundDelivery.deliverToCarrier(
         offer.carrierId,
+        tender.shipment.orgId,
         '204',
         ediContent,
         tender.reference,
@@ -434,13 +436,13 @@ export class TenderService implements ITenderService {
 
       if (result?.success) {
         // Mark the offer as EDI-sent
-        await this.tenderRepo.updateOffer(offer.id, {
+        await this.tenderRepo.updateOffer(offer.id, tender.shipment.orgId, {
           ediSent: true,
           edi204Content: ediContent,
         } as any);
       } else if (result) {
         // Delivery attempted but failed — store content anyway for manual retry
-        await this.tenderRepo.updateOffer(offer.id, {
+        await this.tenderRepo.updateOffer(offer.id, tender.shipment.orgId, {
           edi204Content: ediContent,
         } as any);
       }

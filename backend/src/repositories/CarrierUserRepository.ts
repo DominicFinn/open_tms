@@ -16,14 +16,15 @@ export interface UpdateCarrierUserDTO {
 
 export interface ICarrierUserRepository {
   create(data: CreateCarrierUserDTO): Promise<CarrierUser>;
-  findById(id: string): Promise<CarrierUser | null>;
+  findById(id: string, orgId: string): Promise<CarrierUser | null>;
   findByEmail(email: string): Promise<CarrierUser | null>;
-  findByCarrierId(carrierId: string): Promise<CarrierUser[]>;
-  update(id: string, data: UpdateCarrierUserDTO): Promise<CarrierUser>;
-  updatePassword(id: string, passwordHash: string): Promise<CarrierUser>;
-  updateLastLogin(id: string): Promise<CarrierUser>;
-  applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser>;
-  clearLockout(id: string): Promise<CarrierUser>;
+  carrierExistsInOrg(carrierId: string, orgId: string): Promise<boolean>;
+  findByCarrierId(carrierId: string, orgId: string): Promise<CarrierUser[]>;
+  update(id: string, orgId: string, data: UpdateCarrierUserDTO): Promise<CarrierUser>;
+  updatePassword(id: string, orgId: string, passwordHash: string): Promise<CarrierUser>;
+  updateLastLogin(id: string, orgId: string): Promise<CarrierUser>;
+  applyFailedAttempt(id: string, orgId: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser>;
+  clearLockout(id: string, orgId: string): Promise<CarrierUser>;
 }
 
 export class CarrierUserRepository implements ICarrierUserRepository {
@@ -33,9 +34,9 @@ export class CarrierUserRepository implements ICarrierUserRepository {
     return this.prisma.carrierUser.create({ data });
   }
 
-  async findById(id: string): Promise<CarrierUser | null> {
+  async findById(id: string, orgId: string): Promise<CarrierUser | null> {
     return this.prisma.carrierUser.findUnique({
-      where: { id },
+      where: { id, carrier: { orgId } },
       include: {
         carrier: { select: { id: true, name: true } },
       },
@@ -43,49 +44,55 @@ export class CarrierUserRepository implements ICarrierUserRepository {
   }
 
   async findByEmail(email: string): Promise<CarrierUser | null> {
+    // tenancy-exempt: email is unique across every org; portal login takes the org from the row it finds, and registration only checks the unique constraint after confirming the carrier is in the caller's org.
     return this.prisma.carrierUser.findUnique({
       where: { email },
       include: {
-        carrier: { select: { id: true, name: true, archived: true, deletedAt: true } },
+        carrier: { select: { id: true, orgId: true, name: true, archived: true, deletedAt: true } },
       },
     });
   }
 
-  async findByCarrierId(carrierId: string): Promise<CarrierUser[]> {
+  async carrierExistsInOrg(carrierId: string, orgId: string): Promise<boolean> {
+    const count = await this.prisma.carrier.count({ where: { id: carrierId, orgId } });
+    return count > 0;
+  }
+
+  async findByCarrierId(carrierId: string, orgId: string): Promise<CarrierUser[]> {
     return this.prisma.carrierUser.findMany({
-      where: { carrierId },
+      where: { carrierId, carrier: { orgId } },
       orderBy: { name: 'asc' },
     });
   }
 
-  async update(id: string, data: UpdateCarrierUserDTO): Promise<CarrierUser> {
-    return this.prisma.carrierUser.update({ where: { id }, data });
+  async update(id: string, orgId: string, data: UpdateCarrierUserDTO): Promise<CarrierUser> {
+    return this.prisma.carrierUser.update({ where: { id, carrier: { orgId } }, data });
   }
 
-  async updatePassword(id: string, passwordHash: string): Promise<CarrierUser> {
+  async updatePassword(id: string, orgId: string, passwordHash: string): Promise<CarrierUser> {
     return this.prisma.carrierUser.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: { passwordHash },
     });
   }
 
-  async updateLastLogin(id: string): Promise<CarrierUser> {
+  async updateLastLogin(id: string, orgId: string): Promise<CarrierUser> {
     return this.prisma.carrierUser.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
     });
   }
 
-  async applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser> {
+  async applyFailedAttempt(id: string, orgId: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser> {
     return this.prisma.carrierUser.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: { failedLoginAttempts, lockedUntil },
     });
   }
 
-  async clearLockout(id: string): Promise<CarrierUser> {
+  async clearLockout(id: string, orgId: string): Promise<CarrierUser> {
     return this.prisma.carrierUser.update({
-      where: { id },
+      where: { id, carrier: { orgId } },
       data: { failedLoginAttempts: 0, lockedUntil: null },
     });
   }

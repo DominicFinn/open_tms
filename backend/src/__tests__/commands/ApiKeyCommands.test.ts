@@ -168,11 +168,25 @@ describe('API key command handlers', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(tx.apiKey.delete).toHaveBeenCalledWith({ where: { id: 'key-1' } });
+      expect(tx.apiKey.delete).toHaveBeenCalledWith({ where: { id: 'key-1', orgId: 'test-org' } });
       expect(result.events[0].type).toBe(EVENT_TYPES.API_KEY_DELETED);
       const payload = result.events[0].payload as any;
       expect(payload.keyPrefix).toBe('sk_live_abc');
       expect(payload.keyHash).toBeUndefined();
+    });
+
+    it('scopes the lookup to the caller org so another tenant\'s key is never deleted', async () => {
+      const { prisma, tx } = buildPrisma({ findUnique: null });
+      const { bus } = mockEventBus();
+      const handler = new DeleteApiKeyCommandHandler(prisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(DELETE_API_KEY, { id: 'key-other' }, { orgId: 'org-b' })
+      );
+
+      expect(result.success).toBe(false);
+      expect(tx.apiKey.findUnique).toHaveBeenCalledWith({ where: { id: 'key-other', orgId: 'org-b' } });
+      expect(tx.apiKey.delete).not.toHaveBeenCalled();
     });
 
     it('fails when key does not exist', async () => {

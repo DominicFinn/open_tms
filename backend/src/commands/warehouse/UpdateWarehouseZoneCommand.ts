@@ -39,7 +39,7 @@ export class UpdateWarehouseZoneCommandHandler extends BaseCommandHandler<
     if (!existing) throw new Error(`Zone ${zoneId} not found`);
 
     const zone = await tx.warehouseZone.update({
-      where: { id: existing.id },
+      where: { id: existing.id, orgId: command.orgId },
       data: updates,
     });
 
