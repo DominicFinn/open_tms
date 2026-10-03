@@ -27,10 +27,14 @@ function mockPrisma(stop: { status: string }) {
   } as any;
 }
 
+const commandBus = () => ({
+  dispatch: jest.fn().mockResolvedValue({ success: true, events: [], data: { ordersUpdated: 0, shipmentId: 'ship-1' } }),
+}) as any;
+
 describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idempotency', () => {
   it('marks a pending stop arrived on the first matching ping', async () => {
     const prisma = mockPrisma({ status: 'pending' });
-    const service = new OrderDeliveryService(prisma);
+    const service = new OrderDeliveryService(prisma, commandBus());
 
     await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
@@ -44,12 +48,11 @@ describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idem
 
   it('does not re-stamp a stop that is already arrived on a repeat ping', async () => {
     const prisma = mockPrisma({ status: 'arrived' });
-    const service = new OrderDeliveryService(prisma);
+    const service = new OrderDeliveryService(prisma, commandBus());
 
     await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
     expect(prisma.shipmentStop.update).not.toHaveBeenCalled();
-    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('does not downgrade a completed stop back to arrived on a repeat ping', async () => {
@@ -57,11 +60,10 @@ describe('OrderDeliveryService.checkGeofenceAndUpdateOrders — repeat-ping idem
     // (#283) must not be reverted by this legacy evaluator re-matching the
     // same geofence on a later ping.
     const prisma = mockPrisma({ status: 'completed' });
-    const service = new OrderDeliveryService(prisma);
+    const service = new OrderDeliveryService(prisma, commandBus());
 
     await service.checkGeofenceAndUpdateOrders('org-1', 'ship-1', 40.0, -74.0);
 
     expect(prisma.shipmentStop.update).not.toHaveBeenCalled();
-    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

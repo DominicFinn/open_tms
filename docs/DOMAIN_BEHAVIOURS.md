@@ -76,11 +76,11 @@ These call domain services with complex orchestration logic. Most still create A
 | Operation | Trigger | Service | What It Does |
 |-----------|---------|---------|-------------|
 | Assign to shipment (#264) | `POST /api/v1/orders/:id/assign-to-shipment` | ShipmentAssignmentService | Matches lane, creates/reuses shipment (dispatches `CreateShipmentCommand` when creating), creates stop, updates order status |
-| Update delivery status | `POST /api/v1/orders/:id/delivery-status` | OrderDeliveryService | Updates deliveryStatus, creates audit log |
-| Mark delivered | `POST /api/v1/orders/:id/mark-delivered` | OrderDeliveryService | Sets deliveryStatus=delivered, deliveredAt=now |
-| Create exception | `POST /api/v1/orders/:id/delivery-exception` | OrderDeliveryService | Sets deliveryStatus=exception, records type/notes |
-| Resolve exception | `POST /api/v1/orders/:id/resolve-exception` | OrderDeliveryService | Sets deliveryStatus=in_transit, records resolution |
-| Update orders for stop | `POST /api/v1/shipment-stops/:id/update-orders` | OrderDeliveryService | Bulk updates all orders at a shipment stop |
+| Update delivery status | `POST /api/v1/orders/:id/delivery-status` | `ChangeOrderDeliveryStatusCommand` via OrderDeliveryService | Updates deliveryStatus, audit log; emits `order.delivered` / `order.exception` / `order.delivery_status_changed` |
+| Mark delivered | `POST /api/v1/orders/:id/mark-delivered` | `ChangeOrderDeliveryStatusCommand` via OrderDeliveryService | Sets deliveryStatus=delivered, deliveredAt=now; emits `order.delivered` |
+| Create exception | `POST /api/v1/orders/:id/delivery-exception` | `ChangeOrderDeliveryStatusCommand` via OrderDeliveryService | Sets deliveryStatus=exception, records type/notes; emits `order.exception` |
+| Resolve exception | `POST /api/v1/orders/:id/resolve-exception` | `ResolveOrderDeliveryExceptionCommand` via OrderDeliveryService | Sets deliveryStatus=in_transit, records resolution; emits `order.exception_resolved` |
+| Update orders for stop | `POST /api/v1/shipment-stops/:id/update-orders` | `RecordStopOrdersDeliveryCommand` via OrderDeliveryService | Moves the stop and its orders (rules below); one order event per changed order |
 | Geofence check | `POST /api/v1/shipments/:id/geofence-check` | OrderDeliveryService | Calculates distance to stops, auto-updates if within radius |
 | Convert to shipment (#264) | `POST /api/v1/orders/:id/convert-to-shipment` | OrderConversionService | Dispatches `ConvertOrderToShipmentCommand`: creates shipment + stop + junction, updates order status |
 | Batch convert (#264) | `POST /api/v1/orders/batch-convert` | OrderConversionService | Individual mode loops `convertOrder`; combine mode dispatches `CombineOrdersIntoShipmentCommand`. Compatibility checks first |
@@ -124,6 +124,17 @@ status value.
 null (not moving yet) → in_transit → delivered
                               ↘ exception → (resolved) → in_transit
 ```
+
+**Order delivery events (#325).** Every delivery status write goes through a command, so it runs in
+a transaction and emits after commit: `order.delivered` (carrying `deliveredAt`, the device time
+for tracking), `order.exception` (with `exceptionType`), `order.exception_resolved`, or
+`order.delivery_status_changed` for anything else, one event per order. Free-text confirmer names and
+notes stay in the order row and audit log, never the event. `RecordStopOrdersDeliveryCommand` drives
+orders from stops: **completing the pickup** (leaving the origin) puts every not-yet-moving order on
+the shipment `in_transit` and never delivers anything (before, an order whose delivery stop was the
+origin was marked delivered, #307); **arriving at a delivery stop** puts its unmoved orders in transit;
+**completing a delivery stop** delivers its active orders. The order read model, customer webhooks,
+email and in-app notifications now see deliveries, which they didn't when these were silent writes.
 
 `deliveryStatus` is nullable and only ever gets a value once the order is `assigned` — there is
 no `unassigned`/`assigned`/`cancelled` delivery status; those were redundant with `Order.status`.

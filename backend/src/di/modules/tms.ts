@@ -38,6 +38,8 @@ import { CreateOrderCommandHandler } from '../../commands/orders/CreateOrderComm
 import { UpdateOrderCommandHandler } from '../../commands/orders/UpdateOrderCommand.js';
 import { ArchiveOrderCommandHandler } from '../../commands/orders/ArchiveOrderCommand.js';
 import { CancelOrderCommandHandler } from '../../commands/orders/CancelOrderCommand.js';
+import { ChangeOrderDeliveryStatusCommandHandler, ResolveOrderDeliveryExceptionCommandHandler } from '../../commands/orders/ChangeOrderDeliveryStatusCommand.js';
+import { RecordStopOrdersDeliveryCommandHandler } from '../../commands/orders/RecordStopOrdersDeliveryCommand.js';
 import { SoftDeleteOrderCommandHandler } from '../../commands/orders/SoftDeleteOrderCommand.js';
 import { UnarchiveOrderCommandHandler } from '../../commands/orders/UnarchiveOrderCommand.js';
 import { ConvertOrderToShipmentCommandHandler } from '../../commands/orders/ConvertOrderToShipmentCommand.js';
@@ -314,7 +316,7 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   });
 
   container.singleton(TOKENS.IOrderDeliveryService).toFactory(() => {
-    return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient));
+    return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient), container.resolve(TOKENS.ICommandBus));
   });
 
   container.singleton(TOKENS.IArrivalCriteriaEvaluationService).toFactory(() => {
@@ -608,6 +610,9 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
   bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
   bus.register(new CancelOrderCommandHandler(prisma, eventBus));
+  bus.register(new ChangeOrderDeliveryStatusCommandHandler(prisma, eventBus));
+  bus.register(new ResolveOrderDeliveryExceptionCommandHandler(prisma, eventBus));
+  bus.register(new RecordStopOrdersDeliveryCommandHandler(prisma, eventBus));
   bus.register(new SoftDeleteOrderCommandHandler(prisma, eventBus));
   bus.register(new UnarchiveOrderCommandHandler(prisma, eventBus));
   bus.register(new CreateTrackableUnitCommandHandler(prisma, eventBus));

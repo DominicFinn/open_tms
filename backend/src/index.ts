@@ -167,8 +167,8 @@ async function start() {
         server.log.warn('Failed to register embedded event handlers: ' + (err as Error).message);
       }
 
-      const deliveryService = new OrderDeliveryService(server.prisma);
       const webhookCommandBus = container.resolve<any>(TOKENS.ICommandBus);
+      const deliveryService = new OrderDeliveryService(server.prisma, webhookCommandBus);
       const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService, webhookCommandBus);
       // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
