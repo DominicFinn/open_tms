@@ -98,6 +98,7 @@ export default function VNextCreateLocation() {
   const [geofenceValue, setGeofenceValue] = useState<GeofenceValue | null>(null);
   const [existingGeofenceId, setExistingGeofenceId] = useState<string | null>(null);
   const [geofenceDirty, setGeofenceDirty] = useState(false);
+  const [geofenceError, setGeofenceError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -109,6 +110,7 @@ export default function VNextCreateLocation() {
     setGeofenceValue(null);
     setExistingGeofenceId(null);
     setGeofenceDirty(false);
+    setGeofenceError(null);
 
     if (!id) return;
     setLoading(true);
@@ -150,6 +152,12 @@ export default function VNextCreateLocation() {
 
   const handleSubmit = async () => {
     setSubmitError('');
+    // An out-of-bounds shape reaches us as a null geofence, which would otherwise save the location
+    // with no geofence (or delete the existing one on edit).
+    if (geofenceError) {
+      setSubmitError(`Fix the geofence before saving: ${geofenceError}`);
+      return;
+    }
     setSubmitting(true);
     try {
       const body: any = {
@@ -443,6 +451,7 @@ export default function VNextCreateLocation() {
             key={id ?? 'new'}
             value={geofenceValue}
             onChange={(next) => { setGeofenceValue(next); setGeofenceDirty(true); }}
+            onErrorChange={setGeofenceError}
             centerLat={latitude ? parseFloat(latitude) : null}
             centerLng={longitude ? parseFloat(longitude) : null}
           />

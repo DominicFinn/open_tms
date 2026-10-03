@@ -4,8 +4,10 @@
  *
  * Fully controlled: local map state (center/radius or vertex list) is seeded once from `value`
  * (editing an existing geofence) and every user action re-emits the finished shape via `onChange`,
- * or `null` while the shape is incomplete (no center yet, or fewer than 3 polygon points) or after
- * Clear. The caller owns persistence — this component only produces geometry.
+ * or `null` while the shape is incomplete (no center yet, or fewer than 3 polygon points), out of
+ * size bounds, or after Clear. Because `null` alone can't tell "nothing drawn" from "drawn but
+ * invalid", the current validation error is also reported via `onErrorChange` so the caller can
+ * block saving. The caller owns persistence — this component only produces geometry.
  *
  * The radial center, the radius handle, and every polygon vertex are draggable and redraw the
  * shape live (via direct Leaflet layer mutation) during the drag, only committing to React state —
@@ -16,7 +18,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Crosshair, Info, Trash2, Undo2 } from 'lucide-react';
+import { Crosshair, Info, LocateFixed, Trash2, Undo2 } from 'lucide-react';
 import {
   GEOFENCE_MIN_RADIUS_METERS,
   GEOFENCE_MAX_RADIUS_METERS,
@@ -54,6 +56,7 @@ export interface GeofenceValue {
 export interface GeofenceEditorProps {
   value: GeofenceValue | null;
   onChange: (value: GeofenceValue | null) => void;
+  onErrorChange?: (error: string | null) => void;
   centerLat?: number | null;
   centerLng?: number | null;
   height?: number | string;
@@ -98,6 +101,7 @@ const locationIcon = () =>
 export default function GeofenceEditor({
   value,
   onChange,
+  onErrorChange,
   centerLat,
   centerLng,
   height = 380,
@@ -119,7 +123,12 @@ export default function GeofenceEditor({
   const [points, setPoints] = useState<LatLng[]>(
     value?.shapeType === 'polygon' ? (value.geometry as PolygonGeometry).points : []
   );
-  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [geometryError, setGeometryErrorState] = useState<string | null>(null);
+
+  const setGeometryError = (error: string | null) => {
+    setGeometryErrorState(error);
+    onErrorChange?.(error);
+  };
 
   // Map setup — created once.
   useEffect(() => {
@@ -185,6 +194,13 @@ export default function GeofenceEditor({
     map.setView([centerLat, centerLng], Math.max(map.getZoom(), LOCATION_ZOOM));
   };
 
+  const handleSnapToLocation = () => {
+    if (centerLat == null || centerLng == null) return;
+    const next = { lat: centerLat, lng: centerLng };
+    setCenter(next);
+    emitChange('radial', next, radiusMeters, points, name);
+  };
+
   const emitChange = (
     nextShapeType: 'radial' | 'polygon',
     nextCenter: LatLng | null,
@@ -193,7 +209,7 @@ export default function GeofenceEditor({
     nextName: string
   ) => {
     if (nextShapeType === 'radial') {
-      if (!nextCenter || nextRadius <= 0) {
+      if (!nextCenter) {
         setGeometryError(null);
         onChange(null);
         return;
@@ -317,16 +333,20 @@ export default function GeofenceEditor({
         emitChange('radial', next, radiusMeters, points, name);
       });
 
+      const clampRadius = (raw: number) =>
+        Math.min(GEOFENCE_MAX_RADIUS_METERS, Math.max(GEOFENCE_MIN_RADIUS_METERS, raw));
+
       edgeMarker.on('drag', () => {
         const ll = edgeMarker.getLatLng();
-        const newRadius = map.distance(circle.getLatLng(), ll);
-        if (newRadius > 0) circle.setRadius(newRadius);
+        circle.setRadius(clampRadius(map.distance(circle.getLatLng(), ll)));
       });
       edgeMarker.on('dragend', () => {
         const ll = edgeMarker.getLatLng();
-        const rawRadius = Math.round(map.distance(circle.getLatLng(), ll));
-        const newRadius = Math.min(GEOFENCE_MAX_RADIUS_METERS, Math.max(GEOFENCE_MIN_RADIUS_METERS, rawRadius));
+        const newRadius = clampRadius(Math.round(map.distance(circle.getLatLng(), ll)));
         circle.setRadius(newRadius);
+        // Snap the handle back onto the edge: when the clamped radius equals the current one, the
+        // state update is a no-op and the redraw effect won't reposition it.
+        edgeMarker.setLatLng([center.lat, circle.getBounds().getEast()]);
         setRadiusMeters(newRadius);
         emitChange('radial', center, newRadius, points, name);
       });
@@ -384,6 +404,12 @@ export default function GeofenceEditor({
           </TabsList>
         </Tabs>
         <div className="flex gap-2">
+          {shapeType === 'radial' && centerLat != null && centerLng != null && (
+            <Button variant="outline" size="sm" onClick={handleSnapToLocation}>
+              <LocateFixed className="h-4 w-4" />
+              {center ? 'Move to location' : 'Place at location'}
+            </Button>
+          )}
           {centerLat != null && centerLng != null && (
             <Button variant="outline" size="sm" onClick={handleCenterOnLocation}>
               <Crosshair className="h-4 w-4" />
