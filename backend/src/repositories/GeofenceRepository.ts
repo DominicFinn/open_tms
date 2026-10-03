@@ -30,8 +30,8 @@ export interface IGeofenceRepository {
   findByEntities(entityType: string, entityIds: string[], orgId: string): Promise<Geofence[]>;
   findById(id: string, orgId: string): Promise<Geofence | null>;
   create(data: CreateGeofenceDTO): Promise<Geofence>;
-  update(id: string, data: UpdateGeofenceDTO): Promise<Geofence>;
-  archive(id: string): Promise<Geofence>;
+  update(id: string, orgId: string, data: UpdateGeofenceDTO): Promise<Geofence>;
+  archive(id: string, orgId: string): Promise<Geofence>;
 }
 
 export class GeofenceRepository implements IGeofenceRepository {
@@ -70,9 +70,9 @@ export class GeofenceRepository implements IGeofenceRepository {
     });
   }
 
-  async update(id: string, data: UpdateGeofenceDTO): Promise<Geofence> {
+  async update(id: string, orgId: string, data: UpdateGeofenceDTO): Promise<Geofence> {
     return this.prisma.geofence.update({
-      where: { id },
+      where: { id, orgId },
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.shapeType !== undefined ? { shapeType: data.shapeType } : {}),
@@ -83,9 +83,9 @@ export class GeofenceRepository implements IGeofenceRepository {
     });
   }
 
-  async archive(id: string): Promise<Geofence> {
+  async archive(id: string, orgId: string): Promise<Geofence> {
     return this.prisma.geofence.update({
-      where: { id },
+      where: { id, orgId },
       data: { active: false, archivedAt: new Date() },
     });
   }

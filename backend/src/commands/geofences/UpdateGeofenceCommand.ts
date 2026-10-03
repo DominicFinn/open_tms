@@ -37,7 +37,7 @@ export class UpdateGeofenceCommandHandler extends BaseCommandHandler<
     if (!existing) throw new Error(`Geofence ${geofenceId} not found`);
 
     await tx.geofence.update({
-      where: { id: geofenceId },
+      where: { id: geofenceId, orgId: command.orgId },
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(shapeType !== undefined ? { shapeType } : {}),

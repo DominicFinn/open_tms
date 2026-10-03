@@ -35,7 +35,7 @@ export class ArchiveGeofenceCommandHandler extends BaseCommandHandler<
     if (!existing.active) return { id: existing.id };
 
     await tx.geofence.update({
-      where: { id: geofenceId },
+      where: { id: geofenceId, orgId: command.orgId },
       data: { active: false, archivedAt: new Date() },
     });
 
