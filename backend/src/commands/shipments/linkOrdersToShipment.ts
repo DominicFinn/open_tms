@@ -29,6 +29,17 @@ export interface LinkOrdersToShipmentContext {
   source?: string;
 }
 
+/**
+ * The pickup stop at the shipment's origin, sequence 1. A shipment created from orders needs it so
+ * leaving the origin is tracked (#324): it is what moves a ready shipment to in_progress and puts
+ * its orders in transit. Call before linking orders, whose delivery stops then follow it.
+ */
+export async function createPickupStop(tx: TransactionClient, shipmentId: string, originId: string): Promise<void> {
+  await tx.shipmentStop.create({
+    data: { shipmentId, locationId: originId, sequenceNumber: 1, stopType: 'pickup', status: 'pending' },
+  });
+}
+
 export async function linkOrdersToShipment(
   tx: TransactionClient,
   shipment: LinkableShipment,

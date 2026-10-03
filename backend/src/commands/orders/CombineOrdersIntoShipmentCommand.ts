@@ -16,7 +16,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
+import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
 import { loadProfileFor } from './shipmentLoadRules.js';
 
@@ -89,6 +89,8 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
         status: 'draft',
       },
     }));
+
+    await createPickupStop(tx, shipment.id, shipment.originId!);
 
     await linkOrdersToShipment(
       tx,

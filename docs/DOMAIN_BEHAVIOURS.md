@@ -130,7 +130,8 @@ null (not moving yet) → in_transit → delivered
 `SplitOrderCommand`: an FTL shipment carries exactly one order; FTL and LTL orders never share a
 shipment; LTL orders from different customers may (the shipment is filed under the first order's
 customer); a shipment is `tempControlled` / `hazmat` if any order on it needs that. Every path that
-creates a shipment from orders sets `serviceLevel`, `tempControlled` and `hazmat` from them; adding
+creates a shipment from orders sets `serviceLevel`, `tempControlled` and `hazmat` from them, and
+starts it with a pickup stop at the origin (sequence 1) so leaving the origin is tracked (#324); adding
 to a shipment with no service level gives it the orders'. `OrderConversionService` runs the same
 checks first only to report per order. `scripts/backfill-shipment-service-level.ts` (dry run unless
 `--apply`) sets the service level on existing shipments whose orders agree and lists mixed or empty

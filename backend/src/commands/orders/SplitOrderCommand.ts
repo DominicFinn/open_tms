@@ -21,6 +21,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { loadProfileFor } from './shipmentLoadRules.js';
+import { createPickupStop } from '../shipments/linkOrdersToShipment.js';
 
 export interface SplitGroupPayload {
   trackableUnitIds: string[];
@@ -174,11 +175,12 @@ export class SplitOrderCommandHandler extends BaseCommandHandler<SplitOrderPaylo
         data: { orderId: order.id, shipmentId: shipment.id },
       });
 
+      await createPickupStop(tx, shipment.id, order.originId!);
       await tx.shipmentStop.create({
         data: {
           shipmentId: shipment.id,
           locationId: order.destinationId!,
-          sequenceNumber: 1,
+          sequenceNumber: 2,
           stopType: 'delivery',
           status: 'pending',
         },
