@@ -1,6 +1,7 @@
 export * from './shipmentTypeValidator.js';
 export * from './shipmentEventTypes.js';
 export * from './shipmentShareSections.js';
+export * from './geofenceValidation.js';
 
 export type ID = string;
 

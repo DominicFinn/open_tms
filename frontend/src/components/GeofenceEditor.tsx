@@ -17,6 +17,12 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Crosshair, Info, Trash2, Undo2 } from 'lucide-react';
+import {
+  GEOFENCE_MIN_RADIUS_METERS,
+  GEOFENCE_MAX_RADIUS_METERS,
+  radiusOutOfBoundsMessage,
+  polygonAreaOutOfBoundsMessage,
+} from '@open-tms/shared';
 import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, addBaseTileLayer } from '../lib/leafletMap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +119,7 @@ export default function GeofenceEditor({
   const [points, setPoints] = useState<LatLng[]>(
     value?.shapeType === 'polygon' ? (value.geometry as PolygonGeometry).points : []
   );
+  const [geometryError, setGeometryError] = useState<string | null>(null);
 
   // Map setup — created once.
   useEffect(() => {
@@ -187,6 +194,13 @@ export default function GeofenceEditor({
   ) => {
     if (nextShapeType === 'radial') {
       if (!nextCenter || nextRadius <= 0) {
+        setGeometryError(null);
+        onChange(null);
+        return;
+      }
+      const error = radiusOutOfBoundsMessage(nextRadius);
+      setGeometryError(error);
+      if (error) {
         onChange(null);
         return;
       }
@@ -197,6 +211,13 @@ export default function GeofenceEditor({
       });
     } else {
       if (nextPoints.length < 3) {
+        setGeometryError(null);
+        onChange(null);
+        return;
+      }
+      const error = polygonAreaOutOfBoundsMessage(nextPoints);
+      setGeometryError(error);
+      if (error) {
         onChange(null);
         return;
       }
@@ -209,6 +230,7 @@ export default function GeofenceEditor({
     setShapeType(nextShapeType);
     setCenter(null);
     setPoints([]);
+    setGeometryError(null);
     onChange(null);
   };
 
@@ -226,6 +248,7 @@ export default function GeofenceEditor({
   const handleClear = () => {
     setCenter(null);
     setPoints([]);
+    setGeometryError(null);
     onChange(null);
   };
 
@@ -301,7 +324,9 @@ export default function GeofenceEditor({
       });
       edgeMarker.on('dragend', () => {
         const ll = edgeMarker.getLatLng();
-        const newRadius = Math.max(1, Math.round(map.distance(circle.getLatLng(), ll)));
+        const rawRadius = Math.round(map.distance(circle.getLatLng(), ll));
+        const newRadius = Math.min(GEOFENCE_MAX_RADIUS_METERS, Math.max(GEOFENCE_MIN_RADIUS_METERS, rawRadius));
+        circle.setRadius(newRadius);
         setRadiusMeters(newRadius);
         emitChange('radial', center, newRadius, points, name);
       });
@@ -398,7 +423,8 @@ export default function GeofenceEditor({
             <Label>Radius (meters)</Label>
             <Input
               type="number"
-              min="1"
+              min={GEOFENCE_MIN_RADIUS_METERS}
+              max={GEOFENCE_MAX_RADIUS_METERS}
               step="10"
               value={radiusMeters}
               onChange={(e) => handleRadiusChange(e.target.value)}
@@ -410,9 +436,10 @@ export default function GeofenceEditor({
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {shapeType === 'radial'
-          ? 'Click the map to place the center. Drag the center to move it, or drag the small diamond handle on the edge to resize.'
+          ? `Click the map to place the center. Drag the center to move it, or drag the small diamond handle on the edge to resize (${GEOFENCE_MIN_RADIUS_METERS}m–${GEOFENCE_MAX_RADIUS_METERS}m).`
           : `Click the map to add corner points (${points.length} placed, 3+ needed). Drag a point to move it, or click it to remove it.`}
       </p>
+      {geometryError && <p className="text-xs font-medium text-destructive">{geometryError}</p>}
 
       <div
         ref={containerRef}

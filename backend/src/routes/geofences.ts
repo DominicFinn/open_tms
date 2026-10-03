@@ -1,6 +1,10 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
+import {
+  radiusOutOfBoundsMessage,
+  polygonAreaOutOfBoundsMessage,
+} from '@open-tms/shared';
 import { IGeofenceRepository } from '../repositories/GeofenceRepository.js';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -11,15 +15,25 @@ import { statusForGeofenceError } from '../commands/geofences/errors.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
 
-const radialGeometrySchema = z.object({
-  centerLat: z.number(),
-  centerLng: z.number(),
-  radiusMeters: z.number().positive(),
-});
+const radialGeometrySchema = z
+  .object({
+    centerLat: z.number(),
+    centerLng: z.number(),
+    radiusMeters: z.number().positive(),
+  })
+  .refine((g) => radiusOutOfBoundsMessage(g.radiusMeters) === null, (g) => ({
+    message: radiusOutOfBoundsMessage(g.radiusMeters) ?? 'Radius out of bounds',
+    path: ['radiusMeters'],
+  }));
 
-const polygonGeometrySchema = z.object({
-  points: z.array(z.object({ lat: z.number(), lng: z.number() })).min(3),
-});
+const polygonGeometrySchema = z
+  .object({
+    points: z.array(z.object({ lat: z.number(), lng: z.number() })).min(3),
+  })
+  .refine((g) => polygonAreaOutOfBoundsMessage(g.points) === null, (g) => ({
+    message: polygonAreaOutOfBoundsMessage(g.points) ?? 'Polygon area out of bounds',
+    path: ['points'],
+  }));
 
 // Whitelisted, not freeform (security rule: whitelist allowed values). "location" is the only
 // entityType with UI/wiring today; extend this alongside CreateGeofenceCommand's existence check
