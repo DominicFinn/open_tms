@@ -468,6 +468,27 @@ Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_
 | `CreateShipmentCommand` (resolution) | Shipment with `originData`/`destinationData` | `location.created` | `source: 'shipment_resolution'` in payload |
 | `LocationResolutionService` | Order creation, EDI import | `location.created` | `source: 'resolution'` in payload |
 
+### Geofences
+
+A generic, polymorphic `Geofence` table (radial or polygon, JSON geometry) attachable to any entity
+type by `entityType`/`entityId` — no Prisma relation, joined manually like `Attachment`/`Comment`.
+Only `entityType: 'location'` is wired up today. Every Location API response embeds that location's
+active geofences as `geofences: Geofence[]` (`GeofenceRepository.findByEntity`/`findByEntities` in
+`withGeofence`/`withGeofences`, `backend/src/routes/locations.ts`).
+
+Drawn by hand in the Locations create/edit form (`GeofenceEditor`, Leaflet, no drawing plugin —
+click to place a radial center or polygon vertices) as its own "Geofence" section. One geofence per
+location in the UI today; the API itself supports several per entity.
+
+**Not in scope here**: what counts as being inside a geofence (arrival/departure detection) — that's
+`ArrivalCriteria` / `ArrivalCriteriaEvaluationService`, untouched by this feature.
+
+| Command | Trigger | Events Emitted | Side Effects |
+|---------|---------|----------------|-------------|
+| `CreateGeofenceCommand` | `POST /api/v1/geofences` | `geofence.created` | Validates the target entity exists in-org first |
+| `UpdateGeofenceCommand` | `PUT /api/v1/geofences/:id` | `geofence.updated` | |
+| `ArchiveGeofenceCommand` | `DELETE /api/v1/geofences/:id` | `geofence.archived` | Soft-delete (`active: false`) |
+
 ---
 
 ## Lanes

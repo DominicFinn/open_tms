@@ -1,0 +1,11 @@
+-- BUSINESS RULE: at most one active geofence per entity (#309). CreateGeofenceCommand already
+-- archives any other active geofence for the same (orgId, entityType, entityId) when it creates a
+-- new one, but that check-then-write is not race-safe under concurrent requests — two simultaneous
+-- creates can each see zero active rows and both insert, exactly the class of bug that leaked a
+-- stray geofence onto an unrelated location during manual testing of this feature. A partial
+-- unique index makes the database the source of truth: a second concurrent insert fails outright
+-- instead of silently leaving two active geofences on the same entity.
+--
+-- Not expressible in schema.prisma (no partial/filtered unique index support in this Prisma
+-- version) — this constraint exists only here, in the migration.
+CREATE UNIQUE INDEX "Geofence_one_active_per_entity" ON "Geofence"("orgId", "entityType", "entityId") WHERE "active" = true;

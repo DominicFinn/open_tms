@@ -460,6 +460,7 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
 - Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
 - **IoT tidy-up** (#291) ✅ telemetry reads scoped to the caller's org, device and vendor settings on commands and repositories, shipment form can no longer take over another org's device, legacy GCP `webhook-service/` removed
 - Full-journey proof: origin departure + ~10 route-based in-transit checkpoints + destination arrival, all as domain events (`tracking.geofence_exited`/`tracking.journey_checkpoint`/`tracking.geofence_entered`) ✅ (#283). v1: origin/destination only, location only — see `docs/DOMAIN_BEHAVIOURS.md` > Tracking (IoT)
+- **Manual location geofencing** (#309) ✅ generic, polymorphic `Geofence` model (radial or polygon) with CRUD API, embedded on Location responses; `GeofenceEditor` (Leaflet, hand-drawn) on the Locations create/edit form; at most one active geofence per location; radius bounded to 25m-5000m and polygon area to the equivalent range. Arrival/departure detection against these geofences is not built, `ArrivalCriteria` is separate and untouched
 
 ### Internal user auth
 

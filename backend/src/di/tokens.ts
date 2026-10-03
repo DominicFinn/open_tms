@@ -22,6 +22,7 @@ export const TOKENS = {
   IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),
 
   IArrivalCriteriaRepository: Symbol.for('IArrivalCriteriaRepository'),
+  IGeofenceRepository: Symbol.for('IGeofenceRepository'),
   ICargoTrackingRepository: Symbol.for('ICargoTrackingRepository'),
   IDeviceRepository: Symbol.for('IDeviceRepository'),
   ISensorReadingRepository: Symbol.for('ISensorReadingRepository'),

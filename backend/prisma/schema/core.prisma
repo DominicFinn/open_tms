@@ -1015,6 +1015,32 @@ model Comment {
   @@index([entityType, entityId, visibleToCustomer])
 }
 
+// ─── Geofences (polymorphic, any entity) ─────────────────────────────────────
+// Table role: authoritative mutable, low volume, drawn manually and edited rarely.
+// Generic geometry store. Arrival/departure "what counts as inside" logic is NOT here —
+// see ArrivalCriteria (tms.prisma) for that; a separate, unrelated table.
+
+model Geofence {
+  id         String    @id @default(uuid())
+  orgId      String
+  entityType String // "location" is the only value with UI/wiring today; free-form like Comment.entityType
+  entityId   String
+  name       String?
+  shapeType  String // "radial" | "polygon"
+  geometry   Json // radial: { centerLat, centerLng, radiusMeters }
+  // polygon: { points: [{ lat, lng }, ...] } (>= 3 points)
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  @@index([orgId])
+  @@index([entityType, entityId])
+  // Also: a DB-level partial unique index — "Geofence_one_active_per_entity" on
+  // (orgId, entityType, entityId) WHERE active — enforces at most one active geofence per
+  // entity. Added via raw migration since this Prisma version has no partial-index syntax.
+}
+
 // ─── Issue Labels ───────────────────────────────────────────────────────────
 
 model IssueLabel {

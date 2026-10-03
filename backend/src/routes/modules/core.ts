@@ -13,6 +13,7 @@ import { webhookRoutes } from '../webhook.js';
 import { seedRoutes } from '../seed.js';
 import { customerRoutes } from '../customers.js';
 import { locationRoutes } from '../locations.js';
+import { geofenceRoutes } from '../geofences.js';
 import { globalSearchRoutes } from '../globalSearch.js';
 import { organizationRoutes } from '../organization.js';
 import { apiKeyRoutes } from '../apiKeys.js';
@@ -48,6 +49,7 @@ export async function registerCoreAuthenticatedRoutes(app: FastifyInstance): Pro
   await app.register(themeAdminRoutes);
   await app.register(customerRoutes);
   await app.register(locationRoutes);
+  await app.register(geofenceRoutes);
   await app.register(globalSearchRoutes);
   await app.register(organizationRoutes);
   await app.register(apiKeyRoutes);
