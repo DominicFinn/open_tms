@@ -14,6 +14,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { loadProfileFor } from './shipmentLoadRules.js';
 import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
 
@@ -75,6 +76,7 @@ export class ConvertOrderToShipmentCommandHandler extends BaseCommandHandler<Con
         deliveryDate: order.requestedDeliveryDate || undefined,
         items: [],
         status: 'draft',
+        ...loadProfileFor([order]),
       },
     });
 

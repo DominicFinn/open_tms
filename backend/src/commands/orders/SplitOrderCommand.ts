@@ -20,6 +20,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { loadProfileFor } from './shipmentLoadRules.js';
 
 export interface SplitGroupPayload {
   trackableUnitIds: string[];
@@ -151,6 +152,7 @@ export class SplitOrderCommandHandler extends BaseCommandHandler<SplitOrderPaylo
           deliveryDate: order.requestedDeliveryDate || undefined,
           items,
           status: 'draft',
+          ...loadProfileFor([order]),
         },
       });
 

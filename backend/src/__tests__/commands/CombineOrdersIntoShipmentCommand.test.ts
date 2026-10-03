@@ -11,6 +11,9 @@ function makeOrder(overrides: any = {}) {
     customerId: 'cust-1',
     originId: 'loc-origin',
     destinationId: 'loc-dest-1',
+    serviceLevel: 'LTL',
+    temperatureControl: 'ambient',
+    requiresHazmat: false,
     createdAt: new Date('2026-01-01'),
     customer: { id: 'cust-1', name: 'Acme' },
     trackableUnits: [],
@@ -125,4 +128,32 @@ describe('CombineOrdersIntoShipmentCommandHandler', () => {
     expect(result.error).toMatch(/No valid orders found/);
     expect(tx.shipment.create).not.toHaveBeenCalled();
   });
+
+  it('sets the shipment service level and handling flags from its orders (#325)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([
+      makeOrder({ id: 'a', customerId: 'cust-1' }),
+      makeOrder({ id: 'b', customerId: 'cust-2', temperatureControl: 'refrigerated' }),
+    ]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(result.success).toBe(true);
+    expect(tx.shipment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ serviceLevel: 'LTL', tempControlled: true, hazmat: false }),
+    }));
+  });
+
+  it('refuses to combine FTL orders (#325)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([makeOrder({ id: 'a', serviceLevel: 'FTL' }), makeOrder({ id: 'b', serviceLevel: 'FTL' })]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(result.success).toBe(false);
+    expect(tx.shipment.create).not.toHaveBeenCalled();
+  });
 });
+

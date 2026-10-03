@@ -11,6 +11,9 @@ function makeOrder(overrides: any = {}) {
     customerId: 'cust-1',
     originId: 'loc-origin',
     destinationId: 'loc-dest',
+    serviceLevel: 'LTL',
+    temperatureControl: 'ambient',
+    requiresHazmat: false,
     trackableUnits: [],
     lineItems: [],
     ...overrides,
@@ -22,6 +25,9 @@ function makeShipment(overrides: any = {}) {
     id: 'ship-1',
     orgId: 'test-org',
     reference: 'SH-EXISTING',
+    serviceLevel: 'LTL',
+    tempControlled: false,
+    hazmat: false,
     items: [{ orderId: 'order-existing', orderNumber: 'ORD-EXISTING' }],
     ...overrides,
   };
@@ -34,7 +40,7 @@ function makeTx(shipment: any = makeShipment()) {
       update: jest.fn().mockResolvedValue({}),
     },
     order: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
-    orderShipment: { create: jest.fn().mockResolvedValue({}) },
+    orderShipment: { create: jest.fn().mockResolvedValue({}), count: jest.fn().mockResolvedValue(1) },
     shipmentStop: {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({ id: 'stop-1' }),
@@ -151,4 +157,40 @@ describe('AddOrdersToShipmentCommandHandler', () => {
     expect(result.error).toMatch(/No valid orders to add/);
     expect(tx.shipment.update).not.toHaveBeenCalled();
   });
+
+  describe('load rules (#325)', () => {
+    async function add(shipment: any, orders: any[], existing = 1) {
+      const tx = makeTx(makeShipment(shipment));
+      tx.orderShipment.count.mockResolvedValue(existing);
+      tx.order.findMany.mockResolvedValue(orders);
+      const handler = new AddOrdersToShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+      const result = await handler.execute(createTestCommand(ADD_ORDERS_TO_SHIPMENT, { shipmentId: 'ship-1', orderIds: orders.map((o) => o.id) }));
+      return { tx, result };
+    }
+
+    it('refuses a second order on an FTL shipment', async () => {
+      const { result, tx } = await add({ serviceLevel: 'FTL' }, [makeOrder({ serviceLevel: 'FTL' })], 1);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/FTL shipment carries one order/);
+      expect(tx.orderShipment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses an FTL order on an LTL shipment', async () => {
+      const { result } = await add({ serviceLevel: 'LTL' }, [makeOrder({ serviceLevel: 'FTL' })]);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/FTL orders can't join a LTL shipment/);
+    });
+
+    it('lets LTL orders from different customers share a shipment', async () => {
+      const { result } = await add({}, [makeOrder({ id: 'a', customerId: 'cust-1' }), makeOrder({ id: 'b', customerId: 'cust-2' })]);
+      expect(result.success).toBe(true);
+    });
+
+    it('gives a shipment with no service level the orders\' one', async () => {
+      const { tx, result } = await add({ serviceLevel: null }, [makeOrder({ serviceLevel: 'FTL' })], 0);
+      expect(result.success).toBe(true);
+      expect(tx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { serviceLevel: 'FTL' } }));
+    });
+  });
 });
+

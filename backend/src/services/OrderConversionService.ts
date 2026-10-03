@@ -156,10 +156,12 @@ export class OrderConversionService implements IOrderConversionService {
       );
     }
 
-    // Check service level mix
+    // BUSINESS RULE (#325): FTL is a dedicated truck for one order, and FTL/LTL never mix.
     const serviceLevels = new Set(orders.map((o) => o.serviceLevel));
     if (serviceLevels.size > 1) {
-      warnings.push('Orders have mixed service levels (FTL/LTL). Shipment will default to FTL.');
+      errors.push('Orders have mixed service levels (FTL/LTL), which can\'t share a shipment.');
+    } else if (serviceLevels.has('FTL') && orders.length > 1) {
+      errors.push('FTL orders each need their own shipment; combine LTL orders instead.');
     }
 
     // Check temperature control mix
@@ -386,6 +388,9 @@ export class OrderConversionService implements IOrderConversionService {
       if (!found.has(id)) errors.push(`Order ${id} not found`);
     }
 
+    // An FTL shipment carries one order: taken already if it has any.
+    let ftlSlotTaken = shipment.serviceLevel === 'FTL'
+      && (await this.prisma.orderShipment.count({ where: { shipmentId, shipment: { orgId } } })) > 0;
     const valid = orders.filter((o) => {
       if (o.status === 'assigned') {
         errors.push(`${o.orderNumber} is already ${o.status}`);
@@ -407,6 +412,11 @@ export class OrderConversionService implements IOrderConversionService {
         errors.push(`${o.orderNumber} is ${o.serviceLevel} but this shipment is ${shipment.serviceLevel}`);
         return false;
       }
+      if (o.serviceLevel === 'FTL' && ftlSlotTaken) {
+        errors.push(`${o.orderNumber} is FTL, and an FTL shipment carries only one order`);
+        return false;
+      }
+      if (o.serviceLevel === 'FTL') ftlSlotTaken = true;
       if (o.requiresHazmat && !shipment.hazmat) {
         errors.push(`${o.orderNumber} requires hazmat handling, which this shipment isn't flagged for`);
         return false;

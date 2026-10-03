@@ -18,6 +18,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
+import { loadProfileFor } from './shipmentLoadRules.js';
 
 export interface CombineOrdersIntoShipmentPayload {
   orderIds: string[];
@@ -70,6 +71,8 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
         destinationId: firstOrder.destinationId!,
         items: [],
         status: 'draft',
+        // LTL may mix customers; the shipment is filed under the first order's.
+        ...loadProfileFor(orders),
       },
     });
 
