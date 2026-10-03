@@ -107,6 +107,17 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       { batchOrderIds: orderIds },
     );
 
+    // With orders bound for different places, the shipment ends at its last drop, not at the first
+    // order's destination: checkpoints and the route header measure towards it (#324).
+    const finalStop = await tx.shipmentStop.findFirst({
+      where: { shipmentId: shipment.id, shipment: { orgId: command.orgId } },
+      orderBy: { sequenceNumber: 'desc' },
+      select: { locationId: true },
+    });
+    if (finalStop && finalStop.locationId !== shipment.destinationId) {
+      await tx.shipment.update({ where: { id: shipment.id, orgId: command.orgId }, data: { destinationId: finalStop.locationId } });
+    }
+
     return { shipmentId: shipment.id };
   }
 }

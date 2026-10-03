@@ -168,5 +168,20 @@ describe('CombineOrdersIntoShipmentCommandHandler', () => {
       data: { shipmentId: 'ship-1', locationId: 'loc-origin', sequenceNumber: 1, stopType: 'pickup', status: 'pending' },
     });
   });
+
+  it('ends the shipment at its last drop when orders go to different places (#324)', async () => {
+    const tx = makeTx();
+    tx.shipment.create.mockResolvedValue({ id: 'ship-1', reference: 'SH-BATCH-XYZ', items: [], originId: 'loc-origin', destinationId: 'loc-dest-1' });
+    tx.shipmentStop.findFirst.mockImplementation((args: any) => Promise.resolve(args?.orderBy ? { locationId: 'loc-dest-2' } : null));
+    tx.order.findMany.mockResolvedValue([
+      makeOrder({ id: 'a', destinationId: 'loc-dest-1' }),
+      makeOrder({ id: 'b', destinationId: 'loc-dest-2' }),
+    ]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(tx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { destinationId: 'loc-dest-2' } }));
+  });
 });
 
