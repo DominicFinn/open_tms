@@ -35,6 +35,27 @@ describe('ShipmentCompletionHandler', () => {
     expect(eventBus.publish).toHaveBeenCalledTimes(2); // delivered + status_changed
   });
 
+  it('stamps the delivery with the arrival device time, not processing time (#323)', async () => {
+    const prisma = {
+      shipment: {
+        findUnique: jest.fn().mockResolvedValue(mockShipment()),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as any;
+    const eventBus = { publish: jest.fn().mockResolvedValue(undefined) } as any;
+    const handler = new ShipmentCompletionHandler(prisma, eventBus);
+    const arrived = '2026-10-01T15:30:00.000Z';
+
+    await handler.handle(createTestEvent(EVENT_TYPES.TRACKING_GEOFENCE_ENTERED, 'shipment', 'ship-1', { eventTime: arrived }));
+
+    expect(prisma.shipment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'complete', deliveryDate: new Date(arrived) } })
+    );
+    const payloads = eventBus.publish.mock.calls.map((c: any) => c[0].payload);
+    expect(payloads[0]).toEqual(expect.objectContaining({ deliveredAt: arrived, eventTime: arrived }));
+    expect(payloads[1]).toEqual(expect.objectContaining({ newStatus: 'complete', eventTime: arrived }));
+  });
+
   it('does not double-publish when two events race for the same destination arrival', async () => {
     // A single destination arrival now emits both tracking.geofence_entered and
     // shipment.stop_arrived (#283); this handler subscribes to both. Simulate

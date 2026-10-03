@@ -22,7 +22,7 @@ function buildPrisma(overrides: any = {}) {
     iotVendor: { findUnique: jest.fn().mockResolvedValue(null) },
     deviceEvent: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
     device: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
-    sensorReading: { create: jest.fn() },
+    sensorReading: { create: jest.fn(), createMany: jest.fn(({ data }: any) => Promise.resolve({ count: data.length })) },
     shipment: {
       findFirst: jest.fn().mockResolvedValue({ id: 'shipment-1', reference: 'TRUCK-1' }),
       findUnique: jest.fn().mockResolvedValue({ id: 'shipment-1', reference: 'TRUCK-1' }),
@@ -224,3 +224,82 @@ describe('createInboundWebhookWorker — tenancy', () => {
     );
   });
 });
+
+describe('createInboundWebhookWorker — generic ping telemetry and timing', () => {
+  const telemetryPayload = {
+    event: {
+      device: { id: 'dev-1', name: 'TRUCK-1' },
+      type: 'location',
+      startTime: '2026-01-01T08:00:00.000Z',
+      location: { global: { lat: 40.1, lon: -74.2 } },
+      readingsCount: 3,
+      readings: [
+        { time: '2026-01-01T07:50:00.000Z', temperature: 4.1, batteryLevel: 88 },
+        { time: '2026-01-01T07:55:00.000Z', temperature: 4.4 },
+        { time: '2026-01-01T08:00:00.000Z', temperature: 4.6, batteryLevel: 87 },
+      ],
+    },
+  };
+
+  beforeEach(() => fakeEventBus.publish.mockClear());
+
+  it('stores every reading in the ping against the registered device, keyed for idempotent retries', async () => {
+    const prisma = buildPrisma({
+      device: { findFirst: jest.fn().mockResolvedValue({ id: 'device-1', assignments: [] }), findUnique: jest.fn(), update: jest.fn() },
+    });
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ rawPayload: telemetryPayload }));
+
+    const { data, skipDuplicates } = prisma.sensorReading.createMany.mock.calls[0][0];
+    expect(skipDuplicates).toBe(true);
+    expect(data).toHaveLength(3);
+    expect(data[0]).toEqual(expect.objectContaining({
+      deviceId: 'device-1', shipmentId: 'shipment-1', temperature: 4.1, batteryLevel: 88,
+      eventTime: new Date('2026-01-01T07:50:00.000Z'), sourceReportId: 'webhook:log-1:0',
+    }));
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        responseBody: expect.objectContaining({ readingsReceived: 3, readingsStored: 3 }),
+      }),
+    }));
+  });
+
+  it('keeps telemetry only in the raw log when the device is not registered to the org', async () => {
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ rawPayload: telemetryPayload }));
+
+    expect(prisma.sensorReading.createMany).not.toHaveBeenCalled();
+  });
+
+  it('runs arrival and checkpoint evaluation for generic pings, stamped with the device time', async () => {
+    const prisma = buildPrisma();
+    const arrivalCriteriaService = { evaluateAndUpdateOrders: jest.fn().mockResolvedValue([]) } as any;
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService(), arrivalCriteriaService);
+
+    await worker(legacyMessage({ rawPayload: telemetryPayload }));
+
+    expect(arrivalCriteriaService.evaluateAndUpdateOrders).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: 'org-1', shipmentId: 'shipment-1', lat: 40.1, lng: -74.2, eventTime: '2026-01-01T08:00:00.000Z',
+    }));
+  });
+});
+
+describe('createInboundWebhookWorker — standalone worker wiring (#287)', () => {
+  it('publishes through an injected event bus instead of the DI container', async () => {
+    fakeEventBus.publish.mockClear();
+    const injectedBus = { publish: jest.fn().mockResolvedValue(undefined) } as any;
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService(), undefined, injectedBus);
+
+    await worker(legacyMessage());
+
+    expect(injectedBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ type: EVENT_TYPES.TRACKING_LOCATION_RECEIVED }),
+    );
+    expect(fakeEventBus.publish).not.toHaveBeenCalled();
+  });
+});
+

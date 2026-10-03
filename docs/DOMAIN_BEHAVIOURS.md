@@ -346,7 +346,7 @@ the access ledger.
 | `tracking.location_received` | Inbound webhook worker | ShipmentReadModel.currentLat/Lng updated, geofence check |
 | `tracking.geofence_entered` | `RecordGeofenceArrivalCommand` | ShipmentStop marked arrived, orders updated; also emits `shipment.stop_arrived` for the destination stop |
 | `tracking.geofence_exited` | `RecordGeofenceDepartureCommand` | Origin ShipmentStop marked completed; also emits `shipment.stop_completed` ("Departed origin" on the timeline) |
-| `tracking.journey_checkpoint` | `RecordJourneyCheckpointCommand` | Writes a `ShipmentJourneyCheckpoint` row; no shipment/stop side effect |
+| `tracking.journey_checkpoint` | `RecordJourneyCheckpointCommand` | Writes a `ShipmentJourneyCheckpoint` row per checkpoint, including any filled in between pings (`inferred: true`); no shipment/stop side effect |
 | `tracking.eta_updated` | ETA recalculation | — |
 
 **Full-journey proof (#283).** `ArrivalCriteriaEvaluationService` dispatches all three geofence events
@@ -359,6 +359,41 @@ has a `LaneRoute`, and hasn't yet arrived at its destination, its position is lo
 `RecordJourneyCheckpointCommand`. A checkpoint never fires on the same ping as an arrival. Query a
 shipment's full journey via `GET /api/v1/shipments/:id/journey`. v1 scope: origin/destination only (no
 waypoints), location only (no sensor data), no GPS-jitter hysteresis on the geofence boundary.
+
+**Tracking pings (#323).** Every vendor payload is parsed into one internal `TrackingPing`
+(`integrations/tracking/TrackingPing.ts`): device, **device timestamp**, optional position, a
+`readings[]` array (temperature, battery level/voltage, light, pressure) and `readingsCount`.
+`parseSystemLocoPing` and `parseGenericPing` are the two adapters; the generic shape accepts either a
+`readings` array (one entry per buffered reading, each with its own `time`) or a single `sensors`
+block. Once the ping resolves to a shipment, both feeds go through the same path in the worker: the
+`tracking.location_received` event, then arrival-criteria evaluation (arrival, origin departure,
+checkpoints), then the legacy geofence check. Arrival, departure, checkpoint and the stop/order
+timestamps written by `OrderDeliveryService.updateOrdersForStop` all use the device time, not the
+time the worker ran. Timeline entries for tracking events (and for `shipment.stop_arrived` /
+`shipment.stop_completed`, which now carry `eventTime`) are stamped with that device time too, and so is shipment completion:
+`ShipmentCompletionHandler` sets `deliveryDate` from the arrival's `eventTime` and carries it on
+`shipment.delivered` and the `status_changed` it publishes. Readings from a generic ping are stored through
+`SensorReadingRepository.createForDevice`, keyed `webhook:<webhookLogId>:<n>` on
+`SensorReading.sourceReportId` so a queue retry is a no-op; a device the org hasn't registered keeps
+its readings only in the webhook log's raw payload. The webhook log's response body records
+`readingsReceived` and `readingsStored`. System Loco readings are still stored by
+`SystemLocoAdapter` (it feeds cold chain and alerting).
+
+**Standalone worker (#287).** `worker.ts` (the separate worker container) now wires the same journey
+pipeline as the embedded API worker: it builds one `PgBossEventBus` for the process, registers the
+event handlers on it first, then builds a command bus with the three tracking command handlers and an
+`ArrivalCriteriaEvaluationService`, and passes both the service and the bus into
+`createInboundWebhookWorker` (the worker has no DI container to resolve them from). Fan-out only
+reaches handlers registered in the publishing process, so in `WORKER_MODE=integrations` tracking
+events are recorded in the event log but reach no handlers.
+
+**Skipped checkpoints.** Pings can be far enough apart that a shipment jumps several checkpoints.
+`RecordJourneyCheckpointCommand` records every checkpoint between the last recorded one and the one
+reached: a filled-in checkpoint is placed on the planned route (`passedCheckpoints`), timed by
+interpolating by distance between an anchor and this ping. The anchor is the last recorded
+checkpoint or, before the first one, the origin departure at distance 0; with neither, it takes the
+ping's time, and its event carries `inferred: true`. The timeline shows it as "passed
+(between pings)".
 
 ### IoT Devices & Vendors
 

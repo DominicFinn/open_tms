@@ -25,7 +25,8 @@ export interface IOrderDeliveryService {
   markOrderDelivered(orgId: string, orderId: string, method: string, confirmedBy?: string, notes?: string): Promise<any>;
   createDeliveryException(exception: DeliveryException): Promise<any>;
   resolveDeliveryException(orgId: string, orderId: string, resolvedBy?: string, notes?: string): Promise<any>;
-  updateOrdersForStop(orgId: string, shipmentStopId: string, status: string, method: string): Promise<number>;
+  /** `occurredAt` is when the stop event actually happened (device time); defaults to now. */
+  updateOrdersForStop(orgId: string, shipmentStopId: string, status: string, method: string, occurredAt?: Date): Promise<number>;
   checkGeofenceAndUpdateOrders(orgId: string, shipmentId: string, currentLat: number, currentLng: number): Promise<number>;
 }
 
@@ -228,7 +229,8 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     orgId: string,
     shipmentStopId: string,
     status: string,
-    method: string = 'auto'
+    method: string = 'auto',
+    occurredAt: Date = new Date(),
   ): Promise<number> {
     const stop = await this.prisma.shipmentStop.findUnique({
       where: { id: shipmentStopId, shipment: { orgId } },
@@ -262,8 +264,8 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         where: { id: shipmentStopId, shipment: { orgId } },
         data: {
           status,
-          actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? new Date() : stop.actualArrival,
-          actualDeparture: status === 'completed' ? new Date() : stop.actualDeparture,
+          actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? (stop.actualArrival ?? occurredAt) : stop.actualArrival,
+          actualDeparture: status === 'completed' ? occurredAt : stop.actualDeparture,
           updatedAt: new Date()
         }
       });
@@ -283,7 +285,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
           },
           data: {
             deliveryStatus: 'delivered',
-            deliveredAt: new Date(),
+            deliveredAt: occurredAt,
             deliveryMethod: method,
             deliveryConfirmedBy: 'system:shipment_stop_completed',
             updatedAt: new Date()

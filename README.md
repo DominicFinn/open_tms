@@ -558,7 +558,7 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - `DELETE /api/v1/api-keys/:id` - Delete key
 
 #### Webhooks & Outbound Integrations
-- `POST /api/v1/webhook` - Receive GPS/location updates from IoT devices (requires API key)
+- `POST /api/v1/webhook` - Receive GPS/location and sensor telemetry (temperature, battery, buffered `readings[]`, `readingsCount`) from IoT devices (API key or System Loco signature). Payload shape: see "Tracking pings" in `docs/DOMAIN_BEHAVIOURS.md`
 - `GET /api/v1/webhook-logs` - List webhook event logs with filtering
 - `GET /api/v1/webhook-logs/stats` - Webhook statistics
 - `GET /api/v1/outbound-integrations` - List outbound EDI integrations

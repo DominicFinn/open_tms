@@ -73,6 +73,25 @@ describe('buildTimelineRow', () => {
     });
   });
 
+  it('stamps a tracking entry with the device time from the payload, and marks inferred checkpoints (#323)', async () => {
+    const prisma = mockPrisma();
+    const row = await buildTimelineRow(
+      prisma,
+      createTestEvent('tracking.journey_checkpoint', 'shipment', 'ship-1', {
+        checkpointIndex: 4, totalCheckpoints: 10, inferred: true, eventTime: '2026-10-01T09:30:00.000Z',
+      })
+    );
+    expect(row!.eventTime.toISOString()).toBe('2026-10-01T09:30:00.000Z');
+    expect(row!.description).toBe('Checkpoint 4/10 passed (between pings)');
+  });
+
+  it('falls back to the domain event timestamp when the payload has no device time', async () => {
+    const prisma = mockPrisma();
+    const event = createTestEvent('shipment.created', 'shipment', 'ship-1', {});
+    const row = await buildTimelineRow(prisma, event);
+    expect(row!.eventTime.toISOString()).toBe(new Date(event.timestamp).toISOString());
+  });
+
   describe('stop classification', () => {
     function stopPrisma(seq: number, min: number, max: number) {
       return mockPrisma({

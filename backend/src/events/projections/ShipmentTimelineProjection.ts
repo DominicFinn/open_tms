@@ -63,7 +63,7 @@ export async function buildTimelineRow(
   const base = {
     shipmentId: event.entityId,
     source: 'system',
-    eventTime: new Date(event.timestamp),
+    eventTime: occurredAt(event, payload),
     address: (payload.location as string) || null,
     sourceEventId: event.id,
   };
@@ -111,11 +111,20 @@ export async function buildTimelineRow(
       return {
         ...base,
         eventType: 'journey_checkpoint',
-        description: `Checkpoint ${payload.checkpointIndex}/${payload.totalCheckpoints} reached`,
+        description: `Checkpoint ${payload.checkpointIndex}/${payload.totalCheckpoints} ${payload.inferred ? 'passed (between pings)' : 'reached'}`,
       };
     default:
       return null;
   }
+}
+
+/**
+ * Tracking events carry the device's own time; the timeline shows when it happened on the road,
+ * not when the ping was processed. Everything else uses the domain event's timestamp.
+ */
+function occurredAt(event: DomainEvent, payload: Record<string, any>): Date {
+  const deviceTime = typeof payload.eventTime === 'string' ? new Date(payload.eventTime) : null;
+  return deviceTime && !Number.isNaN(deviceTime.getTime()) ? deviceTime : new Date(event.timestamp);
 }
 
 export class ShipmentTimelineProjection implements IEventHandler {

@@ -22,10 +22,33 @@ export type SensorReadingWithDevice = Prisma.SensorReadingGetPayload<{
 
 export type SensorReadingRow = Prisma.SensorReadingGetPayload<object>;
 
+export interface NewSensorReading {
+  eventTime: Date;
+  temperature?: number;
+  batteryLevel?: number;
+  batteryVoltage?: number;
+  lightLevel?: number;
+  atmosphericPressure?: number;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  locationAccuracy?: number;
+  /** Unique per reading; a redelivered ping with the same key is skipped. */
+  sourceReportId: string;
+}
+
+export interface ReadingLinks {
+  shipmentId?: string | null;
+  orderId?: string | null;
+  trackableUnitId?: string | null;
+}
+
 export interface ISensorReadingRepository {
   listForShipment(orgId: string, shipmentId: string, window: ReadingWindow): Promise<SensorReadingWithDevice[] | null>;
   listForOrder(orgId: string, orderId: string, window: ReadingWindow): Promise<SensorReadingWithDevice[] | null>;
   listForDevice(orgId: string, deviceId: string, window: ReadingWindow): Promise<SensorReadingRow[] | null>;
+  /** Returns the number of readings written, or null when the device isn't in the org. */
+  createForDevice(orgId: string, deviceId: string, links: ReadingLinks, readings: NewSensorReading[]): Promise<number | null>;
 }
 
 export class SensorReadingRepository implements ISensorReadingRepository {
@@ -61,6 +84,23 @@ export class SensorReadingRepository implements ISensorReadingRepository {
       orderBy: { eventTime: 'desc' },
       take: window.limit,
     });
+  }
+
+  async createForDevice(orgId: string, deviceId: string, links: ReadingLinks, readings: NewSensorReading[]) {
+    const device = await this.prisma.device.findFirst({ where: { id: deviceId, orgId }, select: { id: true } });
+    if (!device) return null;
+    if (readings.length === 0) return 0;
+    const { count } = await this.prisma.sensorReading.createMany({
+      data: readings.map((r) => ({
+        deviceId,
+        shipmentId: links.shipmentId ?? null,
+        orderId: links.orderId ?? null,
+        trackableUnitId: links.trackableUnitId ?? null,
+        ...r,
+      })),
+      skipDuplicates: true,
+    });
+    return count;
   }
 }
 

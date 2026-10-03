@@ -45,7 +45,7 @@ describe('ArrivalCriteriaEvaluationService — order delivery status on arrival'
     const service = new ArrivalCriteriaEvaluationService(prisma, deliveryService, commandBus);
     await service.evaluateAndUpdateOrders({ orgId: 'org-1', shipmentId: 'ship-1', lat: 40.0, lng: -74.0, rawPayload: {} });
 
-    expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-dest', 'completed', 'geofence');
+    expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-dest', 'completed', 'geofence', expect.any(Date));
     expect(prisma.shipment.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'ship-1', orgId: 'org-1' } }),
     );
@@ -62,7 +62,7 @@ describe('ArrivalCriteriaEvaluationService — order delivery status on arrival'
     const service = new ArrivalCriteriaEvaluationService(prisma, deliveryService, commandBus);
     await service.evaluateAndUpdateOrders({ orgId: 'org-1', shipmentId: 'ship-1', lat: 40.0, lng: -74.0, rawPayload: {} });
 
-    expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-origin', 'arrived', 'geofence');
+    expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-origin', 'arrived', 'geofence', expect.any(Date));
   });
 
   it('does nothing for a shipment in another org', async () => {
@@ -83,5 +83,27 @@ describe('ArrivalCriteriaEvaluationService — order delivery status on arrival'
     );
     expect(commandBus.dispatch).not.toHaveBeenCalled();
     expect(deliveryService.updateOrdersForStop).not.toHaveBeenCalled();
+  });
+
+  it('stamps the arrival and the order update with the device time, not processing time', async () => {
+    const prisma = mockPrisma({
+      stopId: 'stop-dest', locationId: 'loc-dest', isDestination: true,
+      originId: 'loc-origin', destinationId: 'loc-dest',
+    });
+    const deliveryService = { updateOrdersForStop: jest.fn().mockResolvedValue(1) } as any;
+    const commandBus = { dispatch: jest.fn().mockResolvedValue({ success: true, data: { arrived: true }, events: [] }) } as any;
+    const deviceTime = '2026-01-01T08:30:00.000Z';
+
+    const service = new ArrivalCriteriaEvaluationService(prisma, deliveryService, commandBus);
+    await service.evaluateAndUpdateOrders({
+      orgId: 'org-1', shipmentId: 'ship-1', lat: 40.0, lng: -74.0, eventTime: deviceTime, rawPayload: {},
+    });
+
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ eventTime: deviceTime }) }),
+    );
+    expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith(
+      'org-1', 'stop-dest', 'completed', 'geofence', new Date(deviceTime),
+    );
   });
 });

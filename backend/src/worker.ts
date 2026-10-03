@@ -26,6 +26,10 @@ import { registerEventHandlers } from './events/registerHandlers.js';
 import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
+import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
+import { RecordGeofenceArrivalCommandHandler } from './commands/tracking/RecordGeofenceArrivalCommand.js';
+import { RecordGeofenceDepartureCommandHandler } from './commands/tracking/RecordGeofenceDepartureCommand.js';
+import { RecordJourneyCheckpointCommandHandler } from './commands/tracking/RecordJourneyCheckpointCommand.js';
 import { IEmailService } from './services/IEmailService.js';
 import { SmtpEmailService } from './services/SmtpEmailService.js';
 import { ConsoleEmailService } from './services/ConsoleEmailService.js';
@@ -103,14 +107,9 @@ async function startWorker() {
   await queue.start();
   console.log('[Worker] Queue adapter started');
 
-  // Integration workers (inbound webhook). The legacy outbound carrier and
-  // outbound tracking workers were removed — outbound EDI is now driven by
-  // Edi856AutoSendHandler and Edi810AutoSendHandler off domain events.
-  if (WORKER_MODE === 'all' || WORKER_MODE === 'integrations') {
-    const deliveryService = new OrderDeliveryService(prisma);
-    await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(prisma, deliveryService));
-    console.log('[Worker] Integration workers registered');
-  }
+  // One event bus for the process. Fan-out only reaches handlers registered on this bus, so the
+  // integration workers below publish through the same instance the event handlers register on.
+  const eventBus = new PgBossEventBus(prisma, queue);
 
   // Event handlers (audit, notifications, email, webhooks, triage)
   if (WORKER_MODE === 'all' || WORKER_MODE === 'events') {
@@ -149,8 +148,6 @@ async function startWorker() {
     } else {
       storageProvider = new DatabaseBinaryStorage(prisma);
     }
-
-    const eventBus = new PgBossEventBus(prisma, queue);
 
     // LLM provider for AI agent features (optional).
     // BUSINESS RULE (#303): the worker builds one provider for the whole process, so an org's own
@@ -223,6 +220,27 @@ async function startWorker() {
     await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus, skillRegistry, documentService);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
+  }
+
+  // Integration workers (inbound webhook). The legacy outbound carrier and
+  // outbound tracking workers were removed — outbound EDI is now driven by
+  // Edi856AutoSendHandler and Edi810AutoSendHandler off domain events.
+  // Registered after the event handlers so the bus already knows where to fan out (#287).
+  if (WORKER_MODE === 'all' || WORKER_MODE === 'integrations') {
+    if (WORKER_MODE === 'integrations') {
+      console.warn('[Worker] integrations-only mode: tracking events are recorded but only fan out to handlers registered in this process');
+    }
+    const deliveryService = new OrderDeliveryService(prisma);
+    const trackingCommandBus = new CommandBus();
+    trackingCommandBus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
+    trackingCommandBus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
+    trackingCommandBus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
+    const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(prisma, deliveryService, trackingCommandBus);
+    await queue.subscribe(
+      QUEUES.INBOUND_WEBHOOK,
+      createInboundWebhookWorker(prisma, deliveryService, arrivalCriteriaService, eventBus),
+    );
+    console.log('[Worker] Integration workers registered');
   }
 
   // Graceful shutdown

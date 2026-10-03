@@ -10,6 +10,8 @@ import { TOKENS } from '../di/tokens.js';
 import { IEventBus } from '../events/IEventBus.js';
 import { createEvent } from '../events/createEvent.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
+import { ISensorReadingRepository, SensorReadingRepository } from '../repositories/SensorReadingRepository.js';
+import { TrackingPing, parseGenericPing, parseSystemLocoPing } from '../integrations/tracking/TrackingPing.js';
 
 /** A queued webhook whose tenant cannot be established. Retrying won't help; it dead-letters. */
 export class WebhookTenantUnresolvedError extends Error {
@@ -21,6 +23,7 @@ export class WebhookTenantUnresolvedError extends Error {
 
 type Deps = {
   prisma: PrismaClient;
+  sensorReadings: ISensorReadingRepository;
   deliveryService: IOrderDeliveryService;
   arrivalCriteriaService?: IArrivalCriteriaEvaluationService;
   systemLoco: SystemLocoAdapter;
@@ -120,21 +123,18 @@ async function processSystemLoco(
     ? await deps.systemLoco.processDeviceEvent(rawPayload, orgId)
     : await deps.systemLoco.processShipmentEvent(rawPayload, orgId);
 
-  const deviceInfo = rawPayload.device || rawPayload.payload?.device || {};
-  const location = rawPayload.location?.global || rawPayload.location || {};
-  const lat = location.lat ? Number(location.lat) : null;
-  const lng = (location.lon || location.lng) ? Number(location.lon || location.lng) : null;
+  const ping = parseSystemLocoPing(rawPayload);
 
   await prisma.webhookLog.update({
     where: { id: webhookLogId, orgId },
     data: {
       status: result.matched ? 'success' : 'not_found',
-      deviceName: deviceInfo.name || null,
-      deviceId: deviceInfo.id || null,
+      deviceName: ping.deviceName || null,
+      deviceId: ping.deviceExternalId || null,
       eventType: rawPayload.type || null,
-      hasLocation: !!location.lat,
-      lat,
-      lng,
+      hasLocation: !!ping.position,
+      lat: ping.position?.lat ?? null,
+      lng: ping.position?.lng ?? null,
       shipmentFound: !!result.shipmentId,
       shipmentUpdated: !!result.shipmentEventId,
       shipmentId: result.shipmentId,
@@ -147,112 +147,149 @@ async function processSystemLoco(
   });
 
   if (!result.shipmentId) return;
+  await applyPingToJourney(deps, orgId, result.shipmentId, ping, rawPayload, 'system_loco_webhook');
+}
 
-  if (lat !== null && lng !== null) {
-    const eventTime = rawPayload.startTime || rawPayload.time || new Date().toISOString();
-    await publishLocation(deps, orgId, result.shipmentId, lat, lng, eventTime, 'system_loco_webhook');
+/**
+ * Everything a ping drives once it is tied to a shipment: the current-position event, then
+ * geofence arrival/departure and journey checkpoints, all stamped with the device's time.
+ */
+async function applyPingToJourney(
+  deps: Deps,
+  orgId: string,
+  shipmentId: string,
+  ping: TrackingPing,
+  rawPayload: any,
+  source: string,
+): Promise<void> {
+  const eventTime = ping.eventTime.toISOString();
+  if (ping.position) {
+    await publishLocation(deps, orgId, shipmentId, ping.position.lat, ping.position.lng, eventTime, source);
   }
 
-  // Evaluate arrival criteria (WiFi, BLE, enhanced geofence) from IoT payload FIRST.
-  // This is the event-publishing path (full-journey departure/checkpoint/arrival, #283) and
-  // it must win the race to flip ShipmentStop.status before the legacy
-  // checkGeofenceAndUpdateOrders below, which does a silent direct write with no event.
+  // Evaluate arrival criteria (WiFi, BLE, enhanced geofence) FIRST. This is the event-publishing
+  // path (full-journey departure/checkpoint/arrival, #283) and it must win the race to flip
+  // ShipmentStop.status before the legacy checkGeofenceAndUpdateOrders below, which does a silent
+  // direct write with no event.
   if (deps.arrivalCriteriaService) {
     try {
       await deps.arrivalCriteriaService.evaluateAndUpdateOrders({
         orgId,
-        shipmentId: result.shipmentId,
-        deviceId: deviceInfo.id || undefined,
-        lat: lat ?? undefined,
-        lng: lng ?? undefined,
+        shipmentId,
+        deviceId: ping.deviceExternalId,
+        lat: ping.position?.lat,
+        lng: ping.position?.lng,
+        eventTime,
         rawPayload,
       });
-    } catch {
-      // Arrival criteria evaluation is non-critical
+    } catch (err) {
+      console.error('[WebhookWorker] Arrival criteria evaluation failed', { shipmentId, orgId, err: (err as Error).message });
     }
   }
 
   // Legacy geofence check runs second, so it becomes a no-op once arrival criteria above have
   // already transitioned the stop for orgs configured via ArrivalCriteria.
-  if (lat !== null && lng !== null) {
+  if (ping.position) {
     try {
-      await deps.deliveryService.checkGeofenceAndUpdateOrders(orgId, result.shipmentId, lat, lng);
-    } catch {
-      // Geofence check is non-critical
+      await deps.deliveryService.checkGeofenceAndUpdateOrders(orgId, shipmentId, ping.position.lat, ping.position.lng);
+    } catch (err) {
+      console.error('[WebhookWorker] Legacy geofence check failed', { shipmentId, orgId, err: (err as Error).message });
     }
   }
 }
 
-/** Resolve the shipment a legacy device feed refers to, within the tenant. */
+interface LegacyResolution {
+  shipment: { id: string; reference: string } | null;
+  /** The org's registered device, when there is one; readings can only be stored against it. */
+  deviceId: string | null;
+}
+
+/** Resolve the device and the shipment a legacy device feed refers to, within the tenant. */
 async function resolveLegacyShipment(
   prisma: PrismaClient,
   orgId: string,
-  device: { id?: string },
+  deviceExternalId: string | undefined,
   deviceName: string,
-): Promise<{ id: string; reference: string } | null> {
+): Promise<LegacyResolution> {
   const registeredDevice = await prisma.device.findFirst({
-    where: { orgId, OR: [{ externalId: device?.id || '' }, { name: deviceName }] },
+    where: { orgId, OR: [{ externalId: deviceExternalId || '' }, { name: deviceName }] },
     include: { assignments: { where: { active: true }, take: 1 } },
   });
+  const deviceId = registeredDevice?.id ?? null;
   const assignedId = registeredDevice?.assignments[0]?.shipmentId;
   if (assignedId) {
-    return prisma.shipment.findFirst({ where: { id: assignedId, orgId }, select: { id: true, reference: true } });
+    const shipment = await prisma.shipment.findFirst({ where: { id: assignedId, orgId }, select: { id: true, reference: true } });
+    return { shipment, deviceId };
   }
 
   const byReference = await prisma.shipment.findFirst({
     where: { orgId, reference: deviceName, archived: false },
     select: { id: true, reference: true },
   });
-  if (byReference) return byReference;
+  if (byReference) return { shipment: byReference, deviceId };
 
   const order = await prisma.order.findFirst({
     where: { orgId, orderNumber: deviceName, archived: false },
     select: { id: true },
   });
-  if (!order) return null;
+  if (!order) return { shipment: null, deviceId };
   const link = await prisma.orderShipment.findFirst({ where: { orderId: order.id, order: { orgId } } });
-  if (!link) return null;
-  return prisma.shipment.findFirst({ where: { id: link.shipmentId, orgId }, select: { id: true, reference: true } });
+  if (!link) return { shipment: null, deviceId };
+  const shipment = await prisma.shipment.findFirst({ where: { id: link.shipmentId, orgId }, select: { id: true, reference: true } });
+  return { shipment, deviceId };
 }
 
 async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, rawPayload: any): Promise<void> {
   const { prisma } = deps;
-  const event = rawPayload?.event || rawPayload;
-  const device = event?.device || {};
-  const deviceName = device?.name || device?.id || '';
-  const eventType = event?.type || 'location';
-  const location = event?.location?.global || event?.location || {};
-  const hasLocation = !!(location?.lat && (location?.lon || location?.lng));
-  const lat = hasLocation ? parseFloat(String(location.lat)) : null;
-  const lng = hasLocation ? parseFloat(String(location.lon || location.lng)) : null;
+  const ping = parseGenericPing(rawPayload);
+  const deviceName = ping.deviceName || ping.deviceExternalId || '';
 
-  const shipment = deviceName ? await resolveLegacyShipment(prisma, orgId, device, deviceName) : null;
+  const { shipment, deviceId } = deviceName
+    ? await resolveLegacyShipment(prisma, orgId, ping.deviceExternalId, deviceName)
+    : { shipment: null, deviceId: null };
   let shipmentEventId: string | null = null;
 
-  if (shipment && lat !== null && lng !== null) {
+  if (shipment && ping.position) {
     const shipmentEvent = await prisma.shipmentEvent.create({
       data: {
         shipmentId: shipment.id,
-        eventType,
-        deviceId: device?.id,
+        eventType: ping.eventType,
+        deviceId: ping.deviceExternalId,
         deviceName,
-        lat,
-        lng,
-        address: location.address,
-        locationSummary: location.summary || location.address,
+        lat: ping.position.lat,
+        lng: ping.position.lng,
+        address: ping.position.address,
+        locationSummary: ping.position.address,
         rawPayload,
-        eventTime: event?.startTime ? new Date(event.startTime) : new Date(),
+        eventTime: ping.eventTime,
       },
     });
     shipmentEventId = shipmentEvent.id;
+  }
 
-    const eventTime = event?.startTime ? new Date(event.startTime).toISOString() : new Date().toISOString();
-    await publishLocation(deps, orgId, shipment.id, lat, lng, eventTime, 'legacy_webhook');
-    try {
-      await deps.deliveryService.checkGeofenceAndUpdateOrders(orgId, shipment.id, lat, lng);
-    } catch {
-      // Geofence check is non-critical
-    }
+  // Readings belong to a device, so a ping from a device the org hasn't registered keeps its
+  // telemetry only in the webhook log's raw payload.
+  let readingsStored = 0;
+  if (deviceId && ping.readings.length > 0) {
+    readingsStored = await deps.sensorReadings.createForDevice(
+      orgId,
+      deviceId,
+      { shipmentId: shipment?.id ?? null },
+      ping.readings.map(({ recordedAt, ...values }, i) => ({
+        ...values,
+        eventTime: recordedAt,
+        lat: ping.position?.lat,
+        lng: ping.position?.lng,
+        address: ping.position?.address,
+        locationAccuracy: ping.position?.accuracyMeters,
+        // One webhook log per delivered ping, so this key makes a queue retry a no-op.
+        sourceReportId: `webhook:${webhookLogId}:${i}`,
+      })),
+    ) ?? 0;
+  }
+
+  if (shipment) {
+    await applyPingToJourney(deps, orgId, shipment.id, ping, rawPayload, 'legacy_webhook');
   }
 
   await prisma.webhookLog.update({
@@ -260,11 +297,11 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
     data: {
       status: shipment ? 'success' : (deviceName ? 'not_found' : 'skipped'),
       deviceName: deviceName || null,
-      deviceId: device?.id || null,
-      eventType,
-      hasLocation,
-      lat,
-      lng,
+      deviceId: ping.deviceExternalId || null,
+      eventType: ping.eventType,
+      hasLocation: !!ping.position,
+      lat: ping.position?.lat ?? null,
+      lng: ping.position?.lng ?? null,
       shipmentFound: !!shipment,
       shipmentUpdated: !!shipmentEventId,
       shipmentId: shipment?.id ?? null,
@@ -272,7 +309,12 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
       shipmentEventId,
       processedAt: new Date(),
       responseCode: 200,
-      responseBody: { processed: true, shipmentFound: !!shipment },
+      responseBody: {
+        processed: true,
+        shipmentFound: !!shipment,
+        readingsReceived: ping.readingsCount,
+        readingsStored,
+      },
     },
   });
 }
@@ -281,6 +323,8 @@ export function createInboundWebhookWorker(
   prisma: PrismaClient,
   deliveryService: IOrderDeliveryService,
   arrivalCriteriaService?: IArrivalCriteriaEvaluationService,
+  /** Passed by the standalone worker, which has no DI container; the API process resolves it. */
+  injectedEventBus?: IEventBus,
 ) {
   const systemLoco = new SystemLocoAdapter(prisma);
   // Wire cold chain monitoring into the sensor ingestion pipeline
@@ -288,11 +332,18 @@ export function createInboundWebhookWorker(
 
   // Event bus for publishing tracking.location_received so the shipment read
   // model's current position updates (drives the map/list dot).
-  let eventBus: IEventBus | null = null;
-  try { eventBus = container.resolve<IEventBus>(TOKENS.IEventBus); } catch { /* not available in some contexts */ }
+  let eventBus: IEventBus | null = injectedEventBus ?? null;
+  if (!eventBus) {
+    try { eventBus = container.resolve<IEventBus>(TOKENS.IEventBus); } catch { /* not available in some contexts */ }
+  }
+  if (!eventBus) {
+    console.warn('[WebhookWorker] No event bus available; location events will not be published');
+  }
   if (eventBus) systemLoco.setEventBus(eventBus);
 
-  const deps: Deps = { prisma, deliveryService, arrivalCriteriaService, systemLoco, eventBus };
+  const deps: Deps = {
+    prisma, sensorReadings: new SensorReadingRepository(prisma), deliveryService, arrivalCriteriaService, systemLoco, eventBus,
+  };
 
   return async (message: QueueMessage<WebhookEvent>) => {
     const { webhookLogId, rawPayload } = message.payload;

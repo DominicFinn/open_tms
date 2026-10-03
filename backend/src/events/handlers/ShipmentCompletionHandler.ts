@@ -53,7 +53,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
     const shipmentId = payload.shipmentId;
     if (!shipmentId) return;
 
-    await this.checkAndCompleteShipment(shipmentId, event.orgId);
+    await this.checkAndCompleteShipment(shipmentId, event.orgId, arrivedAt(event));
   }
 
   private async handleGeofenceEntered(event: DomainEvent): Promise<void> {
@@ -61,10 +61,10 @@ export class ShipmentCompletionHandler implements IEventHandler {
     const shipmentId = event.entityId;
     if (!shipmentId) return;
 
-    await this.checkAndCompleteShipment(shipmentId, event.orgId);
+    await this.checkAndCompleteShipment(shipmentId, event.orgId, arrivedAt(event));
   }
 
-  private async checkAndCompleteShipment(shipmentId: string, orgId: string): Promise<void> {
+  private async checkAndCompleteShipment(shipmentId: string, orgId: string, deliveredAt: Date): Promise<void> {
     // Load the shipment with its stops
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId, orgId },
@@ -111,7 +111,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
         where: { id: shipmentId, status: 'in_progress' },
         data: {
           status: 'complete',
-          deliveryDate: new Date(),
+          deliveryDate: deliveredAt,
         },
       });
       if (count === 0) return;
@@ -125,7 +125,8 @@ export class ShipmentCompletionHandler implements IEventHandler {
         entityId: shipmentId,
         payload: {
           shipmentReference: shipment.reference,
-          deliveredAt: new Date().toISOString(),
+          deliveredAt: deliveredAt.toISOString(),
+          eventTime: deliveredAt.toISOString(),
         },
         source: 'completion_handler',
       });
@@ -143,6 +144,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
           previousStatus,
           newStatus: 'complete',
           shipmentReference: shipment.reference,
+          eventTime: deliveredAt.toISOString(),
         },
         source: 'completion_handler',
       });
@@ -152,4 +154,14 @@ export class ShipmentCompletionHandler implements IEventHandler {
       console.log(`[ShipmentCompletionHandler] Auto-completed shipment ${shipment.reference} — destination arrival criteria met`);
     }
   }
+}
+
+/**
+ * When the destination was actually reached: the device time carried by the arrival event, so a
+ * delayed ping doesn't move the delivery date. Falls back to the event's own timestamp.
+ */
+function arrivedAt(event: DomainEvent): Date {
+  const eventTime = (event.payload as { eventTime?: unknown } | undefined)?.eventTime;
+  const deviceTime = typeof eventTime === 'string' ? new Date(eventTime) : null;
+  return deviceTime && !Number.isNaN(deviceTime.getTime()) ? deviceTime : new Date(event.timestamp);
 }

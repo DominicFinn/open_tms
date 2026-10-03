@@ -50,7 +50,7 @@ export class RecordGeofenceDepartureCommandHandler extends BaseCommandHandler<Re
       type: EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
       entityType: 'shipment',
       entityId: shipmentId,
-      payload: { stopId, shipmentId },
+      payload: { stopId, shipmentId, eventTime },
     }));
 
     return { departed: true };
