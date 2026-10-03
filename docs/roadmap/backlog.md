@@ -65,7 +65,7 @@ Audit trail:
 - #317: edi-collector can't load trading partner config
 - #305: journey checkpoints in the Events tab, with live refresh
 - #307: origin-departure auto-transition, checkpoint radius exclusion, order status cascade
-- #309 and #312: manual geofence drawing on Locations
+- #312: geofence drawing UI and docs (follow-up to #309)
 - #153: repeatable test for shipment telemetry through the ingestion API
 - IoT-driven alerts and automation (excursion alerts, geofence plus sensor triggers)
 - System Loco Device Reports V2 feed (denser telemetry) and Shipments feed (their lifecycle events)

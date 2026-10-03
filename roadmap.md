@@ -29,7 +29,7 @@ invitations and MFA.
 
 **Ingest and live tracking.** Moving IoT, carrier webhooks and EDI inbound into their own process
 (#301), fixing the geofence and arrival-criteria gaps that showed up in the journey work (#287,
-#288, #289), and finishing the checkpoint and geofence drawing UI (#305, #307, #309, #312).
+#288, #289), and finishing the checkpoint and geofence drawing UI (#305, #307, #312).
 
 **Shipment quality.** Making the core shipment flow behave properly for someone using it for the
 first time: the cargo tab, map errors, carrier bidding buttons that do nothing, soft delete, and
