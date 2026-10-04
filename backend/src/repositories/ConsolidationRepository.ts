@@ -20,6 +20,7 @@ const detailSelect = {
       shipmentStops: { select: { shipmentId: true } },
     },
   },
+  devices: { where: { active: true }, select: { id: true, device: { select: { id: true, name: true, externalId: true } } } },
   shipments: {
     orderBy: { addedAt: 'asc' },
     select: {
@@ -40,7 +41,9 @@ const detailSelect = {
   },
 } satisfies Prisma.ConsolidationSelect;
 
-export type ConsolidationDetail = Prisma.ConsolidationGetPayload<{ select: typeof detailSelect }>;
+export type ConsolidationDetail = Prisma.ConsolidationGetPayload<{ select: typeof detailSelect }> & {
+  position: { lat: number; lng: number; at: Date | null } | null;
+};
 
 export interface ConsolidationCandidate {
   id: string;
@@ -58,6 +61,8 @@ export interface IConsolidationRepository {
   list(orgId: string, opts: { archived: boolean; limit: number; offset: number }): Promise<{ items: ConsolidationReadModel[]; total: number }>;
   findDetail(orgId: string, id: string): Promise<ConsolidationDetail | null>;
   listCandidates(orgId: string, search: string | undefined, limit: number): Promise<ConsolidationCandidate[]>;
+  memberShipmentIds(orgId: string, consolidationId: string): Promise<string[]>;
+  consolidationIdForShipment(orgId: string, shipmentId: string): Promise<string | null>;
 }
 
 export class ConsolidationRepository implements IConsolidationRepository {
@@ -73,7 +78,36 @@ export class ConsolidationRepository implements IConsolidationRepository {
   }
 
   async findDetail(orgId: string, id: string) {
-    return this.prisma.consolidation.findFirst({ where: { id, orgId }, select: detailSelect });
+    const consolidation = await this.prisma.consolidation.findFirst({ where: { id, orgId }, select: detailSelect });
+    if (!consolidation) return null;
+    // Every shipment on the run is driven by the same pings, so the freshest of their positions is the truck's.
+    const positions = await this.prisma.shipmentReadModel.findMany({
+      where: { orgId, id: { in: consolidation.shipments.map((s) => s.shipment.id) }, lastLocationAt: { not: null } },
+      orderBy: { lastLocationAt: 'desc' },
+      take: 1,
+      select: { currentLat: true, currentLng: true, lastLocationAt: true },
+    });
+    const p = positions[0];
+    const position = p?.currentLat != null && p.currentLng != null ? { lat: p.currentLat, lng: p.currentLng, at: p.lastLocationAt } : null;
+    return { ...consolidation, position };
+  }
+
+  /** The consolidation's live shipments in the order they were added: who a ping on its device updates. */
+  async memberShipmentIds(orgId: string, consolidationId: string): Promise<string[]> {
+    const rows = await this.prisma.consolidationShipment.findMany({
+      where: { consolidationId, consolidation: { orgId }, shipment: { orgId, archived: false } },
+      orderBy: { addedAt: 'asc' },
+      select: { shipmentId: true },
+    });
+    return rows.map((r) => r.shipmentId);
+  }
+
+  async consolidationIdForShipment(orgId: string, shipmentId: string): Promise<string | null> {
+    const row = await this.prisma.consolidationShipment.findFirst({
+      where: { shipmentId, shipment: { orgId } },
+      select: { consolidationId: true },
+    });
+    return row?.consolidationId ?? null;
   }
 
   /** Shipments that could join a consolidation: open, not archived, not on one already. */

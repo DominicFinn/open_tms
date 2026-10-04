@@ -18,6 +18,8 @@ import { CarrierProjection } from './projections/CarrierProjection.js';
 import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { ConsolidationProjection } from './projections/ConsolidationProjection.js';
+import { ConsolidationProgressHandler } from './handlers/ConsolidationProgressHandler.js';
+import { ConsolidationRepository } from '../repositories/ConsolidationRepository.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
 import { IssueEngineHandler } from './handlers/IssueEngineHandler.js';
@@ -195,6 +197,7 @@ export async function registerEventHandlers(
   if (commandBus) {
     handlers.push(shipmentRoutePlanningHandler(prisma, commandBus));
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
+    handlers.push(new ConsolidationProgressHandler(new ConsolidationRepository(prisma), commandBus));
   }
 
   // WMS: the issue engine raises pack-audit issues from the registry entry

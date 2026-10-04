@@ -18,6 +18,8 @@ import {
   ADD_SHIPMENTS_TO_CONSOLIDATION,
   REMOVE_SHIPMENT_FROM_CONSOLIDATION,
   ARCHIVE_CONSOLIDATION,
+  TRANSITION_CONSOLIDATION_STATUS,
+  REORDER_CONSOLIDATION_STOPS,
 } from '../commands/consolidations/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
@@ -30,6 +32,16 @@ const idParams = { type: 'object' as const, required: ['id'], properties: { id: 
 const shipmentIds = { type: 'array' as const, minItems: 1, maxItems: 50, items: { type: 'string', format: 'uuid' } };
 const nullableId = { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] };
 const nullableNotes = { anyOf: [{ type: 'string', maxLength: 2000 }, { type: 'null' }] };
+const devices = {
+  type: 'array' as const,
+  maxItems: 10,
+  items: {
+    type: 'object' as const,
+    required: ['name', 'externalId'],
+    additionalProperties: false,
+    properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, externalId: { type: 'string', minLength: 1, maxLength: 100 } },
+  },
+};
 
 function send(reply: FastifyReply, result: CommandResult, okStatus = 200) {
   if (!result.success) {
@@ -125,7 +137,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
       tags: TAGS,
       summary: 'Update a consolidation',
       params: idParams,
-      body: { type: 'object', additionalProperties: false, properties: { carrierId: nullableId, notes: nullableNotes } },
+      body: { type: 'object', additionalProperties: false, properties: { carrierId: nullableId, notes: nullableNotes, devices } },
       response: { 200: envelope, 400: envelope, 404: envelope },
     },
   }, async (req, reply) => {
@@ -135,7 +147,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
       orgId: req.orgId!,
       actorId: req.user?.sub ?? null,
       metadata: { correlationId: randomUUID(), source: 'api' },
-      payload: { id, ...(req.body as { carrierId?: string | null; notes?: string | null }) },
+      payload: { id, ...(req.body as { carrierId?: string | null; notes?: string | null; devices?: Array<{ name: string; externalId: string }> }) },
     });
     return send(reply, result);
   });
@@ -181,6 +193,51 @@ export async function consolidationRoutes(server: FastifyInstance) {
       actorId: req.user?.sub ?? null,
       metadata: { correlationId: randomUUID(), source: 'api' },
       payload: { id, shipmentId },
+    });
+    return send(reply, result);
+  });
+
+  server.post('/api/v1/consolidations/:id/status', {
+    schema: {
+      tags: TAGS,
+      summary: 'Mark a consolidation ready, or move it back to draft',
+      params: idParams,
+      body: { type: 'object', required: ['to'], additionalProperties: false, properties: { to: { type: 'string', enum: ['draft', 'ready'] } } },
+      response: { 200: envelope, 400: envelope, 404: envelope },
+    },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const result = await commandBus.dispatch({
+      type: TRANSITION_CONSOLIDATION_STATUS,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+      payload: { id, to: (req.body as { to: 'draft' | 'ready' }).to },
+    });
+    return send(reply, result);
+  });
+
+  server.post('/api/v1/consolidations/:id/stops/order', {
+    schema: {
+      tags: TAGS,
+      summary: 'Set the order a draft consolidation visits its stops',
+      params: idParams,
+      body: {
+        type: 'object',
+        required: ['stopIds'],
+        additionalProperties: false,
+        properties: { stopIds: { type: 'array', minItems: 1, maxItems: 200, items: { type: 'string', format: 'uuid' } } },
+      },
+      response: { 200: envelope, 400: envelope, 404: envelope },
+    },
+  }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const result = await commandBus.dispatch({
+      type: REORDER_CONSOLIDATION_STOPS,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+      payload: { id, stopIds: (req.body as { stopIds: string[] }).stopIds },
     });
     return send(reply, result);
   });

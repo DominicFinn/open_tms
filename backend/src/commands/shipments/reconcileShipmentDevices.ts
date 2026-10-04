@@ -9,13 +9,19 @@ export interface ShipmentDeviceInput {
   externalId: string;
 }
 
-export interface ReconcileShipmentDevicesParams {
+/** What a device tracks: one shipment, or a consolidation whose pings fan out to its shipments (#329). */
+export type DeviceOwner = { shipmentId: string } | { consolidationId: string };
+
+interface ReconcileParams {
   orgId: string;
-  shipmentId: string;
   /** undefined = caller isn't touching devices (no-op); [] = remove all. */
   devices: ShipmentDeviceInput[] | undefined;
   emitAssigned: (deviceId: string, assignmentId: string) => void;
   emitUnassigned: (deviceId: string, assignmentId: string) => void;
+}
+
+export interface ReconcileShipmentDevicesParams extends ReconcileParams {
+  shipmentId: string;
 }
 
 /**
@@ -31,7 +37,15 @@ export interface ReconcileShipmentDevicesParams {
  */
 export async function reconcileShipmentDevices(
   tx: TransactionClient,
-  { orgId, shipmentId, devices, emitAssigned, emitUnassigned }: ReconcileShipmentDevicesParams
+  { shipmentId, ...rest }: ReconcileShipmentDevicesParams
+): Promise<void> {
+  return reconcileDevices(tx, { ...rest, owner: { shipmentId } });
+}
+
+/** Reconciles the active device assignments of a shipment or a consolidation. */
+export async function reconcileDevices(
+  tx: TransactionClient,
+  { orgId, owner, devices, emitAssigned, emitUnassigned }: ReconcileParams & { owner: DeviceOwner }
 ): Promise<void> {
   if (devices === undefined) return;
 
@@ -41,7 +55,7 @@ export async function reconcileShipmentDevices(
   }
 
   const current = await tx.deviceAssignment.findMany({
-    where: { shipmentId, active: true, device: { orgId } },
+    where: { ...owner, active: true, device: { orgId } },
     include: { device: { select: { id: true, externalId: true } } },
   });
   const currentExternalIds = new Set(current.map(a => a.device.externalId));
@@ -71,14 +85,14 @@ export async function reconcileShipmentDevices(
       create: { orgId, externalId, name, provider: 'system_loco' },
     });
 
-    if (currentExternalIds.has(externalId)) continue; // already active on this shipment
+    if (currentExternalIds.has(externalId)) continue; // already active on this owner
 
     for (const releasedId of await releaseActiveAssignments(tx, orgId, device.id)) {
       emitUnassigned(device.id, releasedId);
     }
 
     const assignment = await tx.deviceAssignment.create({
-      data: { deviceId: device.id, shipmentId, active: true },
+      data: { deviceId: device.id, ...owner, active: true },
     });
     emitAssigned(device.id, assignment.id);
   }

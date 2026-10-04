@@ -1,3 +1,4 @@
+import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { TransactionClient } from '../BaseCommandHandler.js';
 
 /** A consolidation rule refused the change. The message is safe to show the user. */
@@ -84,19 +85,19 @@ function kindOf(stop: { stopType: string; sequenceNumber: number }): StopKind {
 }
 
 /**
- * Rebuilds the consolidation's stops from its shipments' stops and links each shipment stop to
- * the consolidation stop that serves it.
+ * Rebuilds the consolidation's stops from its shipments' stops, links each shipment stop to the
+ * consolidation stop that serves it, and puts each shipment's stops in the run's order.
  *
  * BUSINESS RULE: every pickup comes before every drop, so the truck has all the freight before
- * it starts dropping. Pickups, then drops, each in the order the shipments were added and then
- * each shipment's own stop order. Shipments sharing a location share its stop. Stops still
- * needed keep their row, so their status and links survive the rebuild.
+ * it starts dropping. Stops still needed keep their row, status and place in the order (which may
+ * have been set by hand); a new stop goes at the end of its section, pickups or drops, in the
+ * order its shipment was added. Shipments sharing a location share its stop.
  */
 export async function rebuildConsolidationStops(
   tx: TransactionClient,
   orgId: string,
   consolidationId: string,
-): Promise<number> {
+): Promise<{ stopCount: number; changedShipmentIds: string[] }> {
   const members = await tx.consolidationShipment.findMany({
     where: { consolidationId, shipment: { orgId } },
     orderBy: { addedAt: 'asc' },
@@ -105,22 +106,30 @@ export async function rebuildConsolidationStops(
   const shipmentStops = members.flatMap((m) => m.shipment.stops.map((s) => ({ ...s, kind: kindOf(s) })));
   const key = (kind: string, locationId: string) => `${kind}:${locationId}`;
 
-  const wanted: Array<{ kind: StopKind; locationId: string }> = [];
-  const seen = new Set<string>();
+  const needed = new Map<string, { kind: StopKind; locationId: string }>();
   for (const kind of ['pickup', 'delivery'] as const) {
     for (const s of shipmentStops.filter((st) => st.kind === kind)) {
-      if (seen.has(key(kind, s.locationId))) continue;
-      seen.add(key(kind, s.locationId));
-      wanted.push({ kind, locationId: s.locationId });
+      if (!needed.has(key(kind, s.locationId))) needed.set(key(kind, s.locationId), { kind, locationId: s.locationId });
     }
   }
 
-  const existing = await tx.consolidationStop.findMany({ where: { consolidationId, consolidation: { orgId } }, select: { id: true, locationId: true, stopType: true } });
+  const existing = await tx.consolidationStop.findMany({
+    where: { consolidationId, consolidation: { orgId } },
+    orderBy: { sequenceNumber: 'asc' },
+    select: { id: true, locationId: true, stopType: true },
+  });
   const byKey = new Map(existing.map((s) => [key(s.stopType, s.locationId), s.id]));
-  const unused = existing.filter((s) => !seen.has(key(s.stopType, s.locationId))).map((s) => s.id);
+  const unused = existing.filter((s) => !needed.has(key(s.stopType, s.locationId))).map((s) => s.id);
   if (unused.length > 0) await tx.consolidationStop.deleteMany({ where: { id: { in: unused }, consolidationId, consolidation: { orgId } } });
 
-  for (const [i, w] of wanted.entries()) {
+  const kept = existing.filter((s) => needed.has(key(s.stopType, s.locationId)));
+  const order: Array<{ kind: StopKind; locationId: string }> = [];
+  for (const kind of ['pickup', 'delivery'] as const) {
+    order.push(...kept.filter((s) => s.stopType === kind).map((s) => ({ kind, locationId: s.locationId })));
+    order.push(...[...needed.values()].filter((w) => w.kind === kind && !byKey.has(key(kind, w.locationId))));
+  }
+
+  for (const [i, w] of order.entries()) {
     const id = byKey.get(key(w.kind, w.locationId));
     if (id) {
       await tx.consolidationStop.update({ where: { id, consolidationId, consolidation: { orgId } }, data: { sequenceNumber: i + 1 } });
@@ -140,5 +149,82 @@ export async function rebuildConsolidationStops(
   for (const [consolidationStopId, ids] of linkTargets) {
     await tx.shipmentStop.updateMany({ where: { id: { in: ids }, shipment: { orgId } }, data: { consolidationStopId } });
   }
-  return wanted.length;
+  return { stopCount: order.length, changedShipmentIds: await alignShipmentStops(tx, orgId, consolidationId) };
+}
+
+/**
+ * Puts each shipment's stops in the order the run visits them, and makes its origin and
+ * destination the first and last of them. Tracking runs per shipment (#329), so a shipment whose
+ * own order disagreed with the run would infer departures from stops the truck hasn't left.
+ * Returns the shipments that changed.
+ */
+export async function alignShipmentStops(tx: TransactionClient, orgId: string, consolidationId: string): Promise<string[]> {
+  const members = await tx.consolidationShipment.findMany({
+    where: { consolidationId, shipment: { orgId } },
+    select: {
+      shipment: {
+        select: {
+          id: true,
+          originId: true,
+          destinationId: true,
+          stops: { select: { id: true, sequenceNumber: true, locationId: true, consolidationStop: { select: { sequenceNumber: true } } } },
+        },
+      },
+    },
+  });
+
+  const changed: string[] = [];
+  for (const { shipment } of members) {
+    const current = [...shipment.stops].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+    const runPlace = (s: (typeof current)[number]) => s.consolidationStop?.sequenceNumber ?? Number.MAX_SAFE_INTEGER;
+    const target = [...current].sort((a, b) => runPlace(a) - runPlace(b) || a.sequenceNumber - b.sequenceNumber);
+    if (target.length === 0) continue;
+
+    const reordered = target.some((s, i) => s.id !== current[i].id);
+    const originId = target[0].locationId;
+    const destinationId = target[target.length - 1].locationId;
+    if (!reordered && originId === shipment.originId && destinationId === shipment.destinationId) continue;
+
+    if (reordered) {
+      // Two passes: (shipmentId, sequenceNumber) is unique, so move every row clear first.
+      await tx.shipmentStop.updateMany({ where: { shipmentId: shipment.id, shipment: { orgId } }, data: { sequenceNumber: { increment: 100000 } } });
+      for (const [i, s] of target.entries()) {
+        await tx.shipmentStop.update({ where: { id: s.id, shipment: { orgId } }, data: { sequenceNumber: i + 1 } });
+      }
+    }
+    await tx.shipment.update({ where: { id: shipment.id, orgId }, data: { originId, destinationId } });
+    changed.push(shipment.id);
+  }
+  return changed;
+}
+
+/**
+ * BUSINESS RULE: the run's carrier hauls every shipment on it, so it is set on each of them, which
+ * also lets them pass their readiness gate. Clearing the run's carrier leaves the shipments alone.
+ * Returns the shipments that changed.
+ */
+export async function pushCarrierToShipments(
+  tx: TransactionClient,
+  orgId: string,
+  carrierId: string | null | undefined,
+  shipmentIds: string[],
+): Promise<string[]> {
+  if (!carrierId || shipmentIds.length === 0) return [];
+  const stale = await tx.shipment.findMany({
+    where: { id: { in: shipmentIds }, orgId, OR: [{ carrierId: null }, { carrierId: { not: carrierId } }] },
+    select: { id: true },
+  });
+  const ids = stale.map((s) => s.id);
+  if (ids.length > 0) await tx.shipment.updateMany({ where: { id: { in: ids }, orgId }, data: { carrierId } });
+  return ids;
+}
+
+/** shipment.updated for each shipment a consolidation change rewrote, so its read model refreshes. */
+export function shipmentUpdatedEvents(shipmentIds: string[], changes: string[], consolidationId: string) {
+  return [...new Set(shipmentIds)].map((shipmentId) => ({
+    type: EVENT_TYPES.SHIPMENT_UPDATED,
+    entityType: 'shipment',
+    entityId: shipmentId,
+    payload: { changes, consolidationId },
+  }));
 }

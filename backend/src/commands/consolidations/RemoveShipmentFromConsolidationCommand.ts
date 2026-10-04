@@ -3,7 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { loadDraftConsolidation, rebuildConsolidationStops, releaseShipment } from './consolidationMembership.js';
+import { loadDraftConsolidation, rebuildConsolidationStops, releaseShipment, shipmentUpdatedEvents } from './consolidationMembership.js';
 
 export interface RemoveShipmentFromConsolidationPayload {
   id: string;
@@ -29,7 +29,7 @@ export class RemoveShipmentFromConsolidationCommandHandler extends BaseCommandHa
 
     await loadDraftConsolidation(tx, orgId, id);
     await releaseShipment(tx, orgId, id, shipmentId);
-    const stopCount = await rebuildConsolidationStops(tx, orgId, id);
+    const { stopCount, changedShipmentIds } = await rebuildConsolidationStops(tx, orgId, id);
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CONSOLIDATION_SHIPMENT_REMOVED,
@@ -37,6 +37,9 @@ export class RemoveShipmentFromConsolidationCommandHandler extends BaseCommandHa
       entityId: id,
       payload: { shipmentId, stopCount },
     }));
+    for (const e of shipmentUpdatedEvents(changedShipmentIds, ['consolidation'], id)) {
+      emit(this.createEvent(command, e));
+    }
     return { stopCount };
   }
 }

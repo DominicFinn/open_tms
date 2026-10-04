@@ -3,6 +3,7 @@ import { ColdChainService } from '../services/ColdChainService.js';
 import { IEventBus } from '../events/IEventBus.js';
 import { createEvent } from '../events/createEvent.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
+import { ConsolidationRepository } from '../repositories/ConsolidationRepository.js';
 
 /**
  * System Loco IoT Data Feed Adapter
@@ -39,7 +40,10 @@ const SHIPMENT_ALERT_SENSOR_TYPES = new Set([
 
 export interface ProcessingResult {
   deviceId: string;
+  /** The first tracked shipment; see shipmentIds. */
   shipmentId: string | null;
+  /** Every shipment the ping applies to: one, or each shipment on the device's consolidation (#329). */
+  shipmentIds: string[];
   orderId: string | null;
   trackableUnitId: string | null;
   shipmentEventId: string | null;
@@ -66,11 +70,30 @@ export class DeviceTenantMismatchError extends Error {
   }
 }
 
+/** Every shipment a reading belongs to, or one unlinked reading when the device tracks none. */
+const linkTargets = (shipmentIds: string[]): Array<string | null> => (shipmentIds.length > 0 ? shipmentIds : [null]);
+
+/**
+ * sourceReportId is unique. When one reading is stored for each shipment on a consolidation, the
+ * first keeps the feed's id (so a redelivery still dedupes) and each further copy is suffixed with
+ * its shipment.
+ */
+export function fanOutKey(base: string, shipmentId: string | null, index: number): string;
+export function fanOutKey(base: string | null | undefined, shipmentId: string | null, index: number): string | null;
+export function fanOutKey(base: string | null | undefined, shipmentId: string | null, index: number): string | null {
+  if (!base) return null;
+  return index === 0 || !shipmentId ? base : `${base}:${shipmentId}`;
+}
+
 export class SystemLocoAdapter {
   private coldChainService: ColdChainService | null = null;
   private eventBus: IEventBus | null = null;
 
-  constructor(private prisma: PrismaClient) {}
+  private consolidations: ConsolidationRepository;
+
+  constructor(private prisma: PrismaClient) {
+    this.consolidations = new ConsolidationRepository(prisma);
+  }
 
   /**
    * Set the cold chain service for temperature monitoring integration.
@@ -140,62 +163,46 @@ export class SystemLocoAdapter {
     // 1. Upsert device
     const device = await this.upsertDevice(orgId, deviceInfo, location, payload);
 
-    // 2. Resolve shipment/order/trackable unit assignment
-    const { shipmentId, orderId, trackableUnitId } = await this.resolveAssignment(orgId, device.id, deviceInfo.name);
+    // 2. Resolve what the device tracks. On a consolidation that is every shipment on it (#329).
+    const { shipmentIds, orderId, trackableUnitId } = await this.resolveAssignment(orgId, device.id, deviceInfo.name);
+    const shipmentId = shipmentIds[0] ?? null;
 
     let sensorReadingId: string | null = null;
-    let deviceEventId: string | null = null;
     let shipmentEventId: string | null = null;
 
-    // 3. Store sensor reading for sensor event types
+    // 3. Store sensor reading for sensor event types, one per tracked shipment
     if (SENSOR_EVENT_TYPES.has(eventType)) {
-      const reading = await this.createSensorReading(device.id, shipmentId, orderId, trackableUnitId, eventTime, eventType, payload, location);
-      sensorReadingId = reading.id;
+      for (const [i, sid] of linkTargets(shipmentIds).entries()) {
+        const reading = await this.createSensorReading(device.id, sid, orderId, trackableUnitId, eventTime, eventType, payload, location, fanOutKey(payload.id, sid, i));
+        sensorReadingId ??= reading.id;
+      }
     }
 
-    // 4. Store device event for all types
+    // 4. Store device event once; it belongs to the device
     const devEvent = await this.createDeviceEvent(device.id, shipmentId, orderId, trackableUnitId, payload);
-    deviceEventId = devEvent.id;
 
     // 5. Create ShipmentEvent for location-bearing events
-    if (shipmentId && location?.lat) {
-      const se = await this.createShipmentEvent(shipmentId, deviceInfo, eventType, eventTime, location, payload);
-      shipmentEventId = se.id;
+    if (location?.lat) {
+      for (const sid of shipmentIds) {
+        const se = await this.createShipmentEvent(sid, deviceInfo, eventType, eventTime, location, payload);
+        shipmentEventId ??= se.id;
+      }
     }
 
     // 6. Cold chain monitoring — process temperature for immutable log + excursion detection
-    let coldChain: ProcessingResult['coldChain'];
-    if (this.coldChainService && shipmentId && eventType === 'temperature') {
-      const p = payload.payload || {};
-      const temperature = p.temperature != null ? Number(p.temperature) : null;
-      if (temperature !== null) {
-        try {
-          coldChain = await this.coldChainService.processTemperatureReading({
-            orgId,
-            shipmentId,
-            deviceId: device.id,
-            orderId: orderId ?? undefined,
-            trackableUnitId: trackableUnitId ?? undefined,
-            temperature,
-            lat: location?.lat ? Number(location.lat) : undefined,
-            lng: (location?.lon || location?.lng) ? Number(location.lon || location.lng) : undefined,
-            recordedAt: eventTime,
-            rawPayload: payload,
-          });
-        } catch (err) {
-          console.error(`[SystemLocoAdapter] Cold chain processing failed for shipment ${shipmentId}:`, err);
-        }
-      }
-    }
+    const p = payload.payload || {};
+    const temperature = eventType === 'temperature' && p.temperature != null ? Number(p.temperature) : null;
+    const coldChain = await this.processColdChain(orgId, shipmentIds, device.id, orderId, trackableUnitId, temperature, location, eventTime, payload);
 
     return {
       deviceId: device.id,
       shipmentId,
+      shipmentIds,
       orderId,
       trackableUnitId,
       shipmentEventId,
       sensorReadingId,
-      deviceEventId,
+      deviceEventId: devEvent.id,
       matched: !!(shipmentId || orderId || trackableUnitId),
       coldChain,
     };
@@ -217,11 +224,12 @@ export class SystemLocoAdapter {
       device = await this.upsertDevice(orgId, deviceInfo, location, payload);
     }
 
-    // 2. Resolve shipment/order/trackable unit
+    // 2. Resolve shipment(s)/order/trackable unit
     const deviceId = device?.id || null;
-    const { shipmentId, orderId, trackableUnitId } = deviceId
+    const { shipmentIds, orderId, trackableUnitId } = deviceId
       ? await this.resolveAssignment(orgId, deviceId, deviceInfo.name)
-      : { shipmentId: null, orderId: null, trackableUnitId: null };
+      : { shipmentIds: [] as string[], orderId: null, trackableUnitId: null };
+    const shipmentId = shipmentIds[0] ?? null;
 
     let sensorReadingId: string | null = null;
     let deviceEventId: string | null = null;
@@ -229,124 +237,102 @@ export class SystemLocoAdapter {
 
     // 3. Handle by event type
     if (eventType === 'report' && deviceId) {
-      // Sensor report — store reading from sensors object
+      // Sensor report — store reading from sensors object, one per tracked shipment
       const sensors = reportPayload.sensors || {};
-      const reading = await this.prisma.sensorReading.create({
-        data: {
-          deviceId,
-          shipmentId,
-          orderId,
-          trackableUnitId,
-          eventTime,
-          temperature: sensors.temperature != null ? Number(sensors.temperature) : null,
-          batteryLevel: sensors.batteryLevel != null ? Number(sensors.batteryLevel) : null,
-          lightLevel: sensors.lightLevel != null ? Number(sensors.lightLevel) : null,
-          movement: sensors.movement || null,
-          lat: location.lat ? Number(location.lat) : null,
-          lng: location.lon ? Number(location.lon) : null,
-          address: location.address || null,
-          sourceReportId: payload.id || null,
-          rawPayload: payload,
-        },
-      });
-      sensorReadingId = reading.id;
+      for (const [i, sid] of linkTargets(shipmentIds).entries()) {
+        const reading = await this.prisma.sensorReading.create({
+          data: {
+            deviceId,
+            shipmentId: sid,
+            orderId,
+            trackableUnitId,
+            eventTime,
+            temperature: sensors.temperature != null ? Number(sensors.temperature) : null,
+            batteryLevel: sensors.batteryLevel != null ? Number(sensors.batteryLevel) : null,
+            lightLevel: sensors.lightLevel != null ? Number(sensors.lightLevel) : null,
+            movement: sensors.movement || null,
+            lat: location.lat ? Number(location.lat) : null,
+            lng: location.lon ? Number(location.lon) : null,
+            address: location.address || null,
+            sourceReportId: fanOutKey(payload.id, sid, i),
+            rawPayload: payload,
+          },
+        });
+        sensorReadingId ??= reading.id;
+      }
     }
 
     if (SHIPMENT_ALERT_SENSOR_TYPES.has(eventType) && deviceId) {
       // Alert with sensor data
-      const reading = await this.prisma.sensorReading.create({
+      for (const [i, sid] of linkTargets(shipmentIds).entries()) {
+        const reading = await this.prisma.sensorReading.create({
+          data: {
+            deviceId,
+            shipmentId: sid,
+            orderId,
+            trackableUnitId,
+            eventTime,
+            temperature: reportPayload.temperature != null ? Number(reportPayload.temperature) : null,
+            impactG: reportPayload.g != null ? Number(reportPayload.g) : null,
+            tiltAngle: reportPayload.angle != null ? Number(reportPayload.angle) : null,
+            batteryLevel: reportPayload.batteryLevel != null ? Number(reportPayload.batteryLevel) : null,
+            lightLevel: reportPayload.lightLevel != null ? Number(reportPayload.lightLevel) : null,
+            lat: location.lat ? Number(location.lat) : null,
+            lng: location.lon ? Number(location.lon) : null,
+            address: location.address || null,
+            isAlert: true,
+            alertType: eventType,
+            sourceReportId: fanOutKey(payload.id, sid, i),
+            rawPayload: payload,
+          },
+        });
+        sensorReadingId ??= reading.id;
+
+        // Light detected in transit → possible tamper/door-open before arrival.
+        if (eventType === 'lightInTransit' && sid) {
+          await this.emitTamperLightIfBeforeArrival(orgId, sid, reading.id);
+        }
+      }
+
+      // Also store as DeviceEvent, once
+      const de = await this.prisma.deviceEvent.create({
         data: {
           deviceId,
           shipmentId,
           orderId,
           trackableUnitId,
-          eventTime,
-          temperature: reportPayload.temperature != null ? Number(reportPayload.temperature) : null,
-          impactG: reportPayload.g != null ? Number(reportPayload.g) : null,
-          tiltAngle: reportPayload.angle != null ? Number(reportPayload.angle) : null,
-          batteryLevel: reportPayload.batteryLevel != null ? Number(reportPayload.batteryLevel) : null,
-          lightLevel: reportPayload.lightLevel != null ? Number(reportPayload.lightLevel) : null,
+          externalEventId: payload.id || null,
+          eventType,
+          category: 'event',
+          startTime: eventTime,
           lat: location.lat ? Number(location.lat) : null,
           lng: location.lon ? Number(location.lon) : null,
           address: location.address || null,
-          isAlert: true,
-          alertType: eventType,
-          sourceReportId: payload.id || null,
-          rawPayload: payload,
+          message: reportPayload.message || null,
+          payload: reportPayload,
         },
       });
-      sensorReadingId = reading.id;
-
-      // Also store as DeviceEvent
-      if (deviceId) {
-        const de = await this.prisma.deviceEvent.create({
-          data: {
-            deviceId,
-            shipmentId,
-            orderId,
-            trackableUnitId,
-            externalEventId: payload.id || null,
-            eventType,
-            category: 'event',
-            startTime: eventTime,
-            lat: location.lat ? Number(location.lat) : null,
-            lng: location.lon ? Number(location.lon) : null,
-            address: location.address || null,
-            message: reportPayload.message || null,
-            payload: reportPayload,
-          },
-        });
-        deviceEventId = de.id;
-      }
-
-      // Light detected in transit → possible tamper/door-open before arrival.
-      if (eventType === 'lightInTransit' && shipmentId) {
-        await this.emitTamperLightIfBeforeArrival(orgId, shipmentId, sensorReadingId);
-      }
+      deviceEventId = de.id;
     }
 
     // 4. Create ShipmentEvent for all types that have location or are status changes
-    if (shipmentId) {
-      const se = await this.createShipmentEvent(
-        shipmentId,
-        deviceInfo,
-        eventType,
-        eventTime,
-        location,
-        payload,
-      );
-      shipmentEventId = se.id;
+    for (const sid of shipmentIds) {
+      const se = await this.createShipmentEvent(sid, deviceInfo, eventType, eventTime, location, payload);
+      shipmentEventId ??= se.id;
     }
 
     // 5. Cold chain monitoring — process temperature from shipment events
-    let coldChain: ProcessingResult['coldChain'];
-    if (this.coldChainService && shipmentId && deviceId) {
-      const temperature = reportPayload.temperature != null ? Number(reportPayload.temperature)
-        : reportPayload.sensors?.temperature != null ? Number(reportPayload.sensors.temperature)
-        : null;
-      if (temperature !== null) {
-        try {
-          coldChain = await this.coldChainService.processTemperatureReading({
-            orgId,
-            shipmentId,
-            deviceId,
-            orderId: orderId ?? undefined,
-            trackableUnitId: trackableUnitId ?? undefined,
-            temperature,
-            lat: location.lat ? Number(location.lat) : undefined,
-            lng: (location.lon || location.lng) ? Number(location.lon || location.lng) : undefined,
-            recordedAt: eventTime,
-            rawPayload: payload,
-          });
-        } catch (err) {
-          console.error(`[SystemLocoAdapter] Cold chain processing failed for shipment ${shipmentId}:`, err);
-        }
-      }
-    }
+    const temperature = reportPayload.temperature != null ? Number(reportPayload.temperature)
+      : reportPayload.sensors?.temperature != null ? Number(reportPayload.sensors.temperature)
+      : null;
+    const coldChain = deviceId
+      ? await this.processColdChain(orgId, shipmentIds, deviceId, orderId, trackableUnitId, temperature, location, eventTime, payload)
+      : undefined;
 
     return {
       deviceId: deviceId || '',
       shipmentId,
+      shipmentIds,
       orderId,
       trackableUnitId,
       shipmentEventId,
@@ -355,6 +341,35 @@ export class SystemLocoAdapter {
       matched: !!(shipmentId || orderId || trackableUnitId),
       coldChain,
     };
+  }
+
+  /** Runs cold chain monitoring for each tracked shipment; returns the first shipment's result. */
+  private async processColdChain(
+    orgId: string, shipmentIds: string[], deviceId: string, orderId: string | null, trackableUnitId: string | null,
+    temperature: number | null, location: any, recordedAt: Date, rawPayload: any,
+  ): Promise<ProcessingResult['coldChain']> {
+    if (!this.coldChainService || temperature === null) return undefined;
+    let first: ProcessingResult['coldChain'];
+    for (const shipmentId of shipmentIds) {
+      try {
+        const result = await this.coldChainService.processTemperatureReading({
+          orgId,
+          shipmentId,
+          deviceId,
+          orderId: orderId ?? undefined,
+          trackableUnitId: trackableUnitId ?? undefined,
+          temperature,
+          lat: location?.lat ? Number(location.lat) : undefined,
+          lng: (location?.lon || location?.lng) ? Number(location.lon || location.lng) : undefined,
+          recordedAt,
+          rawPayload,
+        });
+        first ??= result;
+      } catch (err) {
+        console.error('[SystemLocoAdapter] Cold chain processing failed', { shipmentId, orgId, err: (err as Error).message });
+      }
+    }
+    return first;
   }
 
   // ── Helpers ───────────────────────────────────────────────
@@ -396,13 +411,17 @@ export class SystemLocoAdapter {
     });
   }
 
-  private async resolveAssignment(orgId: string, deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null; trackableUnitId: string | null }> {
+  private async resolveAssignment(orgId: string, deviceId: string, deviceName?: string): Promise<{ shipmentIds: string[]; orderId: string | null; trackableUnitId: string | null }> {
     // 1. Check active DeviceAssignment
     const assignment = await this.prisma.deviceAssignment.findFirst({
       where: { deviceId, device: { orgId }, active: true },
     });
+    if (assignment?.consolidationId) {
+      const shipmentIds = await this.consolidations.memberShipmentIds(orgId, assignment.consolidationId);
+      return { shipmentIds, orderId: null, trackableUnitId: null };
+    }
     if (assignment) {
-      return { shipmentId: assignment.shipmentId, orderId: assignment.orderId, trackableUnitId: assignment.trackableUnitId };
+      return { shipmentIds: assignment.shipmentId ? [assignment.shipmentId] : [], orderId: assignment.orderId, trackableUnitId: assignment.trackableUnitId };
     }
 
     // 2. Fallback: match device name against shipment reference
@@ -410,21 +429,21 @@ export class SystemLocoAdapter {
       const shipment = await this.prisma.shipment.findFirst({
         where: { orgId, reference: deviceName, archived: false },
       });
-      if (shipment) return { shipmentId: shipment.id, orderId: null, trackableUnitId: null };
+      if (shipment) return { shipmentIds: [shipment.id], orderId: null, trackableUnitId: null };
 
       // 3. Fallback: match against order number
       const order = await this.prisma.order.findFirst({
         where: { orgId, orderNumber: deviceName, archived: false },
       });
-      if (order) return { shipmentId: null, orderId: order.id, trackableUnitId: null };
+      if (order) return { shipmentIds: [], orderId: order.id, trackableUnitId: null };
     }
 
-    return { shipmentId: null, orderId: null, trackableUnitId: null };
+    return { shipmentIds: [], orderId: null, trackableUnitId: null };
   }
 
   private async createSensorReading(
     deviceId: string, shipmentId: string | null, orderId: string | null, trackableUnitId: string | null,
-    eventTime: Date, eventType: string, payload: any, location: any,
+    eventTime: Date, eventType: string, payload: any, location: any, sourceReportId: string | null,
   ) {
     const p = payload.payload || {};
     const isAlert = eventType === 'temperature'
@@ -456,7 +475,7 @@ export class SystemLocoAdapter {
         lightMax: p.maxLightLevel != null ? Number(p.maxLightLevel) : null,
         isAlert,
         alertType: isAlert ? eventType : null,
-        sourceReportId: payload.id || null,
+        sourceReportId,
         rawPayload: payload,
       },
     });

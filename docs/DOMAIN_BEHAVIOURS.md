@@ -679,6 +679,13 @@ linking each shipment stop to the consolidation stop that serves it. Lists read 
 | `AddShipmentsToConsolidationCommand` | `POST /api/v1/consolidations/:id/shipments` | `consolidation.shipment_added` (one per shipment) |
 | `RemoveShipmentFromConsolidationCommand` | `POST /api/v1/consolidations/:id/shipments/:shipmentId/remove` | `consolidation.shipment_removed` |
 | `ArchiveConsolidationCommand` | `POST /api/v1/consolidations/:id/archive` | `consolidation.archived` |
+| `TransitionConsolidationStatusCommand` | `POST /api/v1/consolidations/:id/status` (`draft` ⇄ `ready`) | `consolidation.status_changed` |
+| `ReorderConsolidationStopsCommand` | `POST /api/v1/consolidations/:id/stops/order` | `consolidation.stops_reordered`, `shipment.updated` per realigned shipment |
+| `SyncConsolidationProgressCommand` | `ConsolidationProgressHandler` (on `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.status_changed`) | `consolidation.status_changed`, `consolidation.stops_updated` |
+
+`UpdateConsolidationCommand` also takes `devices` (the run's tracking devices, `DeviceAssignment.consolidationId`)
+and pushes a set carrier to every shipment on the run; create and add push the run's carrier too.
+Each emits `shipment.updated` for the shipments it changed.
 
 Writes need `shipments:write`. `GET /api/v1/consolidations/candidates` lists shipments that can join.
 
@@ -691,6 +698,12 @@ Writes need `shipments:write`. `GET /api/v1/consolidations/candidates` lists shi
   Shipments sharing a location share its stop (a pickup and a drop at the same place stay separate
   stops). Stops still needed keep their row and status; stops no longer needed are deleted, which
   unlinks their shipment stops.
+- **Each shipment's stops follow the run's order** (`alignShipmentStops`, after every rebuild and
+  reorder): its stops are renumbered in the order the run visits them, and its origin and
+  destination become the first and last. Tracking runs per shipment, so a shipment whose own order
+  disagreed would infer departures from stops the truck hasn't left.
+- Drops (or pickups) can be reordered within their section while draft; a pickup never follows a drop.
+- **Ready** needs at least one shipment and every shipment `ready`; a ready run can go back to draft.
 - Archiving a draft frees its shipments (they can be consolidated again) and deletes its stops. A
   completed or cancelled run keeps its shipments as the record. A run in progress can't be archived.
 
@@ -702,9 +715,25 @@ Writes need `shipments:write`. `GET /api/v1/consolidations/candidates` lists shi
 
 Backfill: `npx tsx backend/src/scripts/backfill-read-models.ts --only=consolidations`.
 
-Not yet: tracking at consolidation level, cost allocation, and creating per-customer shipments
-from "Ship together" (later slices of #329). Drop order isn't reorderable yet: drops follow first
-appearance, which can differ from a shipment's own drop order.
+### Tracking (fan-out)
+
+A device on a consolidation tracks every shipment on it. `SystemLocoAdapter.resolveAssignment` and
+the generic-feed path in `inboundWebhookWorker` resolve the device's active assignment to the run's
+live shipments (`ConsolidationRepository.memberShipmentIds`), and the ping is applied to each one
+through the normal per-shipment journey: position, geofence arrival and departure, checkpoints,
+order delivery, cold chain. So each shipment completes at its own last drop, only that stop's
+orders move, and each customer's portal shows its own shipment's live position. Each shipment gets
+its own copy of the readings; `sourceReportId` is unique, so the first copy keeps the feed's id and
+the others are suffixed with their shipment (`fanOutKey`). The device event is stored once.
+
+The run mirrors its shipments (`SyncConsolidationProgressCommand`): a run stop is completed when
+every shipment stop it serves is done and arrived once any is; a ready run goes `in_progress` once
+anything moves and `complete` when every shipment is complete. Draft, complete and cancelled runs
+only change by hand. The detail page's map shows the stops in order and the freshest position
+among its shipments.
+
+Not yet: cost allocation, and creating per-customer shipments from "Ship together" (later slices
+of #329). Checkpoints are per shipment, not per run.
 
 ---
 
