@@ -56,31 +56,15 @@ export async function linkOrdersToShipment(
     data: { items: [...existingItems, ...newItems] },
   });
 
-  const maxSeq = await tx.shipmentStop.aggregate({
-    where: { shipmentId: shipment.id, shipment: { orgId: ctx.orgId } },
-    _max: { sequenceNumber: true },
-  });
-  let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
-
   const userId = ctx.actorId ?? undefined;
   let stopsCreated = 0;
 
   for (const order of orders) {
-    let stop = await tx.shipmentStop.findFirst({
-      where: { shipmentId: shipment.id, locationId: order.destinationId!, shipment: { orgId: ctx.orgId } },
-    });
-    if (!stop) {
-      stopsCreated++;
-      stop = await tx.shipmentStop.create({
-        data: {
-          shipmentId: shipment.id,
-          locationId: order.destinationId!,
-          sequenceNumber: nextSeq++,
-          stopType: 'delivery',
-          status: 'pending',
-        },
-      });
-    }
+    const pickup = order.originId
+      ? await ensurePickupStop(tx, ctx.orgId, shipment.id, order.originId)
+      : { id: null, created: false };
+    const drop = await ensureDeliveryStop(tx, ctx.orgId, shipment.id, order.destinationId!);
+    stopsCreated += Number(pickup.created) + Number(drop.created);
 
     await tx.orderShipment.create({
       data: { orderId: order.id, shipmentId: shipment.id },
@@ -90,7 +74,8 @@ export async function linkOrdersToShipment(
       where: { id: order.id, orgId: ctx.orgId },
       data: {
         status: 'assigned',
-        deliveryStopId: stop.id,
+        deliveryStopId: drop.id,
+        pickupStopId: pickup.id,
       },
     });
 
@@ -156,3 +141,58 @@ function buildItemsPayload(orders: any[]): any[] {
       })),
   }));
 }
+
+const PICKUP_TYPES = ['pickup', 'both'];
+const DELIVERY_TYPES = ['delivery', 'both'];
+
+/**
+ * The shipment's pickup stop at `locationId`, created if it has none (#329). A new pickup goes after
+ * the existing pickups and before every drop, so each order is collected before it's delivered.
+ */
+async function ensurePickupStop(
+  tx: TransactionClient, orgId: string, shipmentId: string, locationId: string,
+): Promise<{ id: string; created: boolean }> {
+  const existing = await tx.shipmentStop.findFirst({
+    where: { shipmentId, locationId, stopType: { in: PICKUP_TYPES }, shipment: { orgId } },
+    select: { id: true },
+  });
+  if (existing) return { id: existing.id, created: false };
+
+  const lastPickup = await tx.shipmentStop.findFirst({
+    where: { shipmentId, stopType: { in: PICKUP_TYPES }, shipment: { orgId } },
+    orderBy: { sequenceNumber: 'desc' },
+    select: { sequenceNumber: true },
+  });
+  const sequenceNumber = (lastPickup?.sequenceNumber ?? 0) + 1;
+  // Make room: sequence numbers are unique per shipment, so shift the later stops up, last first.
+  const later = await tx.shipmentStop.findMany({
+    where: { shipmentId, sequenceNumber: { gte: sequenceNumber }, shipment: { orgId } },
+    orderBy: { sequenceNumber: 'desc' },
+    select: { id: true, sequenceNumber: true },
+  });
+  for (const st of later) {
+    await tx.shipmentStop.update({ where: { id: st.id, shipment: { orgId } }, data: { sequenceNumber: st.sequenceNumber + 1 } });
+  }
+  const stop = await tx.shipmentStop.create({
+    data: { shipmentId, locationId, sequenceNumber, stopType: 'pickup', status: 'pending' },
+  });
+  return { id: stop.id, created: true };
+}
+
+/** The shipment's drop at `locationId`, created after the last stop if it has none. */
+async function ensureDeliveryStop(
+  tx: TransactionClient, orgId: string, shipmentId: string, locationId: string,
+): Promise<{ id: string; created: boolean }> {
+  const existing = await tx.shipmentStop.findFirst({
+    where: { shipmentId, locationId, stopType: { in: DELIVERY_TYPES }, shipment: { orgId } },
+    select: { id: true },
+  });
+  if (existing) return { id: existing.id, created: false };
+
+  const last = await tx.shipmentStop.aggregate({ where: { shipmentId, shipment: { orgId } }, _max: { sequenceNumber: true } });
+  const stop = await tx.shipmentStop.create({
+    data: { shipmentId, locationId, sequenceNumber: (last._max.sequenceNumber ?? 0) + 1, stopType: 'delivery', status: 'pending' },
+  });
+  return { id: stop.id, created: true };
+}
+

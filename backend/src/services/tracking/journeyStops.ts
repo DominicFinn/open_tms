@@ -10,6 +10,7 @@ export interface JourneyStop {
   locationId: string;
   sequenceNumber: number;
   status: string;
+  stopType?: string;
   actualArrival: Date | null;
   actualDeparture: Date | null;
 }

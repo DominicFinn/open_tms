@@ -148,20 +148,14 @@ describe('OrderConversionService', () => {
       );
     });
 
-    it('rejects combining orders with different origins, without dispatching', async () => {
+    it('allows combining orders from different origins: each becomes a pickup (#329)', async () => {
       const orderA = makeOrder({ id: 'order-a', originId: 'loc-origin-1' });
       const orderB = makeOrder({ id: 'order-b', originId: 'loc-origin-2' });
-      const prisma = {
-        order: { findMany: jest.fn().mockResolvedValue([orderA, orderB]) },
-      } as any;
-      const commandBus = makeCommandBus();
-      const service = new OrderConversionService(prisma, commandBus);
+      const service = new OrderConversionService({ order: { findMany: jest.fn().mockResolvedValue([orderA, orderB]) } } as any, makeCommandBus());
 
-      const result = await service.batchConvert('test-org', ['order-a', 'order-b'], { mode: 'combine' });
+      const check = await service.checkCompatibility('test-org', ['order-a', 'order-b']);
 
-      expect(result.success).toBe(false);
-      expect(result.errors[0]).toMatch(/different origins/);
-      expect(commandBus.dispatch).not.toHaveBeenCalled();
+      expect(check.errors.some((e) => /origin/.test(e))).toBe(false);
     });
   });
 
@@ -265,21 +259,21 @@ describe('OrderConversionService', () => {
       expect(result.errors).toEqual(['Shipment not found']);
     });
 
-    it('rejects orders with a different origin than the shipment, without dispatching', async () => {
+    it('accepts an order from another origin, which adds a pickup stop (#329)', async () => {
       const order = makeOrder({ originId: 'some-other-origin' });
       const shipment = makeShipment();
       const prisma = {
         shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
         order: { findMany: jest.fn().mockResolvedValue([order]) },
+        orderShipment: { count: jest.fn().mockResolvedValue(0) },
       } as any;
-      const commandBus = makeCommandBus();
+      const commandBus = makeCommandBus({ success: true, data: { shipmentId: 'ship-1', addedOrderIds: ['order-1'] }, events: [] });
       const service = new OrderConversionService(prisma, commandBus);
 
       const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
 
-      expect(result.success).toBe(false);
-      expect(result.errors[0]).toMatch(/different origin/);
-      expect(commandBus.dispatch).not.toHaveBeenCalled();
+      expect(result.errors).toEqual([]);
+      expect(commandBus.dispatch).toHaveBeenCalled();
     });
 
     it('rejects orders with a different customer than the shipment, without dispatching', async () => {
@@ -316,7 +310,7 @@ describe('OrderConversionService', () => {
   });
 
   describe('checkCompatibility', () => {
-    it('flags different origins and different customers as errors (#325)', async () => {
+    it('flags different customers as an error, but not different origins (#325, #329)', async () => {
       const orderA = makeOrder({ id: 'order-a', customerId: 'cust-a', originId: 'loc-origin-1' });
       const orderB = makeOrder({ id: 'order-b', customerId: 'cust-b', originId: 'loc-origin-2' });
       const prisma = {
@@ -335,7 +329,7 @@ describe('OrderConversionService', () => {
         expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org' }) }),
       );
       expect(check.compatible).toBe(false);
-      expect(check.errors.some((e) => /different origins/.test(e))).toBe(true);
+      expect(check.errors.some((e) => /origin/.test(e))).toBe(false);
       expect(check.errors.some((e) => /different customers/.test(e))).toBe(true);
     });
   });

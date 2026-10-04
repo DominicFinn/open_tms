@@ -174,7 +174,9 @@ model ShipmentStop {
   status String @default("pending") // pending, arrived, in_progress, completed, skipped
 
   // Orders to be delivered at this stop
-  orders Order[]
+  orders       Order[] @relation("OrderDeliveryStop")
+  // Orders collected at this stop (#329)
+  pickupOrders Order[] @relation("OrderPickupStop")
 
   // Geofencing (for automatic status updates)
   geofenceRadius  Float? // Radius in meters for geofence trigger
@@ -589,8 +591,12 @@ model Order {
   exceptionResolvedAt DateTime? // When the exception was resolved
 
   // Link to the specific stop where this order should be delivered (for multi-stop shipments)
-  deliveryStop   ShipmentStop? @relation(fields: [deliveryStopId], references: [id])
+  deliveryStop   ShipmentStop? @relation("OrderDeliveryStop", fields: [deliveryStopId], references: [id])
   deliveryStopId String?
+  // Where the order is collected (#329). Null on orders linked before multi-pickup: they're picked
+  // up at their shipment's first pickup stop.
+  pickupStop     ShipmentStop? @relation("OrderPickupStop", fields: [pickupStopId], references: [id])
+  pickupStopId   String?
 
   // Trackable units (pallets, totes, boxes, etc.)
   trackableUnits TrackableUnit[]

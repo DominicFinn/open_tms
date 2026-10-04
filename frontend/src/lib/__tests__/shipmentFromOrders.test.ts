@@ -1,7 +1,7 @@
 import { applyOrders, canJoin, orderConflicts, shipTogetherProblem, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
-  customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', waypoints: [],
+  customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', pickupWaypoints: [], waypoints: [],
   pickupDate: '', deliveryDate: '', tempControlled: false, hazmat: false,
 };
 
@@ -38,6 +38,15 @@ describe('applyOrders', () => {
   });
 });
 
+describe('applyOrders with several origins (#329)', () => {
+  it('makes each further origin a pickup after the first, and accepts the result', () => {
+    const orders = [order(), order({ id: 'o2', orderNumber: 'ORD-2', originId: 'origin-b', destinationId: 'drop-b' })];
+    const form = applyOrders(emptyForm, orders);
+    expect(form).toMatchObject({ originId: 'origin', pickupWaypoints: ['origin-b'], waypoints: ['drop-a'], destinationId: 'drop-b' });
+    expect(orderConflicts(form, orders)).toEqual([]);
+  });
+});
+
 describe('orderConflicts', () => {
   const filled = applyOrders(emptyForm, [order()]);
 
@@ -48,7 +57,7 @@ describe('orderConflicts', () => {
   it('flags edits that no longer fit the orders', () => {
     expect(orderConflicts({ ...filled, customerId: 'cust-2' }, [order()])).toEqual(["The shipment's customer isn't the orders' customer."]);
     expect(orderConflicts({ ...filled, mode: 'FTL' }, [order()])).toEqual(["The orders are LTL, but the shipment's mode is FTL."]);
-    expect(orderConflicts({ ...filled, originId: 'elsewhere' }, [order()])).toEqual(["The route doesn't start at the orders' origin."]);
+    expect(orderConflicts({ ...filled, originId: 'elsewhere' }, [order()])).toEqual(["ORD-1's pickup isn't a stop on this route."]);
     expect(orderConflicts({ ...filled, destinationId: 'elsewhere' }, [order()])).toEqual(["ORD-1's drop isn't a stop on this route."]);
   });
 
@@ -62,12 +71,12 @@ describe('orderConflicts', () => {
 });
 
 describe('canJoin', () => {
-  it('only offers LTL orders for the same customer and origin, not already attached', () => {
+  it('only offers LTL orders for the same customer, not already attached, from any origin (#329)', () => {
     const attached = [order()];
     expect(canJoin(order({ id: 'o2' }), attached)).toBe(true);
     expect(canJoin(order({ id: 'o1' }), attached)).toBe(false);
     expect(canJoin(order({ id: 'o2', customerId: 'cust-2' }), attached)).toBe(false);
-    expect(canJoin(order({ id: 'o2', originId: 'other' }), attached)).toBe(false);
+    expect(canJoin(order({ id: 'o2', originId: 'other' }), attached)).toBe(true);
     expect(canJoin(order({ id: 'o2', serviceLevel: 'FTL' }), [order({ serviceLevel: 'FTL' })])).toBe(false);
     expect(canJoin(order({ serviceLevel: 'FTL' }), [])).toBe(true);
   });
@@ -85,7 +94,7 @@ describe('shipTogetherProblem', () => {
     expect(shipTogetherProblem([available(), { ...available({ id: 'o2' }), status: 'assigned' }])).toBe('Only available orders can be shipped.');
     expect(shipTogetherProblem([available(), available({ id: 'o2', serviceLevel: 'FTL' })])).toBe('FTL orders ship on their own shipment.');
     expect(shipTogetherProblem([available(), available({ id: 'o2', customerId: 'cust-2' })])).toBe('The orders belong to different customers.');
-    expect(shipTogetherProblem([available(), available({ id: 'o2', originId: 'other' })])).toBe('The orders are picked up from different origins.');
+    expect(shipTogetherProblem([available(), available({ id: 'o2', originId: 'other' })])).toBeNull();
   });
 });
 

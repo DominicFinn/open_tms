@@ -160,11 +160,21 @@ a transaction and emits after commit: `order.delivered` (carrying `deliveredAt`,
 for tracking), `order.exception` (with `exceptionType`), `order.exception_resolved`, or
 `order.delivery_status_changed` for anything else, one event per order. Free-text confirmer names and
 notes stay in the order row and audit log, never the event. `RecordStopOrdersDeliveryCommand` drives
-orders from stops: **completing the pickup** (leaving the origin) puts every not-yet-moving order on
-the shipment `in_transit` and never delivers anything (before, an order whose delivery stop was the
-origin was marked delivered, #307); **arriving at a delivery stop** puts its unmoved orders in transit;
+orders from stops: **completing a pickup** puts the not-yet-moving orders collected there `in_transit`
+and never delivers anything (before, an order whose delivery stop was the origin was marked
+delivered, #307); **arriving at a delivery stop** puts its unmoved orders in transit;
 **completing a delivery stop** delivers its active orders. The order read model, customer webhooks,
 email and in-app notifications now see deliveries, which they didn't when these were silent writes.
+
+**Multi-pickup shipments (#329).** Orders on one shipment may come from different origins: each
+origin is a pickup stop (`stopType: pickup`), and every pickup comes before every drop. An order
+links to its pickup through `Order.pickupStopId` as well as to its drop through `deliveryStopId`;
+`linkOrdersToShipment` adds a missing pickup after the last one and a missing drop at the end.
+`POST`/`PUT /api/v1/shipments` take `pickupWaypoints` (pickups after the origin) beside `waypoints`
+(drops), and `syncShipmentStops` keeps both, refusing to drop a stop that orders still collect at or
+drop at. Tracking: a pickup is arrived on entry and completed on departure, and completing it moves
+the orders collected there (or, for orders with no pickup stop, the first pickup's) `in_transit`.
+Arriving at a later stop with an earlier pickup still open records an inferred departure from it.
 
 `deliveryStatus` is nullable and only ever gets a value once the order is `assigned` — there is
 no `unassigned`/`assigned`/`cancelled` delivery status; those were redundant with `Order.status`.

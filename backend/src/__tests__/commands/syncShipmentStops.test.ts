@@ -8,7 +8,7 @@ function mockTx(stored: StoredStop[] = []) {
   let nextId = 1;
   const tx = {
     shipmentStop: {
-      findMany: jest.fn(async () => rows.map((r) => ({ id: r.id, locationId: r.locationId, _count: { orders: r.orders } }))),
+      findMany: jest.fn(async () => rows.map((r) => ({ id: r.id, locationId: r.locationId, stopType: r.stopType, _count: { orders: r.orders, pickupOrders: 0 } }))),
       deleteMany: jest.fn(async ({ where }: any) => { rows = rows.filter((r) => !where.id.in.includes(r.id)); return { count: 0 }; }),
       updateMany: jest.fn(async () => { rows.forEach((r) => { r.sequenceNumber += 100000; }); return { count: rows.length }; }),
       update: jest.fn(async ({ where, data }: any) => { Object.assign(rows.find((r) => r.id === where.id)!, data); return {}; }),

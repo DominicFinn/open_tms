@@ -41,6 +41,8 @@ export interface UpdateShipmentPayload {
     properShippingName?: string | null;
     requiredEquipmentType?: string | null;
     waypoints?: string[];
+    /** Further pickups after the origin, in order (#329). */
+    pickupWaypoints?: string[];
   };
 }
 
@@ -68,6 +70,7 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
     // separately below.
     delete updateData.devices;
     delete updateData.waypoints;
+    delete updateData.pickupWaypoints;
     if (data.laneId) {
       const lane = await tx.lane.findFirstOrThrow({ where: { id: data.laneId, orgId: command.orgId, archived: false } });
       updateData.originId = lane.originId;
@@ -82,12 +85,13 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
 
     // Rebuild the stop list from the route, but ONLY while the shipment is a
     // draft — in-flight shipments carry stop-level progress we must not wipe.
-    if (data.waypoints !== undefined && updated.status === 'draft') {
+    if ((data.waypoints !== undefined || data.pickupWaypoints !== undefined) && updated.status === 'draft') {
       await syncShipmentStops(tx, {
         orgId: command.orgId,
         shipmentId: id,
         originId: updated.originId,
-        waypoints: data.waypoints,
+        pickupWaypoints: data.pickupWaypoints,
+      waypoints: data.waypoints,
         destinationId: updated.destinationId,
       });
     }
