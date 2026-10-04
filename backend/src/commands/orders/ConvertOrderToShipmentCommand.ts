@@ -14,7 +14,8 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
+import { loadProfileFor } from './shipmentLoadRules.js';
+import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
 
 export interface ConvertOrderToShipmentPayload {
@@ -75,6 +76,7 @@ export class ConvertOrderToShipmentCommandHandler extends BaseCommandHandler<Con
         deliveryDate: order.requestedDeliveryDate || undefined,
         items: [],
         status: 'draft',
+        ...loadProfileFor([order]),
       },
     });
 
@@ -91,6 +93,8 @@ export class ConvertOrderToShipmentCommandHandler extends BaseCommandHandler<Con
         status: 'draft',
       },
     }));
+
+    await createPickupStop(tx, shipment.id, shipment.originId!);
 
     await linkOrdersToShipment(
       tx,

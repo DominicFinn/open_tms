@@ -11,6 +11,9 @@ function makeOrder(overrides: any = {}) {
     customerId: 'cust-1',
     originId: 'loc-origin',
     destinationId: 'loc-dest-1',
+    serviceLevel: 'LTL',
+    temperatureControl: 'ambient',
+    requiresHazmat: false,
     createdAt: new Date('2026-01-01'),
     customer: { id: 'cust-1', name: 'Acme' },
     trackableUnits: [],
@@ -63,8 +66,8 @@ describe('CombineOrdersIntoShipmentCommandHandler', () => {
     expect(result.data).toEqual({ shipmentId: 'ship-1' });
     expect(tx.shipment.create.mock.calls[0][0].data.orgId).toBe('test-org');
 
-    // one stop per order (each has a distinct destination and shipmentStop.findFirst always returns null here)
-    expect(tx.shipmentStop.create).toHaveBeenCalledTimes(2);
+    // the pickup, then one stop per order (each has a distinct destination and shipmentStop.findFirst always returns null here)
+    expect(tx.shipmentStop.create).toHaveBeenCalledTimes(3);
     expect(tx.order.update).toHaveBeenCalledTimes(2);
 
     const shipmentCreatedEvents = result.events.filter((e) => e.type === EVENT_TYPES.SHIPMENT_CREATED);
@@ -125,4 +128,71 @@ describe('CombineOrdersIntoShipmentCommandHandler', () => {
     expect(result.error).toMatch(/No valid orders found/);
     expect(tx.shipment.create).not.toHaveBeenCalled();
   });
+
+  it('sets the shipment service level and handling flags from its orders (#325)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([
+      makeOrder({ id: 'a' }),
+      makeOrder({ id: 'b', temperatureControl: 'refrigerated' }),
+    ]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(result.success).toBe(true);
+    expect(tx.shipment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ serviceLevel: 'LTL', tempControlled: true, hazmat: false }),
+    }));
+  });
+
+  it('refuses to combine FTL orders (#325)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([makeOrder({ id: 'a', serviceLevel: 'FTL' }), makeOrder({ id: 'b', serviceLevel: 'FTL' })]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(result.success).toBe(false);
+    expect(tx.shipment.create).not.toHaveBeenCalled();
+  });
+
+  it('starts the shipment with a pickup stop at the origin, before the delivery stops (#324)', async () => {
+    const tx = makeTx();
+    tx.shipment.create.mockResolvedValue({ id: 'ship-1', reference: 'SH-BATCH-XYZ', items: [], originId: 'loc-origin' });
+    tx.order.findMany.mockResolvedValue([makeOrder()]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['order-a'] }, { orgId: 'test-org' }));
+
+    expect(tx.shipmentStop.create.mock.calls[0][0]).toEqual({
+      data: { shipmentId: 'ship-1', locationId: 'loc-origin', sequenceNumber: 1, stopType: 'pickup', status: 'pending' },
+    });
+  });
+
+  it('ends the shipment at its last drop when orders go to different places (#324)', async () => {
+    const tx = makeTx();
+    tx.shipment.create.mockResolvedValue({ id: 'ship-1', reference: 'SH-BATCH-XYZ', items: [], originId: 'loc-origin', destinationId: 'loc-dest-1' });
+    tx.shipmentStop.findFirst.mockImplementation((args: any) => Promise.resolve(args?.orderBy ? { locationId: 'loc-dest-2' } : null));
+    tx.order.findMany.mockResolvedValue([
+      makeOrder({ id: 'a', destinationId: 'loc-dest-1' }),
+      makeOrder({ id: 'b', destinationId: 'loc-dest-2' }),
+    ]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(tx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { destinationId: 'loc-dest-2' } }));
+  });
+
+  it('refuses to combine orders for different customers (#325)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([makeOrder({ id: 'a', customerId: 'cust-1' }), makeOrder({ id: 'b', customerId: 'cust-2' })]);
+    const handler = new CombineOrdersIntoShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['a', 'b'] }, { orgId: 'test-org' }));
+
+    expect(result.success).toBe(false);
+    expect(tx.shipment.create).not.toHaveBeenCalled();
+  });
 });
+

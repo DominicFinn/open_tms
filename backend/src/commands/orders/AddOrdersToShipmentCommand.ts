@@ -18,6 +18,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { assertCanAdd } from './shipmentLoadRules.js';
 import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
 
@@ -60,6 +61,12 @@ export class AddOrdersToShipmentCommandHandler extends BaseCommandHandler<AddOrd
       },
     });
     if (orders.length === 0) throw new Error('No valid orders to add');
+
+    const existingOrderCount = await tx.orderShipment.count({ where: { shipmentId, shipment: { orgId: command.orgId } } });
+    const serviceLevel = assertCanAdd(shipment, existingOrderCount, orders);
+    if (shipment.serviceLevel !== serviceLevel) {
+      await tx.shipment.update({ where: { id: shipmentId, orgId: command.orgId }, data: { serviceLevel } });
+    }
 
     await linkOrdersToShipment(
       tx,

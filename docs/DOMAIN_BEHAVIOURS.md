@@ -125,6 +125,19 @@ null (not moving yet) → in_transit → delivered
                               ↘ exception → (resolved) → in_transit
 ```
 
+**What can share a shipment (#325).** `commands/orders/shipmentLoadRules.ts`, enforced inside
+`AddOrdersToShipmentCommand`, `CombineOrdersIntoShipmentCommand`, `ConvertOrderToShipmentCommand` and
+`SplitOrderCommand`: an FTL shipment carries exactly one order; FTL and LTL orders never share a
+shipment; a shipment belongs to one customer (several customers' freight on one truck will be a
+consolidation of per-customer shipments, not a shared shipment); a shipment is `tempControlled` / `hazmat` if any order on it needs that. Every path that
+creates a shipment from orders sets `serviceLevel`, `tempControlled` and `hazmat` from them, and
+starts it with a pickup stop at the origin (sequence 1) so leaving the origin is tracked (#324);
+combining orders bound for different places sets the shipment's destination to its last drop; adding
+to a shipment with no service level gives it the orders'. `OrderConversionService` runs the same
+checks first only to report per order. `scripts/backfill-shipment-service-level.ts` (dry run unless
+`--apply`) sets the service level on existing shipments whose orders agree and lists mixed or empty
+ones for review.
+
 **Order delivery events (#325).** Every delivery status write goes through a command, so it runs in
 a transaction and emits after commit: `order.delivered` (carrying `deliveredAt`, the device time
 for tracking), `order.exception` (with `exceptionType`), `order.exception_resolved`, or

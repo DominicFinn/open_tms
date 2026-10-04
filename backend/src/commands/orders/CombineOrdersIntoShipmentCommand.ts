@@ -16,8 +16,9 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
+import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
+import { loadProfileFor } from './shipmentLoadRules.js';
 
 export interface CombineOrdersIntoShipmentPayload {
   orderIds: string[];
@@ -70,6 +71,7 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
         destinationId: firstOrder.destinationId!,
         items: [],
         status: 'draft',
+        ...loadProfileFor(orders),
       },
     });
 
@@ -87,6 +89,8 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       },
     }));
 
+    await createPickupStop(tx, shipment.id, shipment.originId!);
+
     await linkOrdersToShipment(
       tx,
       shipment,
@@ -101,6 +105,17 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       emit,
       { batchOrderIds: orderIds },
     );
+
+    // With orders bound for different places, the shipment ends at its last drop, not at the first
+    // order's destination: checkpoints and the route header measure towards it (#324).
+    const finalStop = await tx.shipmentStop.findFirst({
+      where: { shipmentId: shipment.id, shipment: { orgId: command.orgId } },
+      orderBy: { sequenceNumber: 'desc' },
+      select: { locationId: true },
+    });
+    if (finalStop && finalStop.locationId !== shipment.destinationId) {
+      await tx.shipment.update({ where: { id: shipment.id, orgId: command.orgId }, data: { destinationId: finalStop.locationId } });
+    }
 
     return { shipmentId: shipment.id };
   }
