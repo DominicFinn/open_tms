@@ -75,7 +75,7 @@ export interface IOrderConversionService {
   splitOrder(orgId: string, orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
   /**
    * Manually add order(s) to an existing shipment, rather than creating a
-   * new one. Requires matching origin + customer with the target shipment,
+   * new one. Requires a matching customer (an order from another origin adds a pickup stop, #329),
    * and the shipment must not have already left draft/ready.
    */
   addOrdersToShipment(orgId: string, shipmentId: string, orderIds: string[], userId?: string): Promise<BatchConvertResult>;
@@ -140,13 +140,7 @@ export class OrderConversionService implements IOrderConversionService {
       errors.push('Orders belong to different customers, which can\'t share a shipment.');
     }
 
-    // Check origin consistency
-    const originIds = new Set(orders.filter((o) => o.originId).map((o) => o.originId));
-    if (originIds.size > 1) {
-      errors.push(
-        'Orders have different origins. Cannot combine into a single shipment.'
-      );
-    }
+    // Different origins are fine: each origin becomes a pickup stop (#329).
 
     // Check destination consistency
     const destinationIds = new Set(orders.filter((o) => o.destinationId).map((o) => o.destinationId));
@@ -398,10 +392,6 @@ export class OrderConversionService implements IOrderConversionService {
       }
       if (!o.originId || !o.destinationId) {
         errors.push(`${o.orderNumber} is missing origin or destination`);
-        return false;
-      }
-      if (o.originId !== shipment.originId) {
-        errors.push(`${o.orderNumber} has a different origin than this shipment`);
         return false;
       }
       if (o.customerId !== shipment.customerId) {

@@ -2985,6 +2985,12 @@ export default function VNextShipmentDetail() {
                                   {order.requestedDeliveryDate ? new Date(order.requestedDeliveryDate).toLocaleDateString() : '-'}
                                 </span>
                               )}
+                              {order.pickupStop && order.pickupStop.sequenceNumber > 1 && (
+                                <span>
+                                  Picks up at stop {order.pickupStop.sequenceNumber}
+                                  {order.pickupStop.location?.name ? ` · ${order.pickupStop.location.name}` : ''}
+                                </span>
+                              )}
                               {order.deliveryStop && (
                                 <span>
                                   Drops at stop {order.deliveryStop.sequenceNumber}

@@ -16,6 +16,7 @@ interface StopSpec {
   locationId: string;
   sequenceNumber: number;
   status?: string;
+  stopType?: string;
   actualArrival?: Date | null;
   actualDeparture?: Date | null;
 }
@@ -162,6 +163,38 @@ describe('ArrivalCriteriaEvaluationService', () => {
     await ping('loc-mid', { lat: 40.75 }); // between the middle stop and the destination, inside neither
 
     expect(dispatched()).toEqual([[RECORD_JOURNEY_CHECKPOINT, expect.objectContaining({ shipmentId: 'ship-1' })]]);
+  });
+
+  describe('a second pickup (#329)', () => {
+    const milkRun = (mid: Partial<StopSpec>): StopSpec[] => [
+      { id: 'stop-origin', locationId: 'loc-origin', sequenceNumber: 1, stopType: 'pickup', status: 'completed' },
+      { id: 'stop-mid', locationId: 'loc-mid', sequenceNumber: 2, stopType: 'pickup', ...mid },
+      { id: 'stop-dest', locationId: 'loc-dest', sequenceNumber: 3, stopType: 'delivery' },
+    ];
+
+    it('arrives at a later pickup without completing it', async () => {
+      const { ping, dispatched, deliveryService } = setup(milkRun({}));
+      await ping('loc-mid');
+      expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-mid', completesStop: false })]]);
+      expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-mid', 'arrived', 'geofence', expect.any(Date));
+    });
+
+    it('completes a later pickup when the vehicle leaves it, moving its orders', async () => {
+      const { ping, dispatched, deliveryService } = setup(milkRun({ status: 'arrived' }));
+      await ping('loc-mid', { lat: 40.75 });
+      expect(dispatched()).toEqual([[RECORD_GEOFENCE_DEPARTURE, expect.objectContaining({ stopId: 'stop-mid' })]]);
+      expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-mid', 'completed', 'geofence', expect.any(Date));
+    });
+
+    it('infers the departure from a pickup it never saw the vehicle leave when a drop is reached', async () => {
+      const { ping, dispatched, deliveryService } = setup(milkRun({}));
+      await ping('loc-dest');
+      expect(dispatched()).toEqual([
+        [RECORD_GEOFENCE_DEPARTURE, expect.objectContaining({ stopId: 'stop-mid', inferred: true })],
+        [RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-dest', completesStop: true })],
+      ]);
+      expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-mid', 'completed', 'geofence', expect.any(Date));
+    });
   });
 });
 

@@ -78,6 +78,34 @@ describe('RecordStopOrdersDeliveryCommandHandler (#325)', () => {
     expect(result.events.map((e) => e.type)).toEqual([EVENT_TYPES.ORDER_DELIVERY_STATUS_CHANGED]);
   });
 
+  it("only moves the orders collected at a later pickup when it completes (#329)", async () => {
+    const { tx, prisma } = mockTx();
+    tx.shipmentStop.findFirst.mockResolvedValue(stopRow('stop-mid', 'pickup'));
+    const handler = new RecordStopOrdersDeliveryCommandHandler(prisma, mockEventBus().bus);
+
+    await handler.execute(createTestCommand(RECORD_STOP_ORDERS_DELIVERY, {
+      stopId: 'stop-mid', status: 'completed', method: 'geofence', occurredAt: OCCURRED,
+    }));
+
+    expect(tx.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ OR: [{ pickupStopId: 'stop-mid' }] }] }),
+    }));
+  });
+
+  it('counts orders with no pickup stop as collected at the first pickup (#329)', async () => {
+    const { tx, prisma } = mockTx();
+    tx.shipmentStop.findFirst.mockResolvedValue(stopRow('stop-origin', 'pickup'));
+    const handler = new RecordStopOrdersDeliveryCommandHandler(prisma, mockEventBus().bus);
+
+    await handler.execute(createTestCommand(RECORD_STOP_ORDERS_DELIVERY, {
+      stopId: 'stop-origin', status: 'completed', method: 'geofence', occurredAt: OCCURRED,
+    }));
+
+    expect(tx.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ OR: [{ pickupStopId: 'stop-origin' }, { pickupStopId: null }] }] }),
+    }));
+  });
+
   it('changes no orders when the pickup only arrives', async () => {
     const { tx, prisma } = mockTx();
     tx.shipmentStop.findFirst.mockResolvedValue(stopRow('stop-origin', 'pickup'));

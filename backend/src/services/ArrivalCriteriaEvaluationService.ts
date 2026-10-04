@@ -177,17 +177,20 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
       const criteria = stop.location.arrivalCriteria;
       if (criteria.length === 0) continue;
       const entry = { locationLat: stop.location.lat ?? undefined, locationLng: stop.location.lng ?? undefined };
-      const isOrigin = stop.id === originStop?.id;
+      // Pickups (the origin and any further pickup, #329) arrive on entry and complete on departure.
+      const isPickup = stop.stopType === 'pickup' || stop.id === originStop?.id;
       const match = this.firstMatch(criteria, ctx, entry, wifiNetworks, bleBeacons);
 
       if (match) {
         matches.push({ criteriaId: match.criteria.id, criteriaType: match.criteria.criteriaType, locationId: stop.locationId, stopId: stop.id, matchDetail: match.detail });
         if (stop.status === 'pending') {
           const method = match.criteria.criteriaType === 'geofence' ? 'geofence' : 'geofence_iot';
-          arrivedThisPing = await this.arriveAtStop(shipment.orgId, ctx, stop, isOrigin, originStop, eventTime, method) || arrivedThisPing;
+          const unfinishedPickups = isPickup ? [] : shipment.stops.filter((st) =>
+            (st.stopType === 'pickup' || st.id === originStop?.id) && st.sequenceNumber < stop.sequenceNumber && st.status !== 'completed');
+          arrivedThisPing = await this.arriveAtStop(shipment.orgId, ctx, stop, isPickup, unfinishedPickups, eventTime, method) || arrivedThisPing;
         }
-      } else if (isOrigin && stop.status === 'arrived') {
-        await this.departOriginIfOutside(shipment.orgId, ctx, stop, criteria, eventTime);
+      } else if (isPickup && stop.status === 'arrived') {
+        await this.departPickupIfOutside(shipment.orgId, ctx, stop, criteria, eventTime);
       }
     }
 
@@ -219,7 +222,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
         stops: {
           orderBy: { sequenceNumber: 'asc' },
           select: {
-            id: true, locationId: true, sequenceNumber: true, status: true, actualArrival: true, actualDeparture: true,
+            id: true, locationId: true, sequenceNumber: true, status: true, stopType: true, actualArrival: true, actualDeparture: true,
             location: {
               select: {
                 lat: true,
@@ -248,27 +251,30 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
   }
 
   /**
-   * Arrival at a pending stop. The origin only arrives; any other stop completes on entry (#324),
-   * and reaching it proves the vehicle left the origin, so an origin departure no ping ever showed
-   * is recorded first, as inferred.
+   * Arrival at a pending stop. A pickup only arrives; a drop completes on entry (#324). Reaching a
+   * drop proves the vehicle left the pickups before it, so a departure no ping ever showed is
+   * recorded first, as inferred, for each of them (#329).
    */
   private async arriveAtStop(
-    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, isOrigin: boolean,
-    originStop: { id: string; locationId: string; status: string } | null, eventTime: string, method: string,
+    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, isPickup: boolean,
+    unfinishedPickups: Array<{ id: string; locationId: string }>, eventTime: string, method: string,
   ): Promise<boolean> {
-    if (!isOrigin && originStop && originStop.status !== 'completed') {
-      await this.recordDeparture(orgId, ctx, originStop.id, originStop.locationId, eventTime, true);
+    for (const pickup of unfinishedPickups) {
+      const departed = await this.recordDeparture(orgId, ctx, pickup.id, pickup.locationId, eventTime, true);
+      if (departed) {
+        await this.deliveryService.updateOrdersForStop(orgId, pickup.id, 'completed', method, new Date(eventTime));
+      }
     }
 
-    const arrived = await this.recordArrival(orgId, ctx, stop.id, stop.locationId, eventTime, !isOrigin);
+    const arrived = await this.recordArrival(orgId, ctx, stop.id, stop.locationId, eventTime, !isPickup);
     if (arrived) {
-      await this.deliveryService.updateOrdersForStop(orgId, stop.id, isOrigin ? 'arrived' : 'completed', method, new Date(eventTime));
+      await this.deliveryService.updateOrdersForStop(orgId, stop.id, isPickup ? 'arrived' : 'completed', method, new Date(eventTime));
     }
     return arrived;
   }
 
   /** Departure needs a geofence (WiFi/BLE presence has no "outside") and a GPS position. */
-  private async departOriginIfOutside(
+  private async departPickupIfOutside(
     orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, criteria: any[], eventTime: string,
   ): Promise<void> {
     if (ctx.lat == null || ctx.lng == null) return;

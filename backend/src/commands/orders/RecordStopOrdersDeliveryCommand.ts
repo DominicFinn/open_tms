@@ -31,9 +31,9 @@ const ACTIVE_DELIVERY = [{ deliveryStatus: null }, { deliveryStatus: 'in_transit
  * Moves a shipment stop to a new status and the orders it affects with it (#325).
  *
  * BUSINESS RULES:
- * - Completing the pickup (leaving the origin) puts every not-yet-moving order on the shipment in
- *   transit. It never delivers anything: before #325 this marked orders delivered if their
- *   delivery stop happened to be the origin (#307).
+ * - Completing a pickup (leaving it) puts the not-yet-moving orders collected there in transit
+ *   (#329; orders with no pickup stop count as collected at the first pickup). It never delivers
+ *   anything: before #325 this marked orders delivered if their delivery stop was the origin (#307).
  * - Arriving at a delivery stop puts its not-yet-moving orders in transit.
  * - Completing a delivery stop delivers its active orders. A refusal afterwards is a delivery
  *   exception raised against the order, not a reversal here.
@@ -74,15 +74,21 @@ export class RecordStopOrdersDeliveryCommandHandler extends BaseCommandHandler<R
       },
     });
 
-    const isPickup = stop.stopType === 'pickup' || stop.id === findOriginStop(stop.shipment.stops, stop.shipment.originId)?.id;
+    const firstPickup = findOriginStop(stop.shipment.stops, stop.shipment.originId);
+    const isPickup = stop.stopType === 'pickup' || stop.id === firstPickup?.id;
     const change = ordersToChange(isPickup, status);
     if (!change) return { ordersUpdated: 0, shipmentId: stop.shipmentId };
 
     const orders = await tx.order.findMany({
       where: {
         orgId,
-        ...(change.scope === 'shipment'
-          ? { orderShipments: { some: { shipmentId: stop.shipmentId } } }
+        ...(change.scope === 'pickup'
+          ? {
+            orderShipments: { some: { shipmentId: stop.shipmentId } },
+            // The orders collected here; orders linked before multi-pickup have no pickup stop and
+            // were collected at the first one (#329).
+            AND: [{ OR: [{ pickupStopId: stopId }, ...(stop.id === firstPickup?.id ? [{ pickupStopId: null }] : [])] }],
+          }
           : { deliveryStopId: stopId }),
         OR: change.from === 'unmoved' ? [{ deliveryStatus: null }] : ACTIVE_DELIVERY,
       },
@@ -129,13 +135,13 @@ export class RecordStopOrdersDeliveryCommandHandler extends BaseCommandHandler<R
 }
 
 interface OrderChange {
-  scope: 'shipment' | 'stop';
+  scope: 'pickup' | 'stop';
   from: 'unmoved' | 'active';
   to: DeliveryStatus;
 }
 
 function ordersToChange(isPickup: boolean, status: string): OrderChange | null {
-  if (isPickup) return status === 'completed' ? { scope: 'shipment', from: 'unmoved', to: 'in_transit' } : null;
+  if (isPickup) return status === 'completed' ? { scope: 'pickup', from: 'unmoved', to: 'in_transit' } : null;
   if (status === 'completed') return { scope: 'stop', from: 'active', to: 'delivered' };
   if (status === 'arrived' || status === 'in_progress') return { scope: 'stop', from: 'unmoved', to: 'in_transit' };
   return null;

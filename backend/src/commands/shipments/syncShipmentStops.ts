@@ -17,11 +17,14 @@ export async function syncShipmentStops(
     orgId: string;
     shipmentId: string;
     originId?: string | null;
+    /** Further pickups after the origin, in order (#329). */
+    pickupWaypoints?: string[];
+    /** Drops before the destination, in order. */
     waypoints?: string[];
     destinationId?: string | null;
   },
 ): Promise<void> {
-  const { orgId, shipmentId, originId, waypoints, destinationId } = opts;
+  const { orgId, shipmentId, originId, pickupWaypoints, waypoints, destinationId } = opts;
 
   const rows: Array<{
     shipmentId: string;
@@ -33,6 +36,9 @@ export async function syncShipmentStops(
   let seq = 1;
   if (originId) {
     rows.push({ shipmentId, locationId: originId, sequenceNumber: seq++, stopType: 'pickup', status: 'pending' });
+  }
+  for (const pickup of pickupWaypoints ?? []) {
+    if (pickup) rows.push({ shipmentId, locationId: pickup, sequenceNumber: seq++, stopType: 'pickup', status: 'pending' });
   }
   for (const wp of waypoints ?? []) {
     if (wp) rows.push({ shipmentId, locationId: wp, sequenceNumber: seq++, stopType: 'delivery', status: 'pending' });
@@ -67,16 +73,19 @@ async function reconcileStops(
   const existing = await tx.shipmentStop.findMany({
     where: { shipmentId, shipment: { orgId } },
     orderBy: { sequenceNumber: 'asc' },
-    select: { id: true, locationId: true, _count: { select: { orders: true } } },
+    select: { id: true, locationId: true, stopType: true, _count: { select: { orders: true, pickupOrders: true } } },
   });
 
+  // Prefer the stop of the same kind at a location, so a pickup and a drop at one place stay apart.
   const unmatched = [...existing];
-  const matches = rows.map((row) => {
-    const i = unmatched.findIndex((st) => st.locationId === row.locationId);
-    return { row, stop: i >= 0 ? unmatched.splice(i, 1)[0] : null };
-  });
+  const take = (pred: (st: (typeof existing)[number]) => boolean) => {
+    const i = unmatched.findIndex(pred);
+    return i >= 0 ? unmatched.splice(i, 1)[0] : null;
+  };
+  const sameKind = rows.map((row) => take((st) => st.locationId === row.locationId && st.stopType === row.stopType));
+  const matches = rows.map((row, i) => ({ row, stop: sameKind[i] ?? take((st) => st.locationId === row.locationId) }));
 
-  const stranded = unmatched.filter((st) => st._count.orders > 0);
+  const stranded = unmatched.filter((st) => st._count.orders + st._count.pickupOrders > 0);
   if (stranded.length > 0) throw new StopStillHasOrdersError(stranded.map((st) => st.locationId));
 
   if (unmatched.length > 0) {

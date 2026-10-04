@@ -76,6 +76,8 @@ export interface CreateShipmentPayload {
   properShippingName?: string | null;
   requiredEquipmentType?: string | null;
   waypoints?: string[];
+  /** Further pickups after the origin, in order (#329). */
+  pickupWaypoints?: string[];
 }
 
 export interface CreateShipmentResult {
@@ -317,6 +319,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       orgId: command.orgId,
       shipmentId: shipment.id,
       originId: finalOriginId,
+      pickupWaypoints: body.pickupWaypoints,
       waypoints: body.waypoints,
       destinationId: finalDestinationId,
     });

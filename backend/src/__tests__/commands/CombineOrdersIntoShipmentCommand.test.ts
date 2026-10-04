@@ -22,6 +22,11 @@ function makeOrder(overrides: any = {}) {
   };
 }
 
+// The shipment already has its pickup at the orders' origin; any other stop lookup finds nothing.
+const findStop = (args: any) => Promise.resolve(
+  args?.where?.stopType?.in?.includes('pickup') && args.where.locationId === 'loc-origin' ? { id: 'stop-pickup', sequenceNumber: 1 } : null,
+);
+
 function makeTx() {
   return {
     order: { findMany: jest.fn(), update: jest.fn().mockResolvedValue({}) },
@@ -31,7 +36,7 @@ function makeTx() {
     },
     orderShipment: { create: jest.fn().mockResolvedValue({}) },
     shipmentStop: {
-      findFirst: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn(findStop),
       create: jest.fn().mockResolvedValue({ id: 'stop-1' }),
       aggregate: jest.fn().mockResolvedValue({ _max: { sequenceNumber: null } }),
       findMany: jest.fn().mockResolvedValue([]),

@@ -24,7 +24,9 @@ export interface RouteForm {
   useCustomRoute: boolean;
   originId: string;
   destinationId: string;
-  /** Intermediate stops, in order. With a lane: the lane's stops plus any extra drops. */
+  /** Further pickups after the origin, in order (#329). Only on a custom route. */
+  pickupWaypoints: string[];
+  /** Intermediate drops, in order. With a lane: the lane's stops plus any extra drops. */
   waypoints: string[];
   /** The selected lane's endpoints, when not on a custom route. */
   laneOriginId?: string | null;
@@ -40,11 +42,26 @@ export function orderDrops(orders: OrderForShipment[]): string[] {
   return [...new Set(orders.map((o) => o.destinationId).filter((d): d is string => Boolean(d)))];
 }
 
-/** Every stop the form's route visits, origin first. */
-export function routeStops(form: RouteForm): string[] {
+/** The orders' pickup locations, in the order the orders were added, without repeats. */
+export function orderPickups(orders: OrderForShipment[]): string[] {
+  return [...new Set(orders.map((o) => o.originId).filter((d): d is string => Boolean(d)))];
+}
+
+/** The stops the form's route collects at, origin first. */
+export function pickupStops(form: RouteForm): string[] {
   const origin = form.useCustomRoute ? form.originId : form.laneOriginId ?? '';
+  return [origin, ...(form.useCustomRoute ? form.pickupWaypoints : [])].filter(Boolean);
+}
+
+/** The stops the form's route drops at, destination last. */
+export function dropStops(form: RouteForm): string[] {
   const destination = form.useCustomRoute ? form.destinationId : form.laneDestinationId ?? '';
-  return [origin, ...form.waypoints, destination].filter(Boolean);
+  return [...form.waypoints, destination].filter(Boolean);
+}
+
+/** Every stop the form's route visits: the pickups, then the drops. */
+export function routeStops(form: RouteForm): string[] {
+  return [...pickupStops(form), ...dropStops(form)];
 }
 
 const day = (iso?: string | null) => (iso ? iso.slice(0, 10) : '');
@@ -53,13 +70,18 @@ const day = (iso?: string | null) => (iso ? iso.slice(0, 10) : '');
 export function applyOrders(form: RouteForm, orders: OrderForShipment[]): RouteForm {
   if (orders.length === 0) return form;
   const first = orders[0];
-  const next: RouteForm = { ...form, waypoints: [...form.waypoints] };
+  const next: RouteForm = { ...form, waypoints: [...form.waypoints], pickupWaypoints: [...form.pickupWaypoints] };
 
   next.customerId ||= first.customerId;
   next.mode ||= first.serviceLevel;
-  if (next.useCustomRoute) next.originId ||= first.originId ?? '';
+  if (next.useCustomRoute) {
+    next.originId ||= first.originId ?? '';
+    // Each further origin becomes a pickup after the first (#329).
+    const collected = new Set(pickupStops(next));
+    next.pickupWaypoints.push(...orderPickups(orders).filter((p) => !collected.has(p)));
+  }
 
-  const covered = new Set(routeStops(next));
+  const covered = new Set(dropStops(next));
   const newDrops = orderDrops(orders).filter((d) => !covered.has(d));
   if (next.useCustomRoute && !next.destinationId && newDrops.length > 0) {
     next.destinationId = newDrops[newDrops.length - 1];
@@ -92,14 +114,13 @@ export function orderConflicts(form: RouteForm, orders: OrderForShipment[]): str
   else if (form.mode && !levels.has(form.mode)) problems.push(`The orders are ${[...levels][0]}, but the shipment's mode is ${form.mode}.`);
   if (levels.has('FTL') && orders.length > 1) problems.push('An FTL shipment carries one order.');
 
-  const origins = new Set(orders.map((o) => o.originId).filter(Boolean));
-  const stops = routeStops(form);
-  if (origins.size > 1) problems.push('The orders are picked up from different origins.');
-  else if (stops.length > 0 && origins.size === 1 && !origins.has(stops[0])) problems.push("The route doesn't start at the orders' origin.");
-
-  for (const o of orders) {
-    if (o.destinationId && stops.length > 0 && !stops.slice(1).includes(o.destinationId)) {
-      problems.push(`${o.orderNumber}'s drop isn't a stop on this route.`);
+  // Orders from different origins are fine: each origin is a pickup on the route (#329).
+  const pickups = pickupStops(form);
+  const drops = dropStops(form);
+  if (pickups.length + drops.length > 0) {
+    for (const o of orders) {
+      if (o.originId && !pickups.includes(o.originId)) problems.push(`${o.orderNumber}'s pickup isn't a stop on this route.`);
+      if (o.destinationId && !drops.includes(o.destinationId)) problems.push(`${o.orderNumber}'s drop isn't a stop on this route.`);
     }
   }
   return problems;
@@ -111,7 +132,6 @@ export function canJoin(candidate: OrderForShipment, orders: OrderForShipment[])
   if (orders.length === 0) return true;
   const first = orders[0];
   return candidate.customerId === first.customerId
-    && candidate.originId === first.originId
     && candidate.serviceLevel === first.serviceLevel
     && candidate.serviceLevel !== 'FTL';
 }
@@ -119,14 +139,14 @@ export function canJoin(candidate: OrderForShipment, orders: OrderForShipment[])
 /**
  * Why the selected orders can't be shipped together, or null when they can. "Ship together" on the
  * orders list stays disabled until this is null, so the create page only opens for a valid set.
+ * Different origins are fine: each becomes a pickup (#329).
  */
 export function shipTogetherProblem(
-  orders: Array<{ status?: string | null; serviceLevel?: string | null; customerId?: string | null; originId?: string | null }>,
+  orders: Array<{ status?: string | null; serviceLevel?: string | null; customerId?: string | null }>,
 ): string | null {
   if (orders.length < 2) return 'Select two or more orders to ship together.';
   if (orders.some((o) => o.status?.toLowerCase() !== 'verified')) return 'Only available orders can be shipped.';
   if (orders.some((o) => o.serviceLevel === 'FTL')) return 'FTL orders ship on their own shipment.';
   if (new Set(orders.map((o) => o.customerId)).size > 1) return 'The orders belong to different customers.';
-  if (new Set(orders.map((o) => o.originId)).size > 1) return 'The orders are picked up from different origins.';
   return null;
 }
