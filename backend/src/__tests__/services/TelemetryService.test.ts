@@ -46,7 +46,7 @@ describe('TelemetryService', () => {
   const window = { limit: 10 };
 
   it('returns null when the shipment is not in the org', async () => {
-    const repo = { listForShipment: jest.fn().mockResolvedValue(null), listForOrder: jest.fn(), listForDevice: jest.fn() };
+    const repo = { listForShipment: jest.fn().mockResolvedValue(null), listForOrder: jest.fn(), listForDevice: jest.fn(), createForDevice: jest.fn() };
     const service = new TelemetryService(repo);
 
     expect(await service.forShipment('org-1', 'ship-foreign', window)).toBeNull();
@@ -55,7 +55,7 @@ describe('TelemetryService', () => {
 
   it('returns shipment readings with a summary', async () => {
     const rows = [reading({ temperature: 2 })];
-    const repo = { listForShipment: jest.fn().mockResolvedValue(rows), listForOrder: jest.fn(), listForDevice: jest.fn() };
+    const repo = { listForShipment: jest.fn().mockResolvedValue(rows), listForOrder: jest.fn(), listForDevice: jest.fn(), createForDevice: jest.fn() };
     const service = new TelemetryService(repo);
 
     const result = await service.forShipment('org-1', 'ship-1', window);
@@ -65,7 +65,7 @@ describe('TelemetryService', () => {
   });
 
   it('returns null when the order is not in the org', async () => {
-    const repo = { listForShipment: jest.fn(), listForOrder: jest.fn().mockResolvedValue(null), listForDevice: jest.fn() };
+    const repo = { listForShipment: jest.fn(), listForOrder: jest.fn().mockResolvedValue(null), listForDevice: jest.fn(), createForDevice: jest.fn() };
     const service = new TelemetryService(repo);
 
     expect(await service.forOrder('org-1', 'order-foreign', window)).toBeNull();

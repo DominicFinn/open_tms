@@ -55,7 +55,7 @@ export class RecordGeofenceArrivalCommandHandler extends BaseCommandHandler<Reco
         type: EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
         entityType: 'shipment',
         entityId: shipmentId,
-        payload: { stopId, shipmentId },
+        payload: { stopId, shipmentId, eventTime },
       }));
     }
 

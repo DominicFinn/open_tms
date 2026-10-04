@@ -18,7 +18,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { RECORD_GEOFENCE_ARRIVAL } from '../commands/tracking/RecordGeofenceArrivalCommand.js';
 import { RECORD_GEOFENCE_DEPARTURE } from '../commands/tracking/RecordGeofenceDepartureCommand.js';
 import { RECORD_JOURNEY_CHECKPOINT } from '../commands/tracking/RecordJourneyCheckpointCommand.js';
-import { locateOnRoute, checkpointIndexForFraction } from './routing/RouteProgressService.js';
+import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints } from './routing/RouteProgressService.js';
 
 export interface DeviceEventContext {
   orgId: string;
@@ -26,6 +26,8 @@ export interface DeviceEventContext {
   deviceId?: string;
   lat?: number;
   lng?: number;
+  /** Device timestamp (ISO) of the ping. Stamps arrivals, departures and checkpoints. */
+  eventTime?: string;
   rawPayload: any;
 }
 
@@ -244,7 +246,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     // Extract available device data from payload
     const wifiNetworks = extractWifiNetworks(ctx.rawPayload);
     const bleBeacons = extractBleBeacons(ctx.rawPayload);
-    const eventTime = new Date().toISOString();
+    const eventTime = ctx.eventTime ?? new Date().toISOString();
     let arrivedThisPing = false;
 
     // Evaluate each location's criteria
@@ -277,7 +279,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
               // ShipmentCompletionHandler completes the *shipment* on the same
               // event; without this, the order's own status never follows it.
               await this.deliveryService.updateOrdersForStop(
-                shipment.orgId, entry.stopId, entry.isDestination ? 'completed' : 'arrived', method,
+                shipment.orgId, entry.stopId, entry.isDestination ? 'completed' : 'arrived', method, new Date(eventTime),
               );
             }
           }
@@ -296,7 +298,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
             shipment.orgId, ctx.shipmentId, entry.stopId, locationId, ctx.lat, ctx.lng, eventTime,
           );
           if (departed) {
-            await this.deliveryService.updateOrdersForStop(shipment.orgId, entry.stopId, 'completed', 'geofence');
+            await this.deliveryService.updateOrdersForStop(shipment.orgId, entry.stopId, 'completed', 'geofence', new Date(eventTime));
           }
         }
       }
@@ -375,6 +377,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
         checkpointIndex,
         distanceAlongRouteMeters: progress.distanceAlongRouteMeters,
         fractionComplete: progress.fraction,
+        passed: passedCheckpoints(routePolyline, checkpointIndex),
       },
       metadata: { correlationId: randomUUID(), source: 'geofence_evaluation' },
     });

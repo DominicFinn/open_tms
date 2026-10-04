@@ -758,6 +758,11 @@ export interface JourneyLocationEventPayload {
   checkpointIndex?: number;
   /** Only set on tracking.journey_checkpoint */
   totalCheckpoints?: number;
+  /**
+   * Only set on tracking.journey_checkpoint: true when the checkpoint was passed between two pings
+   * and filled in, so its position is on the planned route and its time is interpolated.
+   */
+  inferred?: boolean;
 }
 
 export interface CargoMisdropPayload {

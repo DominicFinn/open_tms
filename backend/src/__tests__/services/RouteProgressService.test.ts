@@ -1,4 +1,4 @@
-import { locateOnRoute, checkpointIndexForFraction } from '../../services/routing/RouteProgressService';
+import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints } from '../../services/routing/RouteProgressService';
 import { encodePolyline } from '../../services/routing/GoogleMapsDirectionsService';
 
 describe('RouteProgressService', () => {
@@ -53,4 +53,20 @@ describe('RouteProgressService', () => {
       expect(checkpointIndexForFraction(0.5)).toBe(5);
     });
   });
+
+  describe('passedCheckpoints', () => {
+    it('places checkpoints 1..n-1 at equal fractions along the planned route', () => {
+      const passed = passedCheckpoints(encodedRoute, 6);
+      expect(passed.map((p) => p.checkpointIndex)).toEqual([1, 2, 3, 4, 5]);
+      expect(passed[4].fractionComplete).toBe(0.5);
+      // The route runs due north from 40.0 to 41.0, so 50% sits at ~40.5.
+      expect(passed[4].lat).toBeCloseTo(40.5, 2);
+      expect(passed[4].lng).toBeCloseTo(-74.0, 5);
+    });
+
+    it('returns nothing when no checkpoint precedes the reached one', () => {
+      expect(passedCheckpoints(encodedRoute, 1)).toEqual([]);
+    });
+  });
 });
+

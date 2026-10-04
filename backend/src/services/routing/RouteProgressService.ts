@@ -65,3 +65,55 @@ export function locateOnRoute(position: LatLng, encodedPolyline: string): RouteP
 export function checkpointIndexForFraction(fraction: number): number {
   return Math.min(JOURNEY_CHECKPOINT_SEGMENTS - 1, Math.max(1, Math.floor(fraction * JOURNEY_CHECKPOINT_SEGMENTS)));
 }
+
+/** A checkpoint the vehicle passed between two pings, placed on the planned route. */
+export interface PassedCheckpoint {
+  checkpointIndex: number;
+  lat: number;
+  lng: number;
+  distanceAlongRouteMeters: number;
+  fractionComplete: number;
+}
+
+/**
+ * Planned-route positions of checkpoints 1..(upToIndex - 1). Used to fill in the checkpoints a
+ * shipment passed between sparse pings: the ping proves it got past them, the route says where.
+ */
+export function passedCheckpoints(encodedPolyline: string, upToIndex: number): PassedCheckpoint[] {
+  const routePoints = decodePolyline(encodedPolyline);
+  if (routePoints.length < 2) return [];
+
+  const segmentLengths = routePoints.slice(1).map((p, i) => haversineDistance(routePoints[i], p));
+  const totalRouteMeters = segmentLengths.reduce((sum, len) => sum + len, 0);
+  if (totalRouteMeters === 0) return [];
+
+  const result: PassedCheckpoint[] = [];
+  for (let index = 1; index < upToIndex; index++) {
+    const fractionComplete = index / JOURNEY_CHECKPOINT_SEGMENTS;
+    const target = totalRouteMeters * fractionComplete;
+    const point = pointAtDistance(routePoints, segmentLengths, target);
+    result.push({
+      checkpointIndex: index,
+      lat: point.lat,
+      lng: point.lng,
+      distanceAlongRouteMeters: Math.round(target),
+      fractionComplete,
+    });
+  }
+  return result;
+}
+
+function pointAtDistance(routePoints: LatLng[], segmentLengths: number[], target: number): LatLng {
+  let cumulative = 0;
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const len = segmentLengths[i];
+    if (cumulative + len >= target && len > 0) {
+      const t = (target - cumulative) / len;
+      const a = routePoints[i];
+      const b = routePoints[i + 1];
+      return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
+    }
+    cumulative += len;
+  }
+  return routePoints[routePoints.length - 1];
+}

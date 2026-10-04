@@ -53,6 +53,7 @@ and priorities). Newest entries append at the bottom of their phase; new phases 
 - **Carrier Tracking API Integrations** - ICarrierTrackingProvider interface, FedEx/UPS/DHL implementations, polling worker, webhook receiver, admin setup wizard
 - **Route Deviation Alerts** - Planned route per lane via Google Maps, corridor-based deviation detection, real-time alerts
 - **Exceptions** - Exception status with type classification, resolution workflow, event-driven notifications, ETA-based auto-detection
+- **Normalised Tracking Pings (#323)** - Every IoT payload (System Loco or the generic webhook) is parsed into one internal ping: device timestamp, position, a readings array (temperature, battery, light, pressure) and a readings count. Generic pings now store their telemetry against the registered device (idempotent on retry) and drive arrivals, origin departure and journey checkpoints, which previously only System Loco did. Arrival, departure, checkpoint and order-delivery times use the device's timestamp instead of processing time. Checkpoints skipped between sparse pings are filled in on the planned route with interpolated times.
 
 ### **Phase 6: Cold Chain** DONE (partial)
 - **Excursion Management** - IoT sensor pipeline, disposition lifecycle (monitoring to released/quarantined), auto-triage. Effective temperature/alert range derives from order temperatureControl defaults (no standalone profile entity)
