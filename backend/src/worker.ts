@@ -30,6 +30,7 @@ import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEval
 import { RecordGeofenceArrivalCommandHandler } from './commands/tracking/RecordGeofenceArrivalCommand.js';
 import { RecordGeofenceDepartureCommandHandler } from './commands/tracking/RecordGeofenceDepartureCommand.js';
 import { RecordJourneyCheckpointCommandHandler } from './commands/tracking/RecordJourneyCheckpointCommand.js';
+import { RecordStopOrdersDeliveryCommandHandler } from './commands/orders/RecordStopOrdersDeliveryCommand.js';
 import { IEmailService } from './services/IEmailService.js';
 import { SmtpEmailService } from './services/SmtpEmailService.js';
 import { ConsoleEmailService } from './services/ConsoleEmailService.js';
@@ -230,11 +231,12 @@ async function startWorker() {
     if (WORKER_MODE === 'integrations') {
       console.warn('[Worker] integrations-only mode: tracking events are recorded but only fan out to handlers registered in this process');
     }
-    const deliveryService = new OrderDeliveryService(prisma);
     const trackingCommandBus = new CommandBus();
     trackingCommandBus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
     trackingCommandBus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
     trackingCommandBus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
+    trackingCommandBus.register(new RecordStopOrdersDeliveryCommandHandler(prisma, eventBus));
+    const deliveryService = new OrderDeliveryService(prisma, trackingCommandBus);
     const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(prisma, deliveryService, trackingCommandBus);
     await queue.subscribe(
       QUEUES.INBOUND_WEBHOOK,

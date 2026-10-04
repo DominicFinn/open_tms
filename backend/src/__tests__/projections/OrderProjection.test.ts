@@ -169,6 +169,16 @@ describe('OrderProjection', () => {
     });
   });
 
+  describe('onOrderDelivered delivery time (#325)', () => {
+    it('uses the deliveredAt carried by the event, not the projection time', async () => {
+      await projection.handle(createTestEvent(EVENT_TYPES.ORDER_DELIVERED, 'order', 'order-1', { deliveredAt: '2026-10-01T15:30:00.000Z' }));
+
+      expect(mockPrisma.orderReadModel.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ deliveredAt: new Date('2026-10-01T15:30:00.000Z') }) })
+      );
+    });
+  });
+
   describe('onOrderArchived', () => {
     it('flips status to archived in place rather than deleting the read model row', async () => {
       const event = createTestEvent(

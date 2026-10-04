@@ -1,5 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { ICargoReconciliationService } from './CargoReconciliationService.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import {
+  CHANGE_ORDER_DELIVERY_STATUS, ChangeOrderDeliveryStatusPayload,
+  RESOLVE_ORDER_DELIVERY_EXCEPTION, ResolveOrderDeliveryExceptionPayload,
+} from '../commands/orders/ChangeOrderDeliveryStatusCommand.js';
+import { RECORD_STOP_ORDERS_DELIVERY, RecordStopOrdersDeliveryPayload } from '../commands/orders/RecordStopOrdersDeliveryCommand.js';
 
 export interface DeliveryStatusUpdate {
   orgId: string;
@@ -30,10 +37,30 @@ export interface IOrderDeliveryService {
   checkGeofenceAndUpdateOrders(orgId: string, shipmentId: string, currentLat: number, currentLng: number): Promise<number>;
 }
 
+const ORDER_DETAIL_INCLUDE = {
+  customer: true,
+  origin: true,
+  destination: true,
+  deliveryStop: { include: { location: true, shipment: true } },
+} as const;
+
+/** A failed delivery command, carrying the handler's message (routes surface it as-is). */
+export class OrderDeliveryCommandError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OrderDeliveryCommandError';
+  }
+}
+
+/**
+ * Order delivery status. Every write goes through a command so it runs in a transaction and emits
+ * order.* events after commit (#325); this service keeps the call shape the routes and the
+ * tracking pipeline already use, and owns the cargo-reconciliation side effect.
+ */
 export class OrderDeliveryService implements IOrderDeliveryService {
   private cargoReconciliation: ICargoReconciliationService | null = null;
 
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaClient, private commandBus: ICommandBus) {}
 
   /**
    * Set the cargo reconciliation service (injected after construction to avoid circular deps)
@@ -42,90 +69,17 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     this.cargoReconciliation = service;
   }
 
-  /**
-   * Update order delivery status
-   */
   async updateOrderDeliveryStatus(update: DeliveryStatusUpdate): Promise<any> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: update.orderId, orgId: update.orgId },
-      include: {
-        deliveryStop: {
-          include: {
-            location: true,
-            shipment: true
-          }
-        }
-      }
-    });
-
-    if (!order) {
-      throw new Error('Order not found');
-    }
-
-    // Build update data
-    const updateData: any = {
+    await this.dispatch<ChangeOrderDeliveryStatusPayload>(update.orgId, CHANGE_ORDER_DELIVERY_STATUS, {
+      orderId: update.orderId,
       deliveryStatus: update.deliveryStatus,
       deliveryMethod: update.deliveryMethod,
       deliveryConfirmedBy: update.deliveryConfirmedBy,
       deliveryNotes: update.deliveryNotes,
-      updatedAt: new Date()
-    };
-
-    // If marking as delivered, set timestamp
-    if (update.deliveryStatus === 'delivered') {
-      updateData.deliveredAt = new Date();
-    }
-
-    // If exception, set exception fields
-    if (update.deliveryStatus === 'exception') {
-      updateData.exceptionType = update.exceptionType;
-      updateData.exceptionNotes = update.exceptionNotes;
-    }
-
-    // Update order
-    const updatedOrder = await this.prisma.order.update({
-      where: { id: update.orderId, orgId: update.orgId },
-      data: updateData,
-      include: {
-        customer: true,
-        origin: true,
-        destination: true,
-        deliveryStop: {
-          include: {
-            location: true,
-            shipment: true
-          }
-        }
-      }
+      exceptionType: update.exceptionType,
+      exceptionNotes: update.exceptionNotes,
     });
-
-    // Write audit log for delivery status change
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: order.orgId,
-        entityType: 'order',
-        entityId: update.orderId,
-        orderId: update.orderId,
-        action: 'delivery_status_changed',
-        description: `Delivery status changed from ${order.deliveryStatus} to ${update.deliveryStatus}${update.deliveryMethod ? ` via ${update.deliveryMethod}` : ''}`,
-        changes: {
-          before: { deliveryStatus: order.deliveryStatus },
-          after: {
-            deliveryStatus: update.deliveryStatus,
-            ...(update.deliveryMethod && { deliveryMethod: update.deliveryMethod }),
-            ...(update.exceptionType && { exceptionType: update.exceptionType }),
-          }
-        },
-        // deliveryConfirmedBy is free text ("Warehouse Receiver - Portland",
-        // a name, a system identifier) — AuditLog.userId is a real FK to
-        // User and only ever holds one of those values by coincidence, so
-        // this always 500'd on a real confirmer name (#250). userName is
-        // the unconstrained denormalized-display column this belongs in.
-        userName: update.deliveryConfirmedBy || undefined,
-      }
-    });
-
-    return updatedOrder;
+    return this.loadOrder(update.orgId, update.orderId);
   }
 
   /**
@@ -166,59 +120,25 @@ export class OrderDeliveryService implements IOrderDeliveryService {
   /**
    * Resolve delivery exception and move order back to in_transit
    */
-  async resolveDeliveryException(
-    orgId: string,
-    orderId: string,
-    resolvedBy?: string,
-    notes?: string
-  ): Promise<any> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId, orgId }
+  async resolveDeliveryException(orgId: string, orderId: string, resolvedBy?: string, notes?: string): Promise<any> {
+    await this.dispatch<ResolveOrderDeliveryExceptionPayload>(orgId, RESOLVE_ORDER_DELIVERY_EXCEPTION, { orderId, resolvedBy, notes });
+    return this.loadOrder(orgId, orderId);
+  }
+
+  private loadOrder(orgId: string, orderId: string) {
+    return this.prisma.order.findFirst({ where: { id: orderId, orgId }, include: ORDER_DETAIL_INCLUDE });
+  }
+
+  private async dispatch<TPayload, TResult = unknown>(orgId: string, type: string, payload: TPayload): Promise<TResult> {
+    const result = await this.commandBus.dispatch<TPayload, TResult>({
+      type,
+      orgId,
+      actorId: null,
+      payload,
+      metadata: { correlationId: randomUUID(), source: 'order_delivery' },
     });
-
-    if (!order) {
-      throw new Error('Order not found');
-    }
-
-    if (order.deliveryStatus !== 'exception') {
-      throw new Error('Order is not in exception status');
-    }
-
-    const updated = await this.prisma.order.update({
-      where: { id: orderId, orgId },
-      data: {
-        deliveryStatus: 'in_transit',
-        exceptionResolvedAt: new Date(),
-        deliveryNotes: notes ? `${order.deliveryNotes || ''}\n\nException resolved: ${notes}` : order.deliveryNotes,
-        updatedAt: new Date()
-      },
-      include: {
-        customer: true,
-        origin: true,
-        destination: true,
-        deliveryStop: true
-      }
-    });
-
-    await this.prisma.auditLog.create({
-      data: {
-        orgId: order.orgId,
-        entityType: 'order',
-        entityId: orderId,
-        orderId,
-        action: 'exception_resolved',
-        description: `Exception resolved, status changed from exception to in_transit${notes ? `: ${notes}` : ''}`,
-        changes: {
-          before: { deliveryStatus: 'exception', exceptionType: order.exceptionType },
-          after: { deliveryStatus: 'in_transit' }
-        },
-        // Same fix as updateOrderDeliveryStatus above — resolvedBy is free
-        // text, not a User id.
-        userName: resolvedBy || undefined,
-      }
-    });
-
-    return updated;
+    if (!result.success) throw new OrderDeliveryCommandError(result.error || 'Order delivery update failed');
+    return result.data as TResult;
   }
 
   /**
@@ -232,127 +152,10 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     method: string = 'auto',
     occurredAt: Date = new Date(),
   ): Promise<number> {
-    const stop = await this.prisma.shipmentStop.findUnique({
-      where: { id: shipmentStopId, shipment: { orgId } },
-      include: {
-        orders: {
-          // Prisma's notIn doesn't reliably include NULL rows (the common
-          // case now — deliveryStatus is null until an order actually
-          // starts moving), so enumerate the "still active" states
-          // explicitly rather than exclude 'delivered'.
-          where: {
-            OR: [
-              { deliveryStatus: null },
-              { deliveryStatus: 'in_transit' },
-              { deliveryStatus: 'exception' },
-            ],
-          }
-        },
-        location: true,
-        shipment: { select: { orgId: true } },
-      }
-    });
-
-    if (!stop) {
-      throw new Error('Shipment stop not found');
-    }
-
-    // Wrap stop status + order updates in a transaction for atomicity
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Update stop status
-      await tx.shipmentStop.update({
-        where: { id: shipmentStopId, shipment: { orgId } },
-        data: {
-          status,
-          actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? (stop.actualArrival ?? occurredAt) : stop.actualArrival,
-          actualDeparture: status === 'completed' ? occurredAt : stop.actualDeparture,
-          updatedAt: new Date()
-        }
-      });
-
-      // If stop is completed, mark all orders at this stop as delivered
-      if (status === 'completed') {
-        const affectedOrders = stop.orders;
-        const updateResult = await tx.order.updateMany({
-          where: {
-            orgId,
-            deliveryStopId: shipmentStopId,
-            OR: [
-              { deliveryStatus: null },
-              { deliveryStatus: 'in_transit' },
-              { deliveryStatus: 'exception' },
-            ],
-          },
-          data: {
-            deliveryStatus: 'delivered',
-            deliveredAt: occurredAt,
-            deliveryMethod: method,
-            deliveryConfirmedBy: 'system:shipment_stop_completed',
-            updatedAt: new Date()
-          }
-        });
-
-        // Audit log for each affected order
-        for (const o of affectedOrders) {
-          await tx.auditLog.create({
-            data: {
-              orgId: o.orgId,
-              entityType: 'order',
-              entityId: o.id,
-              orderId: o.id,
-              action: 'delivery_status_changed',
-              description: `Order delivered at stop (${stop.location?.name || 'unknown'}) via ${method}`,
-              changes: {
-                before: { deliveryStatus: o.deliveryStatus },
-                after: { deliveryStatus: 'delivered' }
-              },
-            }
-          });
-        }
-
-        return updateResult.count;
-      }
-
-      // If stop is in_progress or arrived, mark orders as in_transit
-      if (status === 'arrived' || status === 'in_progress') {
-        const affectedOrders = stop.orders.filter(
-          (o: any) => o.deliveryStatus === null
-        );
-        const updateResult = await tx.order.updateMany({
-          where: {
-            orgId,
-            deliveryStopId: shipmentStopId,
-            deliveryStatus: null,
-          },
-          data: {
-            deliveryStatus: 'in_transit',
-            deliveryMethod: method,
-            updatedAt: new Date()
-          }
-        });
-
-        for (const o of affectedOrders) {
-          await tx.auditLog.create({
-            data: {
-              orgId: o.orgId,
-              entityType: 'order',
-              entityId: o.id,
-              orderId: o.id,
-              action: 'delivery_status_changed',
-              description: `Order in transit - stop ${status} (${stop.location?.name || 'unknown'}) via ${method}`,
-              changes: {
-                before: { deliveryStatus: o.deliveryStatus },
-                after: { deliveryStatus: 'in_transit' }
-              },
-            }
-          });
-        }
-
-        return updateResult.count;
-      }
-
-      return 0;
-    });
+    const result = await this.dispatch<RecordStopOrdersDeliveryPayload, { ordersUpdated: number; shipmentId: string }>(
+      orgId, RECORD_STOP_ORDERS_DELIVERY, { stopId: shipmentStopId, status, method, occurredAt: occurredAt.toISOString() },
+    );
+    const stop = { shipmentId: result.shipmentId };
 
     // Cargo reconciliation runs outside the transaction (non-blocking side effect)
     if (status === 'completed' && this.cargoReconciliation) {
@@ -374,7 +177,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       }
     }
 
-    return result;
+    return result.ordersUpdated;
   }
 
   /**

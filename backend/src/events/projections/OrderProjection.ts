@@ -221,11 +221,13 @@ export class OrderProjection implements IEventHandler {
   }
 
   private async onOrderDelivered(event: DomainEvent): Promise<void> {
+    // When it was delivered (device time for tracking, #325), not when the projection ran.
+    const { deliveredAt } = event.payload as { deliveredAt?: string };
     await this.prisma.orderReadModel.update({
       where: { id: event.entityId, orgId: event.orgId },
       data: {
         deliveryStatus: 'delivered',
-        deliveredAt: new Date(),
+        deliveredAt: deliveredAt ? new Date(deliveredAt) : new Date(event.timestamp),
         exceptionType: null,
         updatedAt: new Date(),
       },
