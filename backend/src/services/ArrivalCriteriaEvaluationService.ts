@@ -18,7 +18,8 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { RECORD_GEOFENCE_ARRIVAL } from '../commands/tracking/RecordGeofenceArrivalCommand.js';
 import { RECORD_GEOFENCE_DEPARTURE } from '../commands/tracking/RecordGeofenceDepartureCommand.js';
 import { RECORD_JOURNEY_CHECKPOINT } from '../commands/tracking/RecordJourneyCheckpointCommand.js';
-import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints } from './routing/RouteProgressService.js';
+import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints, fractionOfSpan } from './routing/RouteProgressService.js';
+import { JourneyStop, actionableStops, findDestinationStop, findOriginStop } from './tracking/journeyStops.js';
 
 export interface DeviceEventContext {
   orgId: string;
@@ -162,180 +163,161 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
   ) {}
 
   async evaluateAndUpdateOrders(ctx: DeviceEventContext): Promise<ArrivalCriteriaMatch[]> {
-    const matches: ArrivalCriteriaMatch[] = [];
+    const shipment = await this.loadShipment(ctx);
+    if (!shipment) return [];
 
-    // Get all stops for this shipment that haven't been completed
-    const stops = await this.prisma.shipmentStop.findMany({
-      where: {
-        shipmentId: ctx.shipmentId,
-        shipment: { orgId: ctx.orgId },
-        status: { in: ['pending', 'arrived'] },
-      },
-      include: {
-        location: {
-          include: {
-            arrivalCriteria: {
-              where: { active: true },
-              orderBy: { priority: 'desc' },
-            },
-          },
-        },
-      },
-    });
-
-    // Also check origin/destination directly (shipments without explicit stops),
-    // and load everything needed for departure/checkpoint detection below.
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: ctx.shipmentId, orgId: ctx.orgId },
-      select: {
-        orgId: true,
-        originId: true,
-        destinationId: true,
-        origin: {
-          include: {
-            arrivalCriteria: { where: { active: true }, orderBy: { priority: 'desc' } },
-          },
-        },
-        destination: {
-          include: {
-            arrivalCriteria: { where: { active: true }, orderBy: { priority: 'desc' } },
-          },
-        },
-        stops: { select: { id: true, locationId: true, status: true } },
-        lane: { select: { route: { select: { encodedPolyline: true } } } },
-      },
-    });
-
-    if (!shipment) return matches;
-
-    // Build set of locations to evaluate (from stops + origin/destination)
-    const locationCriteriaMap = new Map<string, {
-      criteria: any[];
-      stopId?: string;
-      locationLat?: number;
-      locationLng?: number;
-      isOrigin: boolean;
-      isDestination: boolean;
-    }>();
-
-    for (const stop of stops) {
-      if (stop.location.arrivalCriteria.length > 0) {
-        locationCriteriaMap.set(stop.locationId, {
-          criteria: stop.location.arrivalCriteria,
-          stopId: stop.id,
-          locationLat: stop.location.lat ?? undefined,
-          locationLng: stop.location.lng ?? undefined,
-          isOrigin: stop.locationId === shipment.originId,
-          isDestination: stop.locationId === shipment.destinationId,
-        });
-      }
-    }
-
-    // Add destination criteria if no stop exists for it
-    const destinationId = shipment.destinationId ?? null;
-    if (destinationId && shipment.destination?.arrivalCriteria?.length && !locationCriteriaMap.has(destinationId)) {
-      locationCriteriaMap.set(destinationId, {
-        criteria: shipment.destination.arrivalCriteria,
-        locationLat: shipment.destination.lat ?? undefined,
-        locationLng: shipment.destination.lng ?? undefined,
-        isOrigin: false,
-        isDestination: true,
-      });
-    }
-
-    // Extract available device data from payload
+    const originStop = findOriginStop(shipment.stops, shipment.originId);
+    const eventTime = ctx.eventTime ?? new Date().toISOString();
     const wifiNetworks = extractWifiNetworks(ctx.rawPayload);
     const bleBeacons = extractBleBeacons(ctx.rawPayload);
-    const eventTime = ctx.eventTime ?? new Date().toISOString();
+    const matches: ArrivalCriteriaMatch[] = [];
     let arrivedThisPing = false;
 
-    // Evaluate each location's criteria
-    for (const [locationId, entry] of locationCriteriaMap) {
-      let matchedThisLocation = false;
+    for (const stop of actionableStops(shipment.stops)) {
+      const criteria = stop.location.arrivalCriteria;
+      if (criteria.length === 0) continue;
+      const entry = { locationLat: stop.location.lat ?? undefined, locationLng: stop.location.lng ?? undefined };
+      const isOrigin = stop.id === originStop?.id;
+      const match = this.firstMatch(criteria, ctx, entry, wifiNetworks, bleBeacons);
 
-      for (const criteria of entry.criteria) {
-        const matched = this.evaluateSingleCriteria(criteria, ctx, entry, wifiNetworks, bleBeacons);
-        if (matched) {
-          matchedThisLocation = true;
-          matches.push({
-            criteriaId: criteria.id,
-            criteriaType: criteria.criteriaType,
-            locationId,
-            stopId: entry.stopId || '',
-            matchDetail: matched,
-          });
-
-          if (entry.stopId) {
-            const arrived = await this.recordArrival(
-              shipment.orgId, ctx.shipmentId, entry.stopId, locationId,
-              ctx.lat, ctx.lng, eventTime, entry.isDestination,
-            );
-            if (arrived) {
-              arrivedThisPing = true;
-              const method = criteria.criteriaType === 'geofence' ? 'geofence' : 'geofence_iot';
-              // Destination arrival is the only signal this pipeline has that a
-              // delivery happened — 'completed' is what makes updateOrdersForStop
-              // mark the orders at this stop delivered, not just in_transit.
-              // ShipmentCompletionHandler completes the *shipment* on the same
-              // event; without this, the order's own status never follows it.
-              await this.deliveryService.updateOrdersForStop(
-                shipment.orgId, entry.stopId, entry.isDestination ? 'completed' : 'arrived', method, new Date(eventTime),
-              );
-            }
-          }
-
-          // One criteria match per location is enough
-          break;
+      if (match) {
+        matches.push({ criteriaId: match.criteria.id, criteriaType: match.criteria.criteriaType, locationId: stop.locationId, stopId: stop.id, matchDetail: match.detail });
+        if (stop.status === 'pending') {
+          const method = match.criteria.criteriaType === 'geofence' ? 'geofence' : 'geofence_iot';
+          arrivedThisPing = await this.arriveAtStop(shipment.orgId, ctx, stop, isOrigin, originStop, eventTime, method) || arrivedThisPing;
         }
+      } else if (isOrigin && stop.status === 'arrived') {
+        await this.departOriginIfOutside(shipment.orgId, ctx, stop, criteria, eventTime);
       }
+    }
 
-      // Departure: only the origin stop, only where a geofence criteria is
-      // configured (wifi/ble presence has no "outside" notion), only with GPS.
-      if (!matchedThisLocation && entry.stopId && entry.isOrigin && ctx.lat != null && ctx.lng != null) {
-        const geofenceCriteria = entry.criteria.find((c: any) => c.criteriaType === 'geofence');
-        if (geofenceCriteria) {
-          const departed = await this.recordDeparture(
-            shipment.orgId, ctx.shipmentId, entry.stopId, locationId, ctx.lat, ctx.lng, eventTime,
-          );
-          if (departed) {
-            await this.deliveryService.updateOrdersForStop(shipment.orgId, entry.stopId, 'completed', 'geofence', new Date(eventTime));
-          }
-        }
-      }
+    // Shipments with no stop at the destination still report a match there, with no stop to move.
+    if (!shipment.stops.some((s) => s.locationId === shipment.destinationId)) {
+      const destinationMatch = this.matchDestinationWithoutStop(shipment, ctx, wifiNetworks, bleBeacons);
+      if (destinationMatch) matches.push(destinationMatch);
     }
 
     // In-transit checkpoint: only when this same ping didn't just record an
     // arrival (arrival always wins over a same-ping checkpoint).
     if (!arrivedThisPing && ctx.lat != null && ctx.lng != null) {
-      await this.recordCheckpointIfDue(shipment, ctx.shipmentId, ctx.lat, ctx.lng, eventTime);
+      await this.recordCheckpointIfDue(shipment, originStop, ctx, eventTime);
     }
 
     return matches;
   }
 
+  private async loadShipment(ctx: DeviceEventContext) {
+    return this.prisma.shipment.findUnique({
+      where: { id: ctx.shipmentId, orgId: ctx.orgId },
+      select: {
+        orgId: true,
+        originId: true,
+        destinationId: true,
+        destination: {
+          include: { arrivalCriteria: { where: { active: true }, orderBy: { priority: 'desc' } } },
+        },
+        stops: {
+          orderBy: { sequenceNumber: 'asc' },
+          select: {
+            id: true, locationId: true, sequenceNumber: true, status: true, actualArrival: true, actualDeparture: true,
+            location: {
+              select: {
+                lat: true,
+                lng: true,
+                arrivalCriteria: { where: { active: true }, orderBy: { priority: 'desc' } },
+              },
+            },
+          },
+        },
+        lane: { select: { route: { select: { encodedPolyline: true } } } },
+      },
+    });
+  }
+
+  private firstMatch(
+    criteria: any[], ctx: DeviceEventContext, entry: { locationLat?: number; locationLng?: number },
+    wifiNetworks: Array<{ ssid?: string; bssid?: string }>,
+    bleBeacons: Array<{ uuid?: string; major?: number; minor?: number; rssi?: number }>,
+  ): { criteria: any; detail: string } | null {
+    for (const c of criteria) {
+      const detail = this.evaluateSingleCriteria(c, ctx, entry, wifiNetworks, bleBeacons);
+      if (detail) return { criteria: c, detail };
+    }
+    return null;
+  }
+
+  /**
+   * Arrival at a pending stop. The origin only arrives; any other stop completes on entry (#324),
+   * and reaching it proves the vehicle left the origin, so an origin departure no ping ever showed
+   * is recorded first, as inferred.
+   */
+  private async arriveAtStop(
+    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, isOrigin: boolean,
+    originStop: { id: string; locationId: string; status: string } | null, eventTime: string, method: string,
+  ): Promise<boolean> {
+    if (!isOrigin && originStop && originStop.status !== 'completed') {
+      await this.recordDeparture(orgId, ctx, originStop.id, originStop.locationId, eventTime, true);
+    }
+
+    const arrived = await this.recordArrival(orgId, ctx, stop.id, stop.locationId, eventTime, !isOrigin);
+    if (arrived) {
+      await this.deliveryService.updateOrdersForStop(orgId, stop.id, isOrigin ? 'arrived' : 'completed', method, new Date(eventTime));
+    }
+    return arrived;
+  }
+
+  /** Departure needs a geofence (WiFi/BLE presence has no "outside") and a GPS position. */
+  private async departOriginIfOutside(
+    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, criteria: any[], eventTime: string,
+  ): Promise<void> {
+    if (ctx.lat == null || ctx.lng == null) return;
+    if (!criteria.some((c: any) => c.criteriaType === 'geofence')) return;
+    const departed = await this.recordDeparture(orgId, ctx, stop.id, stop.locationId, eventTime, false);
+    if (departed) {
+      await this.deliveryService.updateOrdersForStop(orgId, stop.id, 'completed', 'geofence', new Date(eventTime));
+    }
+  }
+
+  private matchDestinationWithoutStop(
+    shipment: { destinationId: string | null; destination: { lat: number | null; lng: number | null; arrivalCriteria: any[] } | null },
+    ctx: DeviceEventContext,
+    wifiNetworks: Array<{ ssid?: string; bssid?: string }>,
+    bleBeacons: Array<{ uuid?: string; major?: number; minor?: number; rssi?: number }>,
+  ): ArrivalCriteriaMatch | null {
+    const destination = shipment.destination;
+    if (!shipment.destinationId || !destination?.arrivalCriteria.length) return null;
+    const entry = { locationLat: destination.lat ?? undefined, locationLng: destination.lng ?? undefined };
+    const match = this.firstMatch(destination.arrivalCriteria, ctx, entry, wifiNetworks, bleBeacons);
+    if (!match) return null;
+    return { criteriaId: match.criteria.id, criteriaType: match.criteria.criteriaType, locationId: shipment.destinationId, stopId: '', matchDetail: match.detail };
+  }
+
   private async recordArrival(
-    orgId: string, shipmentId: string, stopId: string, locationId: string,
-    lat: number | undefined, lng: number | undefined, eventTime: string, isDestination: boolean,
+    orgId: string, ctx: DeviceEventContext, stopId: string, locationId: string, eventTime: string, completesStop: boolean,
   ): Promise<boolean> {
     const result = await this.commandBus.dispatch<any, { arrived: boolean }>({
       type: RECORD_GEOFENCE_ARRIVAL,
       orgId,
       actorId: null,
-      payload: { shipmentId, stopId, locationId, lat, lng, eventTime, isDestination },
+      payload: {
+        shipmentId: ctx.shipmentId, stopId, locationId, lat: ctx.lat, lng: ctx.lng, eventTime, completesStop, deviceId: ctx.deviceId,
+      },
       metadata: { correlationId: randomUUID(), source: 'geofence_evaluation' },
     });
     return !!result.success && !!result.data?.arrived;
   }
 
   private async recordDeparture(
-    orgId: string, shipmentId: string, stopId: string, locationId: string,
-    lat: number, lng: number, eventTime: string,
+    orgId: string, ctx: DeviceEventContext, stopId: string, locationId: string, eventTime: string, inferred: boolean,
   ): Promise<boolean> {
     const result = await this.commandBus.dispatch<any, { departed: boolean }>({
       type: RECORD_GEOFENCE_DEPARTURE,
       orgId,
       actorId: null,
-      payload: { shipmentId, stopId, locationId, lat, lng, eventTime },
+      payload: {
+        shipmentId: ctx.shipmentId, stopId, locationId, eventTime, deviceId: ctx.deviceId,
+        ...(inferred ? { inferred: true } : { lat: ctx.lat, lng: ctx.lng }),
+      },
       metadata: { correlationId: randomUUID(), source: 'geofence_evaluation' },
     });
     return !!result.success && !!result.data?.departed;
@@ -344,40 +326,44 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
   private async recordCheckpointIfDue(
     shipment: {
       orgId: string;
-      originId: string | null;
       destinationId: string | null;
-      stops: { id: string; locationId: string; status: string }[];
+      stops: Array<JourneyStop & { location: { arrivalCriteria: any[] } }>;
       lane: { route: { encodedPolyline: string } | null } | null;
     },
-    shipmentId: string, lat: number, lng: number, eventTime: string,
+    originStop: (JourneyStop & { location: { arrivalCriteria: any[] } }) | null,
+    ctx: DeviceEventContext,
+    eventTime: string,
   ): Promise<void> {
     const routePolyline = shipment.lane?.route?.encodedPolyline;
-    if (!routePolyline || !shipment.originId || !shipment.destinationId) return;
-
-    const originStop = shipment.stops.find((s) => s.locationId === shipment.originId);
-    const destinationStop = shipment.stops.find((s) => s.locationId === shipment.destinationId);
-    if (!originStop || !destinationStop) return;
+    const destinationStop = findDestinationStop(shipment.stops, shipment.destinationId);
+    if (!routePolyline || !originStop || !destinationStop) return;
     if (originStop.status !== 'completed') return; // hasn't departed origin yet
     if (destinationStop.status === 'arrived' || destinationStop.status === 'completed') return; // already arrived
 
-    const progress = locateOnRoute({ lat, lng }, routePolyline);
+    const progress = locateOnRoute({ lat: ctx.lat!, lng: ctx.lng! }, routePolyline);
     if (!progress) return;
 
-    const checkpointIndex = checkpointIndexForFraction(progress.fraction);
+    const span = {
+      startOffsetMeters: geofenceRadius(originStop.location.arrivalCriteria),
+      endOffsetMeters: geofenceRadius(destinationStop.location.arrivalCriteria),
+    };
+    const fraction = fractionOfSpan(progress, span);
+    const checkpointIndex = checkpointIndexForFraction(fraction);
 
     await this.commandBus.dispatch({
       type: RECORD_JOURNEY_CHECKPOINT,
       orgId: shipment.orgId,
       actorId: null,
       payload: {
-        shipmentId,
+        shipmentId: ctx.shipmentId,
         stopId: destinationStop.id,
-        locationId: shipment.destinationId,
-        lat, lng, eventTime,
+        locationId: destinationStop.locationId,
+        lat: ctx.lat!, lng: ctx.lng!, eventTime,
         checkpointIndex,
         distanceAlongRouteMeters: progress.distanceAlongRouteMeters,
-        fractionComplete: progress.fraction,
-        passed: passedCheckpoints(routePolyline, checkpointIndex),
+        fractionComplete: fraction,
+        passed: passedCheckpoints(routePolyline, checkpointIndex, span),
+        deviceId: ctx.deviceId,
       },
       metadata: { correlationId: randomUUID(), source: 'geofence_evaluation' },
     });
@@ -495,4 +481,11 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     }
     return null;
   }
+}
+
+/** The largest active geofence radius among a location's criteria, or 0 when it has none. */
+function geofenceRadius(criteria: any[]): number {
+  return criteria
+    .filter((c) => c.criteriaType === 'geofence' && typeof c.radiusMeters === 'number')
+    .reduce((max, c) => Math.max(max, c.radiusMeters), 0);
 }

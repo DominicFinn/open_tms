@@ -1,4 +1,4 @@
-import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints } from '../../services/routing/RouteProgressService';
+import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints, fractionOfSpan } from '../../services/routing/RouteProgressService';
 import { encodePolyline } from '../../services/routing/GoogleMapsDirectionsService';
 
 describe('RouteProgressService', () => {
@@ -66,6 +66,26 @@ describe('RouteProgressService', () => {
 
     it('returns nothing when no checkpoint precedes the reached one', () => {
       expect(passedCheckpoints(encodedRoute, 1)).toEqual([]);
+    });
+  });
+
+  describe('excluding the origin and destination geofences (#307)', () => {
+    const progress = { distanceAlongRouteMeters: 10_000, totalRouteMeters: 100_000, fraction: 0.1 };
+
+    it('measures progress from the origin geofence edge to the destination geofence edge', () => {
+      expect(fractionOfSpan(progress, { startOffsetMeters: 10_000, endOffsetMeters: 10_000 })).toBe(0);
+      expect(fractionOfSpan({ ...progress, distanceAlongRouteMeters: 50_000 }, { startOffsetMeters: 10_000, endOffsetMeters: 10_000 })).toBe(0.5);
+    });
+
+    it('falls back to the whole route when the geofences would cover it', () => {
+      expect(fractionOfSpan(progress, { startOffsetMeters: 60_000, endOffsetMeters: 60_000 })).toBeCloseTo(0.1);
+    });
+
+    it('places filled-in checkpoints inside the span, not inside a geofence', () => {
+      const full = passedCheckpoints(encodedRoute, 2);
+      const trimmed = passedCheckpoints(encodedRoute, 2, { startOffsetMeters: 5_000, endOffsetMeters: 5_000 });
+      expect(trimmed[0].distanceAlongRouteMeters).toBeGreaterThan(full[0].distanceAlongRouteMeters);
+      expect(trimmed[0].fractionComplete).toBe(0.1);
     });
   });
 });

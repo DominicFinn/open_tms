@@ -4,10 +4,14 @@ import { RecordJourneyCheckpointCommandHandler, RECORD_JOURNEY_CHECKPOINT } from
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
-function mockPrismaWithStop(stop: any) {
+function mockPrismaWithStop(stop: any, shipment: any = { status: 'in_progress', reference: 'SHP-1' }) {
   const tx = {
     shipmentStop: {
       findUnique: jest.fn().mockResolvedValue(stop),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    shipment: {
+      findFirst: jest.fn().mockResolvedValue(shipment),
       update: jest.fn().mockResolvedValue({}),
     },
     domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -22,11 +26,11 @@ function mockPrismaWithStop(stop: any) {
 describe('RecordGeofenceArrivalCommandHandler', () => {
   const basePayload = {
     shipmentId: 'ship-1', stopId: 'stop-1', locationId: 'loc-1',
-    lat: 40.1, lng: -74.2, eventTime: '2026-01-01T00:00:00.000Z', isDestination: false,
+    lat: 40.1, lng: -74.2, eventTime: '2026-01-01T00:00:00.000Z', completesStop: false, deviceId: 'dev-1',
   };
 
-  it('marks a pending stop arrived and emits TRACKING_GEOFENCE_ENTERED', async () => {
-    const { prisma } = mockPrismaWithStop({ id: 'stop-1', status: 'pending' });
+  it('marks the origin stop arrived and emits TRACKING_GEOFENCE_ENTERED + SHIPMENT_STOP_ARRIVED', async () => {
+    const { prisma, tx } = mockPrismaWithStop({ id: 'stop-1', status: 'pending' });
     const { bus } = mockEventBus();
     const handler = new RecordGeofenceArrivalCommandHandler(prisma, bus);
 
@@ -34,25 +38,34 @@ describe('RecordGeofenceArrivalCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ arrived: true });
-    expect(result.events).toHaveLength(1);
-    expect(result.events[0].type).toBe(EVENT_TYPES.TRACKING_GEOFENCE_ENTERED);
+    expect(tx.shipmentStop.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { status: 'arrived', actualArrival: new Date(basePayload.eventTime) },
+    }));
+    expect(result.events.map((e) => e.type)).toEqual([
+      EVENT_TYPES.TRACKING_GEOFENCE_ENTERED,
+      EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+    ]);
     expect(result.events[0].payload).toEqual(
-      expect.objectContaining({ shipmentId: 'ship-1', stopId: 'stop-1', locationId: 'loc-1' })
+      expect.objectContaining({ shipmentId: 'ship-1', stopId: 'stop-1', locationId: 'loc-1', deviceId: 'dev-1' })
     );
   });
 
-  it('also emits SHIPMENT_STOP_ARRIVED when the stop is the destination', async () => {
-    const { prisma } = mockPrismaWithStop({ id: 'stop-1', status: 'pending' });
+  it('completes any other stop on entry and emits STOP_ARRIVED then STOP_COMPLETED (#324)', async () => {
+    const { prisma, tx } = mockPrismaWithStop({ id: 'stop-1', status: 'pending' });
     const { bus } = mockEventBus();
     const handler = new RecordGeofenceArrivalCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(RECORD_GEOFENCE_ARRIVAL, { ...basePayload, isDestination: true })
+      createTestCommand(RECORD_GEOFENCE_ARRIVAL, { ...basePayload, completesStop: true })
     );
 
+    expect(tx.shipmentStop.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { status: 'completed', actualArrival: new Date(basePayload.eventTime) },
+    }));
     expect(result.events.map((e) => e.type)).toEqual([
       EVENT_TYPES.TRACKING_GEOFENCE_ENTERED,
       EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+      EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
     ]);
     expect(result.events[1].payload).toEqual({ stopId: 'stop-1', shipmentId: 'ship-1', eventTime: '2026-01-01T00:00:00.000Z' });
   });
@@ -89,6 +102,43 @@ describe('RecordGeofenceDepartureCommandHandler', () => {
       EVENT_TYPES.TRACKING_GEOFENCE_EXITED,
       EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
     ]);
+  });
+
+  it('moves a ready shipment to in_progress when it departs the origin (#307)', async () => {
+    const { prisma, tx } = mockPrismaWithStop({ id: 'stop-1', status: 'arrived' }, { status: 'ready', reference: 'SHP-1' });
+    const { bus } = mockEventBus();
+    const handler = new RecordGeofenceDepartureCommandHandler(prisma, bus);
+
+    const result = await handler.execute(createTestCommand(RECORD_GEOFENCE_DEPARTURE, payload));
+
+    expect(tx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'in_progress' } }));
+    const statusEvent = result.events.find((e) => e.type === EVENT_TYPES.SHIPMENT_STATUS_CHANGED);
+    expect(statusEvent?.payload).toEqual(expect.objectContaining({ previousStatus: 'ready', newStatus: 'in_progress', eventTime: payload.eventTime }));
+  });
+
+  it('leaves a draft shipment alone on departure', async () => {
+    const { prisma, tx } = mockPrismaWithStop({ id: 'stop-1', status: 'arrived' }, { status: 'draft', reference: 'SHP-1' });
+    const { bus } = mockEventBus();
+    const handler = new RecordGeofenceDepartureCommandHandler(prisma, bus);
+
+    const result = await handler.execute(createTestCommand(RECORD_GEOFENCE_DEPARTURE, payload));
+
+    expect(tx.shipment.update).not.toHaveBeenCalled();
+    expect(result.events.map((e) => e.type)).not.toContain(EVENT_TYPES.SHIPMENT_STATUS_CHANGED);
+  });
+
+  it('records an inferred departure from a still-pending origin, with no departure time', async () => {
+    const { prisma, tx } = mockPrismaWithStop({ id: 'stop-1', status: 'pending' });
+    const { bus } = mockEventBus();
+    const handler = new RecordGeofenceDepartureCommandHandler(prisma, bus);
+
+    const result = await handler.execute(createTestCommand(RECORD_GEOFENCE_DEPARTURE, {
+      shipmentId: 'ship-1', stopId: 'stop-1', locationId: 'loc-1', eventTime: payload.eventTime, inferred: true,
+    }));
+
+    expect(result.data).toEqual({ departed: true });
+    expect(tx.shipmentStop.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'completed', actualDeparture: null } }));
+    expect(result.events[0].payload).toEqual(expect.objectContaining({ inferred: true }));
   });
 
   it('is a no-op when the stop is not currently arrived', async () => {

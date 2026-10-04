@@ -754,13 +754,16 @@ export interface JourneyLocationEventPayload {
   lat?: number;
   lng?: number;
   eventTime: string;
+  /** External id of the device whose ping produced the event, when known. */
+  deviceId?: string;
   /** Only set on tracking.journey_checkpoint (1-9) */
   checkpointIndex?: number;
   /** Only set on tracking.journey_checkpoint */
   totalCheckpoints?: number;
   /**
-   * Only set on tracking.journey_checkpoint: true when the checkpoint was passed between two pings
-   * and filled in, so its position is on the planned route and its time is interpolated.
+   * True when the event was implied rather than observed: a journey checkpoint passed between two
+   * pings (position on the planned route, interpolated time), or an origin departure inferred from
+   * reaching a later stop.
    */
   inferred?: boolean;
 }
