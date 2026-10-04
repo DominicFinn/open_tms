@@ -302,7 +302,9 @@ describe('CQRS Pipeline Integration', () => {
           findFirst: jest.fn().mockResolvedValue(null),
           create: jest.fn().mockResolvedValue({ id: 'stop-1' }),
           aggregate: jest.fn().mockResolvedValue({ _max: { sequenceNumber: null } }),
+          findMany: jest.fn().mockResolvedValue([]),
         },
+        lane: { findMany: jest.fn().mockResolvedValue([]) },
         auditLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
       const mockPrisma = {
