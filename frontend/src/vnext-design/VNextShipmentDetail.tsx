@@ -2040,23 +2040,21 @@ export default function VNextShipmentDetail() {
       .catch(() => { });
   }, [shipment?.laneId, shipment?.status, shipment?.currentLat, shipment?.currentLng]);
 
-  // Fetch the lane's planned route (if any) so it can be overlaid on the map.
+  // Fetch the shipment's planned route (if any) so it can be overlaid on the map: its own for a
+  // custom route, otherwise its lane's (#328).
   // laneRoute stays `undefined` while this is unresolved, then settles to
-  // either the route object or `null` (no lane / no saved route) — that
+  // either the route object or `null` (no route) — that
   // three-way state lets the default-visibility effect below tell "still
   // loading" apart from "confirmed no route".
   useEffect(() => {
-    // Wait for the shipment itself to load first — otherwise `shipment` is
-    // still null on mount, `shipment?.laneId` reads as undefined, and this
-    // would prematurely resolve laneRoute to `null` ("no route") before the
-    // real laneId is even known, locking in the wrong default below.
-    if (!shipment) return;
-    if (!shipment.laneId) { setLaneRoute(null); return; }
-    fetch(`${API_URL}/api/v1/lanes/${shipment.laneId}/route`)
+    // Wait for the shipment itself to load first, so laneRoute doesn't settle to `null` ("no
+    // route") before there's a shipment to ask about, locking in the wrong default below.
+    if (!shipment?.id) return;
+    fetch(`${API_URL}/api/v1/shipments/${shipment.id}/route`)
       .then(r => r.json())
       .then(json => setLaneRoute(json.error ? null : (json.data ?? null)))
       .catch(() => setLaneRoute(null));
-  }, [shipment?.laneId, !!shipment]);
+  }, [shipment?.id, shipment?.laneId]);
 
   // Default the map to whichever layer is more useful: once we know whether
   // a planned route exists, show the route (and hide the plain straight

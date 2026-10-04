@@ -18,6 +18,7 @@ import {
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
 import { IOrderConversionService } from '../services/OrderConversionService.js';
+import { IShipmentRouteRepository } from '../repositories/ShipmentRouteRepository.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
 // Normalizes to a full ISO string.
@@ -34,6 +35,7 @@ const flexibleDate = z.string().trim().min(1).transform((v, ctx) => {
 export async function shipmentRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
+  const shipmentRoutesRepo = container.resolve<IShipmentRouteRepository>(TOKENS.IShipmentRouteRepository);
 
   await registerOrgScope(server);
 
@@ -502,6 +504,24 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
   // Full-journey proof: origin departure, in-transit checkpoints, destination
   // arrival (#283). Checkpoint count is bounded (~10), so no pagination.
+  // The shipment's planned route: its own for a custom route, otherwise its lane's (#328).
+  server.get('/api/v1/shipments/:id/route', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Shipment planned route',
+      description: "The planned road route the shipment is measured against: its own route when it's on a custom route, otherwise its lane's. Data is null when it has neither.",
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const route = await shipmentRoutesRepo.findEffectiveRoute(req.orgId!, id);
+    if (route === undefined) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    return { data: route, error: null };
+  });
+
   server.get('/api/v1/shipments/:id/journey', {
     schema: {
       tags: ['Shipments'],

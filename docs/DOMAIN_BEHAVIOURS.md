@@ -310,6 +310,7 @@ Two independent removal states, both retaining the row for audit:
 | `shipment.exception` | ShipmentReadModel.hasException = true (status unchanged) | In-app + email | — |
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
+| `shipment.route_planned` | — | — | `SetShipmentRouteCommand` stored a custom-route shipment's planned route (#328) |
 | `shipment.archived` | ShipmentReadModel row removed | — | — |
 | `shipment.unarchived` | ShipmentReadModel row re-inserted | — | — |
 | `shipment.deleted` | ShipmentReadModel row removed | — | — |
@@ -390,6 +391,19 @@ has a `LaneRoute`, and hasn't yet arrived at its destination, its position is lo
 `RecordJourneyCheckpointCommand`. A checkpoint never fires on the same ping as an arrival. Query a
 shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are covered by #324 below;
 there is still no GPS-jitter hysteresis on the geofence boundary.
+
+**Shipment routes (#328).** A shipment is measured against one planned route:
+`ShipmentRouteRepository.findEffectiveRoute` returns its own `ShipmentRoute` when it's on a custom route
+(no lane), otherwise its lane's `LaneRoute`. Journey checkpoints, route deviation in the ETA monitor,
+`GET /api/v1/shipments/:id/route` and the shipment map all read it. `ShipmentRoutePlanningHandler`
+(on `shipment.created` / `shipment.updated`) runs `ShipmentRoutePlanner`: a lane shipment rides its
+lane and any route of its own is removed; a custom-route shipment that is `draft` or `ready` gets a
+Google Directions route through its stops in sequence, stored by `SetShipmentRouteCommand`, which
+emits `shipment.route_planned`. The provider is called outside any transaction and only when the stop
+sequence changed (`ShipmentRoute.stopsKey`); with no Google Maps server key in the org's maps settings
+planning is skipped and logged. Once a shipment is moving, its route isn't re-planned. Known gap: the
+standalone worker only has a command bus when an LLM provider is configured, so without one it doesn't
+run command-driven handlers, this one included.
 
 **Multi-stop shipments (#324).** Stops are matched one at a time, not by location
 (`services/tracking/journeyStops.ts`). For each location, a ping can only act on that location's

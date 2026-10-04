@@ -57,6 +57,11 @@ import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js
 import { PackAuditIssueLinkHandler } from './handlers/PackAuditIssueLinkHandler.js';
 import { BolGenerationHandler } from './handlers/BolGenerationHandler.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
+import { ShipmentRoutePlanningHandler } from './handlers/ShipmentRoutePlanningHandler.js';
+import { ShipmentRoutePlanner } from '../services/routing/ShipmentRoutePlanner.js';
+import { ShipmentRouteRepository } from '../repositories/ShipmentRouteRepository.js';
+import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { GoogleMapsDirectionsService } from '../services/routing/GoogleMapsDirectionsService.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -186,6 +191,7 @@ export async function registerEventHandlers(
 
   // WMS: auto-replenishment - reacts to pick line completion / inventory adjustments and fires CHECK_REPLENISHMENT
   if (commandBus) {
+    handlers.push(shipmentRoutePlanningHandler(prisma, commandBus));
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
   }
 
@@ -234,3 +240,24 @@ export async function registerEventHandlers(
     console.log(`[EventBus] Registered handler: ${handler.name} (concurrency: ${options.concurrency ?? 'default'}, patterns: ${handler.eventPatterns.join(', ')})`);
   }
 }
+
+function shipmentRoutePlanningHandler(prisma: PrismaClient, commandBus: ICommandBus): ShipmentRoutePlanningHandler {
+  return new ShipmentRoutePlanningHandler(new ShipmentRoutePlanner(
+    new ShipmentRouteRepository(prisma),
+    new OrganizationRepository(prisma),
+    new GoogleMapsDirectionsService(),
+    commandBus,
+  ));
+}
+
+/**
+ * Route planning for the embedded (API process) workers, which register the other handlers without
+ * a command bus (#328). The standalone worker gets it through registerEventHandlers instead, so it
+ * is never registered twice.
+ */
+export async function registerShipmentRoutePlanning(eventBus: IEventBus, prisma: PrismaClient, commandBus: ICommandBus): Promise<void> {
+  const handler = shipmentRoutePlanningHandler(prisma, commandBus);
+  await eventBus.subscribe(handler.name, handler.eventPatterns, (event) => handler.handle(event), handler.options);
+  console.log(`[EventBus] Registered handler: ${handler.name} (patterns: ${handler.eventPatterns.join(', ')})`);
+}
+
