@@ -44,7 +44,7 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
     const { orderIds } = command.payload;
 
     const orders = await tx.order.findMany({
-      where: { id: { in: orderIds }, archived: false },
+      where: { id: { in: orderIds }, orgId: command.orgId, archived: false },
       include: {
         customer: { select: { id: true, name: true } },
         trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
@@ -63,7 +63,7 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
 
     const shipment = await tx.shipment.create({
       data: {
-        orgId: firstOrder.orgId,
+        orgId: command.orgId,
         reference,
         customerId: firstOrder.customerId,
         originId: firstOrder.originId!,
@@ -77,7 +77,7 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       type: EVENT_TYPES.SHIPMENT_CREATED,
       entityType: 'shipment',
       entityId: shipment.id,
-      orgId: firstOrder.orgId,
+      orgId: command.orgId,
       payload: {
         shipmentReference: reference,
         customerId: firstOrder.customerId,
@@ -92,7 +92,7 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       shipment,
       orders,
       {
-        orgId: firstOrder.orgId,
+        orgId: command.orgId,
         actorId: command.actorId,
         correlationId: command.metadata.correlationId,
         source: command.metadata.source,
