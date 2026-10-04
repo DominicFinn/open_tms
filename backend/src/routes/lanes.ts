@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
+import { ILanesRepository } from '../repositories/LanesRepository.js';
 import { CREATE_LANE } from '../commands/lanes/CreateLaneCommand.js';
 import { UPDATE_LANE } from '../commands/lanes/UpdateLaneCommand.js';
 import { ARCHIVE_LANE } from '../commands/lanes/ArchiveLaneCommand.js';
@@ -11,6 +12,7 @@ import { guardWrites } from '../auth/guardWrites.js';
 
 export async function laneRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const lanesRepo = container.resolve<ILanesRepository>(TOKENS.ILanesRepository);
 
   await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('lanes'));
@@ -144,6 +146,24 @@ export async function laneRoutes(server: FastifyInstance) {
   });
 
   // Get lane by ID
+  // Lanes between two locations, for matching a shipment's orders to a lane on the create page (#328).
+  server.get('/api/v1/lanes/between', {
+    schema: {
+      tags: ['Lanes'],
+      summary: 'Lanes between two locations',
+      description: 'Active lanes from originId to destinationId, with their intermediate stop location ids in order.',
+      querystring: {
+        type: 'object',
+        properties: { originId: { type: 'string', format: 'uuid' }, destinationId: { type: 'string', format: 'uuid' } },
+        required: ['originId', 'destinationId'],
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const { originId, destinationId } = req.query as { originId: string; destinationId: string };
+    const lanes = await lanesRepo.findBetween(req.orgId!, originId, destinationId);
+    return { data: lanes, error: null };
+  });
+
   server.get('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;

@@ -392,6 +392,22 @@ has a `LaneRoute`, and hasn't yet arrived at its destination, its position is lo
 shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are covered by #324 below;
 there is still no GPS-jitter hysteresis on the geofence boundary.
 
+**Creating a shipment from orders (#328).** The create-shipment page takes `?orderIds=a,b` (from an
+order's "Create shipment" or the orders list's "Ship together"; the older `?fromOrderId=` still works).
+"Ship together" is only clickable for two or more available orders that can share a shipment (one
+customer, one origin, LTL); otherwise it's disabled and the reason from `shipTogetherProblem` is
+shown beside it. The page has an Orders card with an "Add order" search limited to orders that can join (same customer,
+origin and service level, available, LTL only when there's more than one). The rules live in
+`frontend/src/lib/shipmentFromOrders.ts`: adding orders fills empty fields, widens the dates, adds
+each drop as a stop and turns on temperature/hazmat handling, but never overwrites an edit, and no
+field is locked; `orderConflicts` blocks saving when the form no longer fits the orders. On open, a
+lane from the orders' origin to their last drop is preselected (`GET /api/v1/lanes/between`), if it
+supports the orders' service level (or Both), preferring one whose stops cover the other drops; its stops plus any uncovered drops become the
+shipment's stops, with a warning that the lane's route won't pass through the extra ones. With no
+lane, the shipment gets a custom route through the drops. The Waypoints card is only shown for a
+custom route. Saving creates the shipment through `CreateShipmentCommand`, then attaches every order
+through add-orders, which enforces the same rules server-side.
+
 **Shipment routes (#328).** A shipment is measured against one planned route:
 `ShipmentRouteRepository.findEffectiveRoute` returns its own `ShipmentRoute` when it's on a custom route
 (no lane), otherwise its lane's `LaneRoute`. Journey checkpoints, route deviation in the ETA monitor,

@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Pencil,
   Trash2,
+  Truck,
   User,
   X,
   XCircle,
@@ -707,6 +708,12 @@ export default function VNextOrderDetail() {
             <FileText className="h-4 w-4" />
             Documents
           </Button>
+          {hasPermission('shipments:write') && order.status === 'verified' && !order.archived && !order.deletedAt && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/shipments/create?orderIds=${order.id}`)}>
+              <Truck className="h-4 w-4" />
+              Create shipment
+            </Button>
+          )}
           {hasPermission('orders:write') && ['pending', 'verified', 'issue'].includes(order.status) && !order.deletedAt && (
             <Button
               variant="outline"

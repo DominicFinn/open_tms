@@ -61,6 +61,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { deliveryStatusLabel, deliveryStatusVariant } from '@/lib/orderDeliveryStatus';
+import { shipTogetherProblem } from '@/lib/shipmentFromOrders';
 
 interface Order {
   id: string;
@@ -119,19 +120,9 @@ function formatDate(d?: string): string {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// Query params consumed by VNextCreateShipment's fromOrderId prefill effect.
-function buildShipQueryString(o: Order): string {
-  const params = new URLSearchParams();
-  params.set('fromOrderId', o.id);
-  if (o.customerId) params.set('customerId', o.customerId);
-  if (o.originId) params.set('originId', o.originId);
-  if (o.destinationId) params.set('destinationId', o.destinationId);
-  if (o.serviceLevel) params.set('mode', o.serviceLevel);
-  if (o.requestedPickupDate) params.set('pickupDate', o.requestedPickupDate.slice(0, 10));
-  if (o.requestedDeliveryDate) params.set('deliveryDate', o.requestedDeliveryDate.slice(0, 10));
-  if (o.temperatureControl && o.temperatureControl !== 'ambient') params.set('tempControlled', '1');
-  if (o.requiresHazmat) params.set('hazmat', '1');
-  return params.toString();
+// The create-shipment page loads these orders and fills the form in from them (#328).
+function buildShipQueryString(...orders: Order[]): string {
+  return new URLSearchParams({ orderIds: orders.map(o => o.id).join(',') }).toString();
 }
 
 export default function VNextOrders() {
@@ -241,6 +232,9 @@ export default function VNextOrders() {
   const filteredIds = useMemo(() => filtered.map(o => o.id), [filtered]);
   const selectedInView = filteredIds.filter(idv => selected.has(idv));
   const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
+  // "Ship together" is only clickable for a set of orders that can share one shipment.
+  const selectedOrders = useMemo(() => orders.filter(o => selected.has(o.id)), [orders, selected]);
+  const shipTogetherBlocker = useMemo(() => shipTogetherProblem(selectedOrders), [selectedOrders]);
 
   // Selection is keyed by id and otherwise persists across filter changes, which lets a stale
   // selection made under one filter silently apply under another. Prune it back to whatever's
@@ -593,6 +587,23 @@ export default function VNextOrders() {
               Clear
             </Button>
             <div className="ml-auto flex items-center gap-2">
+              {hasPermission('shipments:write') && (
+                <>
+                  {shipTogetherBlocker && selectedOrders.length > 1 && (
+                    <span className="text-xs text-muted-foreground">{shipTogetherBlocker}</span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={Boolean(shipTogetherBlocker)}
+                    title={shipTogetherBlocker ?? undefined}
+                    onClick={() => navigate(`/shipments/create?${buildShipQueryString(...selectedOrders)}`)}
+                  >
+                    <Truck className="h-4 w-4" />
+                    Ship together
+                  </Button>
+                </>
+              )}
               {hasPermission('orders:write') && (
                 <Button variant="outline" size="sm" disabled={bulkArchiving} onClick={handleBulkArchive}>
                   {bulkArchiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}

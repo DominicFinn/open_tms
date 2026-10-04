@@ -86,6 +86,16 @@ export interface ILanesRepository {
   deleteLaneCarrier(laneCarrierId: string, orgId: string): Promise<void>;
   createMany(data: CreateLaneDTO[]): Promise<void>;
   count(orgId: string): Promise<number>;
+  /** Active lanes running from one location to another, with their stops in order (#328). */
+  findBetween(orgId: string, originId: string, destinationId: string): Promise<LaneBetween[]>;
+}
+
+export interface LaneBetween {
+  id: string;
+  name: string;
+  serviceLevel: string;
+  /** Intermediate stop location ids, in order. */
+  stopLocationIds: string[];
 }
 
 export class LanesRepository implements ILanesRepository {
@@ -318,6 +328,15 @@ export class LanesRepository implements ILanesRepository {
     await this.prisma.lane.createMany({
       data: data.map(d => ({ ...d, orgId: d.orgId ?? null })) as any
     });
+  }
+
+  async findBetween(orgId: string, originId: string, destinationId: string): Promise<LaneBetween[]> {
+    const lanes = await this.prisma.lane.findMany({
+      where: { orgId, originId, destinationId, archived: false },
+      select: { id: true, name: true, serviceLevel: true, stops: { select: { locationId: true }, orderBy: { order: 'asc' } } },
+      orderBy: { name: 'asc' },
+    });
+    return lanes.map((l) => ({ id: l.id, name: l.name, serviceLevel: l.serviceLevel, stopLocationIds: l.stops.map((s) => s.locationId) }));
   }
 
   async count(orgId: string): Promise<number> {

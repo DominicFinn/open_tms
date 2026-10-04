@@ -10,6 +10,7 @@ import {
   Info,
   Loader2,
   MapPin,
+  Package,
   PencilLine,
   Plus,
   Radio,
@@ -17,10 +18,14 @@ import {
   ShieldAlert,
   StickyNote,
   Trash2,
+  X,
 } from 'lucide-react';
 
 import { API_URL } from '../api';
 import { describeProFormat, checkProFormat } from '../lib/proNumberFormat';
+import {
+  OrderForShipment, RouteForm, applyOrders, canJoin, orderConflicts, orderDrops,
+} from '../lib/shipmentFromOrders';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -97,15 +102,57 @@ interface RestrictionPreset {
 }
 
 
+const BLANK_ROUTE: RouteForm = {
+  customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', waypoints: [],
+  pickupDate: '', deliveryDate: '', tempControlled: false, hazmat: false,
+};
+
+/** A lane's intermediate stops, then any of the orders' drops the lane doesn't already visit. */
+function laneWaypoints(detail: any, orders: OrderForShipment[]): string[] {
+  const laneStops: string[] = (detail?.stops || []).map((st: any) => st.locationId);
+  const covered = new Set([detail?.originId, detail?.destinationId, ...laneStops]);
+  return [...laneStops, ...orderDrops(orders).filter(d => !covered.has(d))];
+}
+
+/**
+ * A lane from the orders' origin to their last drop that supports their service level (or both),
+ * preferring one whose stops cover the other drops. Null when no lane fits.
+ */
+async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: string } | null> {
+  const origin = orders[0]?.originId;
+  const drops = orderDrops(orders);
+  if (!origin || drops.length === 0) return null;
+  const params = new URLSearchParams({ originId: origin, destinationId: drops[drops.length - 1] });
+  try {
+    const json = await fetch(`${API_URL}/api/v1/lanes/between?${params}`).then(r => r.json());
+    const level = orders[0].serviceLevel;
+    const lanes: Array<{ id: string; serviceLevel: string; stopLocationIds: string[] }> = (json.data || [])
+      .filter((l: { serviceLevel: string }) => l.serviceLevel === level || l.serviceLevel === 'Both');
+    const middle = drops.slice(0, -1);
+    return lanes.find(l => middle.every(d => l.stopLocationIds.includes(d))) ?? lanes[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function VNextCreateShipment() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
   const [searchParams] = useSearchParams();
-  // Present when arriving via an order's "Ship" action (FTL path) — prefills
-  // the form from that order and, on success, links the order to the new
-  // shipment instead of leaving it to the separate "Add Order" flow.
-  const fromOrderId = searchParams.get('fromOrderId');
+  // Orders this shipment is being created for (#328): from an order's "Create shipment", the
+  // orders list's "Ship together", or added on this page. They fill the form in, but every field
+  // stays editable; see lib/shipmentFromOrders. `fromOrderId` is the older single-order link.
+  const initialOrderIds = useMemo(() => {
+    const ids = searchParams.get('orderIds');
+    if (ids) return ids.split(',').filter(Boolean);
+    const legacy = searchParams.get('fromOrderId');
+    return legacy ? [legacy] : [];
+  }, [searchParams]);
+  const [attachedOrders, setAttachedOrders] = useState<OrderForShipment[]>([]);
+  const [orderCandidates, setOrderCandidates] = useState<OrderForShipment[] | null>(null);
+  const [orderPickerOpen, setOrderPickerOpen] = useState(false);
+  const [orderSearch, setOrderSearch] = useState('');
 
   const [customer, setCustomer] = useState('');
   const [reference, setReference] = useState('');
@@ -174,6 +221,42 @@ export default function VNextCreateShipment() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // The fields orders fill in, as one value, so the rules in lib/shipmentFromOrders can work on it.
+  const routeForm = useMemo<RouteForm>(() => ({
+    customerId: customer,
+    mode,
+    useCustomRoute,
+    originId: originLocation,
+    destinationId: destLocation,
+    waypoints,
+    laneOriginId: laneDetail?.originId ?? null,
+    laneDestinationId: laneDetail?.destinationId ?? null,
+    pickupDate,
+    deliveryDate,
+    tempControlled,
+    hazmat,
+  }), [customer, mode, useCustomRoute, originLocation, destLocation, waypoints, laneDetail, pickupDate, deliveryDate, tempControlled, hazmat]);
+
+  const setRouteForm = (f: RouteForm) => {
+    setCustomer(f.customerId);
+    setMode(f.mode);
+    setUseCustomRoute(f.useCustomRoute);
+    setOriginLocation(f.originId);
+    setDestLocation(f.destinationId);
+    setWaypoints(f.waypoints);
+    setPickupDate(f.pickupDate);
+    setDeliveryDate(f.deliveryDate);
+    setTempControlled(f.tempControlled);
+    setHazmat(f.hazmat);
+  };
+
+  const orderProblems = useMemo(() => orderConflicts(routeForm, attachedOrders), [routeForm, attachedOrders]);
+
+  const locationName = (locationId: string) => {
+    const l = locations.find((loc: any) => loc.id === locationId);
+    return l?.name ?? 'Unknown location';
+  };
+
   const assignedLaneCarrier = useMemo(
     () => laneDetail?.laneCarriers?.find((lc: any) => lc.assigned) || null,
     [laneDetail],
@@ -233,19 +316,55 @@ export default function VNextCreateShipment() {
     const detail = await loadLaneDetail(newLaneId);
     const assigned = detail?.laneCarriers?.find((lc: any) => lc.assigned);
     setCarrierId(assigned ? assigned.carrierId : '');
+    setWaypoints(laneWaypoints(detail, attachedOrders));
   };
 
   const handleToggleCustomRoute = (checked: boolean) => {
     setUseCustomRoute(checked);
     if (checked) {
+      // Start the custom route from the lane's stops, if one was picked, rather than from blank.
+      setOriginLocation(laneDetail?.originId ?? '');
+      setDestLocation(laneDetail?.destinationId ?? '');
       setLaneId('');
       setLaneDetail(null);
       setSetAsLaneDefault(false);
     } else {
       setOriginLocation('');
       setDestLocation('');
+      setWaypoints([]);
     }
   };
+
+  const handleAddOrder = (order: OrderForShipment) => {
+    // With no lane picked yet, an order's own origin and drops make the route.
+    const base = !useCustomRoute && !laneId ? { ...routeForm, useCustomRoute: true } : routeForm;
+    setAttachedOrders(prev => [...prev, order]);
+    setRouteForm(applyOrders(base, [order]));
+    setOrderPickerOpen(false);
+    setOrderSearch('');
+  };
+
+  const handleRemoveOrder = (orderId: string) => {
+    setAttachedOrders(prev => prev.filter(o => o.id !== orderId));
+  };
+
+  const openOrderPicker = (open: boolean) => {
+    setOrderPickerOpen(open);
+    if (!open || orderCandidates) return;
+    fetch(`${API_URL}/api/v1/orders`)
+      .then(r => r.json())
+      .then(json => setOrderCandidates(json.data || []))
+      .catch(() => setOrderCandidates([]));
+  };
+
+  const pickableOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    return (orderCandidates || [])
+      .filter((o: any) => o.status === 'verified' && canJoin(o, attachedOrders))
+      .filter((o: any) => !customer || o.customerId === customer)
+      .filter((o: any) => !q || `${o.orderNumber} ${o.customer?.name ?? ''}`.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [orderCandidates, attachedOrders, customer, orderSearch]);
 
   // Changing the lane's default carrier is a shared change (every future
   // shipment on this lane defaults to it too), so confirm before overwriting
@@ -417,23 +536,38 @@ export default function VNextCreateShipment() {
     }).catch(() => {});
   }, []);
 
-  // Prefill from the originating order (see fromOrderId above). Runs once on
-  // mount, alongside the fetch effect above rather than after it — these are
-  // plain query-param values, not dependent on customers/locations having
-  // loaded yet, since Select values just need a matching id once options arrive.
+  // Load the orders this shipment is being created for, then build the route: the matching lane
+  // if there is one (its stops plus any drops it doesn't cover), otherwise a custom route through
+  // the orders' drops.
   useEffect(() => {
-    if (isEdit || !fromOrderId) return;
-    setCustomer(searchParams.get('customerId') || '');
-    setMode(searchParams.get('mode') || '');
-    setUseCustomRoute(true);
-    setOriginLocation(searchParams.get('originId') || '');
-    setDestLocation(searchParams.get('destinationId') || '');
-    setPickupDate(searchParams.get('pickupDate') || '');
-    setDeliveryDate(searchParams.get('deliveryDate') || '');
-    if (searchParams.get('tempControlled') === '1') setTempControlled(true);
-    if (searchParams.get('hazmat') === '1') setHazmat(true);
+    if (isEdit || initialOrderIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const loaded = await Promise.all(initialOrderIds.map(oid =>
+        fetch(`${API_URL}/api/v1/orders/${oid}`).then(r => r.json()).then(j => j.data ?? null).catch(() => null)));
+      const orders = loaded.filter(Boolean) as OrderForShipment[];
+      if (cancelled || orders.length === 0) return;
+      setAttachedOrders(orders);
+
+      const lane = await findMatchingLane(orders);
+      const detail = lane ? await loadLaneDetail(lane.id) : null;
+      if (cancelled) return;
+      if (lane && detail) {
+        setLaneId(lane.id);
+        const assigned = detail.laneCarriers?.find((lc: any) => lc.assigned);
+        setCarrierId(assigned ? assigned.carrierId : '');
+        setRouteForm(applyOrders({
+          ...BLANK_ROUTE, useCustomRoute: false,
+          laneOriginId: detail.originId, laneDestinationId: detail.destinationId,
+          waypoints: laneWaypoints(detail, []),
+        }, orders));
+      } else {
+        setRouteForm(applyOrders({ ...BLANK_ROUTE, useCustomRoute: true }, orders));
+      }
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialOrderIds]);
 
   const addWaypoint = () => setWaypoints(w => [...w, '']);
   const removeWaypoint = (idx: number) => setWaypoints(w => w.filter((_, i) => i !== idx));
@@ -537,8 +671,8 @@ export default function VNextCreateShipment() {
   }, [restrictionTypeId, tempControlled, tempMinC, tempMaxC, humidityControlled, humidityMinPct, humidityMaxPct]);
 
   const handleSubmit = async () => {
-    if (dateError || restrictionError) {
-      setSubmitError(dateError || restrictionError);
+    if (dateError || restrictionError || orderProblems.length > 0) {
+      setSubmitError(dateError || restrictionError || orderProblems[0]);
       return;
     }
     setSubmitError('');
@@ -643,17 +777,18 @@ export default function VNextCreateShipment() {
       if (isEdit) {
         toast.success(`Shipment ${ref} updated`);
         navigate(`/shipments/${id}`);
-      } else if (fromOrderId && newId) {
+      } else if (attachedOrders.length > 0 && newId) {
         const addRes = await fetch(`${API_URL}/api/v1/shipments/${newId}/add-orders`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderIds: [fromOrderId] }),
+          body: JSON.stringify({ orderIds: attachedOrders.map(o => o.id) }),
         });
         const addJson = await addRes.json().catch(() => ({}));
-        if (!addRes.ok || addJson.error) {
-          toast.error(`Shipment ${ref} created, but the order couldn't be linked to it: ${addJson.error || 'unknown error'}. Use "Add Order" on the shipment instead.`);
+        const linkErrors: string[] = addJson.data?.errors || [];
+        if (!addRes.ok || addJson.error || linkErrors.length > 0) {
+          toast.error(`Shipment ${ref} created, but not every order could be linked: ${addJson.error || linkErrors.join('; ') || 'unknown error'}. Use "Add order" on the shipment instead.`, { duration: 9000 });
         } else {
-          toast.success(`Shipment ${ref} created and order linked`);
+          toast.success(`Shipment ${ref} created with ${attachedOrders.length} order${attachedOrders.length > 1 ? 's' : ''}`);
         }
         navigate(`/shipments/${newId}`);
       } else {
@@ -693,6 +828,96 @@ export default function VNextCreateShipment() {
         </h1>
       </div>
 
+      {!isEdit && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              Orders
+              {attachedOrders.length > 0 && <span className="text-sm font-normal text-muted-foreground">({attachedOrders.length})</span>}
+            </CardTitle>
+            <Popover open={orderPickerOpen} onOpenChange={openOrderPicker}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="sm">
+                  <Plus className="h-4 w-4" />
+                  Add order
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[420px] p-1" align="end">
+                <Input
+                  autoFocus
+                  placeholder="Search available orders..."
+                  value={orderSearch}
+                  onChange={e => setOrderSearch(e.target.value)}
+                  className="mb-1"
+                />
+                <div className="max-h-64 overflow-y-auto">
+                  {orderCandidates === null ? (
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading orders...
+                    </div>
+                  ) : pickableOrders.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No available orders that can share this shipment.
+                    </div>
+                  ) : (
+                    pickableOrders.map((o: any) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => handleAddOrder(o)}
+                        className="flex w-full flex-col items-start rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent/15"
+                      >
+                        <span className="font-medium">{o.orderNumber} <span className="font-normal text-muted-foreground">{o.customer?.name}</span></span>
+                        <span className="text-xs text-muted-foreground">
+                          {o.serviceLevel} · {o.destinationId ? locationName(o.destinationId) : 'No destination'}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {attachedOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No orders attached. Add orders to fill in the shipment from them; you can still change anything they fill in.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {attachedOrders.map(o => (
+                  <div key={o.id} className="flex items-center gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-muted/40">
+                    <div className="min-w-0 flex-1 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{o.orderNumber}</span>
+                        <Badge variant="muted">{o.serviceLevel}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {o.originId ? locationName(o.originId) : '-'} → {o.destinationId ? locationName(o.destinationId) : '-'}
+                      </div>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveOrder(o.id)} aria-label={`Remove ${o.orderNumber}`}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {orderProblems.length > 0 && (
+              <div className="space-y-1 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {orderProblems.map(problem => (
+                  <div key={problem} className="flex items-start gap-2">
+                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    {problem}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -703,7 +928,7 @@ export default function VNextCreateShipment() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Customer</Label>
-            <Select value={customer} onValueChange={setCustomer} disabled={!!fromOrderId}>
+            <Select value={customer} onValueChange={setCustomer}>
               <SelectTrigger>
                 <SelectValue placeholder="Select customer..." />
               </SelectTrigger>
@@ -713,11 +938,6 @@ export default function VNextCreateShipment() {
                 ))}
               </SelectContent>
             </Select>
-            {fromOrderId && (
-              <p className="text-xs text-muted-foreground">
-                Locked — must match the order being shipped, or it won't link to this shipment.
-              </p>
-            )}
           </div>
           <div className="space-y-2">
             <Label>Reference</Label>
@@ -766,27 +986,21 @@ export default function VNextCreateShipment() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className={cn('flex items-center gap-2 text-sm font-medium', !!fromOrderId && 'cursor-not-allowed opacity-50')}>
+          <label className="flex items-center gap-2 text-sm font-medium">
             <input
               type="checkbox"
               checked={useCustomRoute}
               onChange={e => handleToggleCustomRoute(e.target.checked)}
-              disabled={!!fromOrderId}
               className="h-4 w-4 rounded border border-input bg-background accent-primary"
             />
             Use a custom route instead of a lane
           </label>
-          {fromOrderId && (
-            <p className="-mt-2 text-xs text-muted-foreground">
-              Locked to a custom route so the origin matches the order being shipped.
-            </p>
-          )}
 
           {useCustomRoute ? (
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Origin</Label>
-                <Select value={originLocation} onValueChange={setOriginLocation} disabled={!!fromOrderId}>
+                <Select value={originLocation} onValueChange={setOriginLocation}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select origin..." />
                   </SelectTrigger>
@@ -796,11 +1010,6 @@ export default function VNextCreateShipment() {
                     ))}
                   </SelectContent>
                 </Select>
-                {fromOrderId && (
-                  <p className="text-xs text-muted-foreground">
-                    Locked — must match the order being shipped, or it won't link to this shipment.
-                  </p>
-                )}
               </div>
               <div className="space-y-2">
                 <Label>Destination</Label>
@@ -879,6 +1088,25 @@ export default function VNextCreateShipment() {
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {laneDetail && (
+                <div className="space-y-1 text-sm">
+                  <Label>Stops</Label>
+                  <ol className="space-y-1 text-muted-foreground">
+                    {[laneDetail.originId, ...waypoints, laneDetail.destinationId].map((locId: string, idx: number) => (
+                      <li key={`${locId}-${idx}`} className="flex items-center gap-2">
+                        <span className="w-5 text-xs">{idx + 1}</span>
+                        {locationName(locId)}
+                      </li>
+                    ))}
+                  </ol>
+                  {laneWaypoints(laneDetail, []).length < waypoints.length && (
+                    <p className="text-xs text-warning">
+                      Some of the orders' drops aren't on this lane, so they're added as extra stops; the lane's planned route won't pass through them. Use a custom route to plan one that does.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {laneId && (
                 <div className="space-y-3 rounded-md border border-border p-4">
@@ -1014,6 +1242,7 @@ export default function VNextCreateShipment() {
         </CardContent>
       </Card>
 
+      {useCustomRoute && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1050,6 +1279,7 @@ export default function VNextCreateShipment() {
           </Button>
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
