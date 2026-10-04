@@ -142,6 +142,24 @@ function shipmentStatusLabel(status: string): string {
 }
 
 // Percent of the pickup-to-delivery window elapsed, for the route progress bar.
+type LatLngPoint = { lat: number; lng: number };
+
+// The lane line follows the journey: origin, the stops in sequence, then the destination. The
+// pickup and final drop usually sit on the origin and destination, so a point equal to the one
+// before it is skipped.
+function laneLinePoints(shipment: any, hasOrigin: boolean, hasDest: boolean): LatLngPoint[] {
+  const stops = [...(shipment?.stops || [])]
+    .filter((st: any) => st.location?.lat && st.location?.lng)
+    .sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber)
+    .map((st: any) => ({ lat: st.location.lat, lng: st.location.lng }));
+  const points: LatLngPoint[] = [
+    ...(hasOrigin ? [{ lat: shipment.origin.lat, lng: shipment.origin.lng }] : []),
+    ...stops,
+    ...(hasDest ? [{ lat: shipment.destination.lat, lng: shipment.destination.lng }] : []),
+  ];
+  return points.filter((p, i) => i === 0 || p.lat !== points[i - 1].lat || p.lng !== points[i - 1].lng);
+}
+
 function routeProgressPct(pickupDate?: string | null, deliveryDate?: string | null, status?: string): number {
   if (status === 'complete') return 100;
   if (!pickupDate || !deliveryDate) return 0;
@@ -2159,7 +2177,11 @@ export default function VNextShipmentDetail() {
         popupHtml: `<strong>Destination</strong><br/>${shipment.destination.city || ''}, ${shipment.destination.state || ''}`,
       });
     }
-    (shipment.stops || []).filter((st: any) => st.location?.lat && st.location?.lng).forEach((st: any, i: number) => {
+    // The pickup and final drop sit on the origin/destination pins already.
+    (shipment.stops || [])
+      .filter((st: any) => st.location?.lat && st.location?.lng)
+      .filter((st: any) => st.locationId !== shipment.originId && st.locationId !== shipment.destinationId)
+      .forEach((st: any, i: number) => {
       out.push({
         id: `stop-${st.id ?? i}`,
         position: { lat: st.location.lat, lng: st.location.lng },
@@ -2194,7 +2216,7 @@ export default function VNextShipmentDetail() {
 
   const mapPolylines = useMemo<MapPolyline[]>(() => {
     const lines: MapPolyline[] = [];
-    const lanePoints = mapMarkers.map((m) => m.position);
+    const lanePoints = laneLinePoints(shipment, hasOriginCoords, hasDestCoords);
 
     if (showLane && lanePoints.length >= 2) {
       lines.push({ id: 'lane-shadow', points: lanePoints, color: COLOR_MUTED, weight: 3, opacity: 0.7, dashed: true });
@@ -2212,32 +2234,8 @@ export default function VNextShipmentDetail() {
       });
     }
 
-    // Traveled/remaining split around the live tracked position — always on
-    // when we have a live fix, independent of the lane/route toggles above,
-    // since this reflects where the shipment actually is, not a planned path.
-    if (hasCurrentCoords) {
-      const current = { lat: shipment.currentLat, lng: shipment.currentLng };
-      if (hasOriginCoords) {
-        lines.push({
-          id: 'traveled',
-          points: [{ lat: shipment.origin.lat, lng: shipment.origin.lng }, current],
-          color: COLOR_PRIMARY,
-          weight: 4,
-        });
-      }
-      if (hasDestCoords) {
-        lines.push({
-          id: 'remaining',
-          points: [current, { lat: shipment.destination.lat, lng: shipment.destination.lng }],
-          color: COLOR_MUTED,
-          weight: 3,
-          dashed: true,
-        });
-      }
-    }
-
     return lines;
-  }, [mapMarkers, showLane, showRoute, laneRoute, shipment, hasCurrentCoords, hasOriginCoords, hasDestCoords]);
+  }, [showLane, showRoute, laneRoute, shipment, hasOriginCoords, hasDestCoords]);
 
   // Framing follows whatever is actually drawn, so toggling the planned route on, or a fresh
   // location ping coming in, re-frames to include it rather than leaving part of it off screen.
