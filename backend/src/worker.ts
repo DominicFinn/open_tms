@@ -46,6 +46,7 @@ import { PromoteDecisionCommandHandler } from './commands/agentDecisions/Promote
 import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
+import { SetShipmentRouteCommandHandler } from './commands/shipments/SetShipmentRouteCommand.js';
 import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
 import { SkillRegistry } from './services/skills/SkillRegistry.js';
 import { DocumentGenerationService, IDocumentGenerationService } from './services/DocumentGenerationService.js';
@@ -184,6 +185,8 @@ async function startWorker() {
       bus.register(new CreateIssueCommandHandler(prisma, eventBus));
       bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
       bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+      // The route planning handler stores routes through this bus (#328).
+      bus.register(new SetShipmentRouteCommandHandler(prisma, eventBus));
       workerCommandBus = bus;
 
       const source = org?.llmApiKey ? 'org config' : 'env var';

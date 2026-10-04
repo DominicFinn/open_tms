@@ -19,6 +19,7 @@ import { IRouteDeviationService } from './RouteDeviationService.js';
 import { IEventBus } from '../../events/IEventBus.js';
 import { DomainEvent } from '../../events/DomainEvent.js';
 import { EVENT_TYPES, EVENT_SCHEMA_VERSIONS } from '../../events/eventTypes.js';
+import { ShipmentRouteRepository } from '../../repositories/ShipmentRouteRepository.js';
 
 /** Configurable thresholds for the monitor */
 export interface EtaMonitorConfig {
@@ -402,8 +403,8 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
       });
     }
 
-    // Route deviation check: if the shipment has a lane with a planned route, check deviation
-    if (this.routeDeviationService && shipment.laneId) {
+    // Route deviation check against the shipment's planned route: its own, or its lane's (#328)
+    if (this.routeDeviationService) {
       await this.checkRouteDeviation(shipment);
     }
 
@@ -492,27 +493,23 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     if (!this.routeDeviationService) return;
 
     try {
-      const laneRoute = await this.prisma.laneRoute.findUnique({
-        where: { laneId: shipment.laneId, orgId: shipment.orgId },
-      });
-
-      if (!laneRoute) return; // No planned route for this lane
+      const route = await new ShipmentRouteRepository(this.prisma).findEffectiveRoute(shipment.orgId, shipment.id);
+      if (!route) return; // No planned route
 
       const result = this.routeDeviationService.checkDeviation(
         { lat: shipment.currentLat, lng: shipment.currentLng },
-        laneRoute.encodedPolyline,
-        laneRoute.corridorMeters,
+        route.encodedPolyline,
+        route.corridorMeters,
       );
 
       if (result.isDeviated) {
-        // Get lane name for the event
-        const lane = await this.prisma.lane.findUnique({
-          where: { id: shipment.laneId, orgId: shipment.orgId },
-          select: { name: true },
-        });
+        // Name the route for the event: the lane's, or "custom route" for a shipment's own
+        const lane = shipment.laneId
+          ? await this.prisma.lane.findUnique({ where: { id: shipment.laneId, orgId: shipment.orgId }, select: { name: true } })
+          : { name: 'custom route' };
 
         await this.publishRouteDeviationEvent(shipment, {
-          laneId: shipment.laneId,
+          laneId: shipment.laneId ?? null,
           laneName: lane?.name || 'Unknown',
           deviationMeters: result.deviationMeters,
           corridorMeters: result.corridorMeters,

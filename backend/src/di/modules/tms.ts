@@ -126,6 +126,8 @@ import {
   UpdateCargoDiscrepancyCommandHandler,
 } from '../../commands/cargoTracking/index.js';
 import { RecordGeofenceArrivalCommandHandler } from '../../commands/tracking/RecordGeofenceArrivalCommand.js';
+import { SetShipmentRouteCommandHandler } from '../../commands/shipments/SetShipmentRouteCommand.js';
+import { ShipmentRouteRepository } from '../../repositories/ShipmentRouteRepository.js';
 import { RecordGeofenceDepartureCommandHandler } from '../../commands/tracking/RecordGeofenceDepartureCommand.js';
 import { RecordJourneyCheckpointCommandHandler } from '../../commands/tracking/RecordJourneyCheckpointCommand.js';
 import { AcknowledgeExcursionCommandHandler } from '../../commands/coldChain/AcknowledgeExcursionCommand.js';
@@ -278,6 +280,10 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IDeviceRepository).toFactory(() => {
     return new DeviceRepository(container.resolve(TOKENS.PrismaClient));
   });
+  container.singleton(TOKENS.IShipmentRouteRepository).toFactory(() => {
+    return new ShipmentRouteRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.ISensorReadingRepository).toFactory(() => {
     return new SensorReadingRepository(container.resolve(TOKENS.PrismaClient));
   });
@@ -702,6 +708,7 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
 
   // Journey tracking commands (full-journey proof: departure/checkpoint/arrival)
   bus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
+  bus.register(new SetShipmentRouteCommandHandler(prisma, eventBus));
   bus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
   bus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
 

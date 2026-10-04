@@ -26,6 +26,7 @@ export const TOKENS = {
   ICargoTrackingRepository: Symbol.for('ICargoTrackingRepository'),
   IDeviceRepository: Symbol.for('IDeviceRepository'),
   ISensorReadingRepository: Symbol.for('ISensorReadingRepository'),
+  IShipmentRouteRepository: Symbol.for('IShipmentRouteRepository'),
   IIotVendorRepository: Symbol.for('IIotVendorRepository'),
   ITelemetryService: Symbol.for('ITelemetryService'),
   IIotVendorSettingsService: Symbol.for('IIotVendorSettingsService'),

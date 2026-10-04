@@ -229,6 +229,7 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
             },
           },
         },
+        route: { select: { encodedPolyline: true } },
         lane: { select: { route: { select: { encodedPolyline: true } } } },
       },
     });
@@ -328,13 +329,15 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
       orgId: string;
       destinationId: string | null;
       stops: Array<JourneyStop & { location: { arrivalCriteria: any[] } }>;
+      route: { encodedPolyline: string } | null;
       lane: { route: { encodedPolyline: string } | null } | null;
     },
     originStop: (JourneyStop & { location: { arrivalCriteria: any[] } }) | null,
     ctx: DeviceEventContext,
     eventTime: string,
   ): Promise<void> {
-    const routePolyline = shipment.lane?.route?.encodedPolyline;
+    // A custom-route shipment's own route, otherwise its lane's (#328).
+    const routePolyline = shipment.route?.encodedPolyline ?? shipment.lane?.route?.encodedPolyline;
     const destinationStop = findDestinationStop(shipment.stops, shipment.destinationId);
     if (!routePolyline || !originStop || !destinationStop) return;
     if (originStop.status !== 'completed') return; // hasn't departed origin yet

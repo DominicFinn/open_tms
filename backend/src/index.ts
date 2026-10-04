@@ -24,7 +24,8 @@ import { createOrderAutoArchiveWorker, registerOrderAutoArchiveSchedule, ORDER_A
 import { OrderAutoArchiveService } from './services/OrderAutoArchiveService.js';
 import { createCarrierUserAnonymizeWorker, registerCarrierUserAnonymizeSchedule, CARRIER_USER_ANONYMIZE_QUEUE } from './workers/carrierUserAnonymizeWorker.js';
 import { CarrierUserAnonymizationService } from './services/CarrierUserAnonymizationService.js';
-import { registerEventHandlers } from './events/registerHandlers.js';
+import { registerEventHandlers, registerShipmentRoutePlanning } from './events/registerHandlers.js';
+import { ICommandBus } from './commands/CommandBus.js';
 import type { IEventBus } from './events/IEventBus.js';
 import { createWebhookRetryWorker, registerWebhookRetrySchedule, WEBHOOK_RETRY_QUEUE } from './workers/webhookRetryWorker.js';
 import { CustomerWebhookDeliveryService } from './services/webhooks/CustomerWebhookDeliveryService.js';
@@ -161,6 +162,7 @@ async function start() {
         await registerEventHandlers(
           eventBus, server.prisma, undefined, undefined, undefined, undefined, undefined, documentService
         );
+        await registerShipmentRoutePlanning(eventBus, server.prisma, container.resolve<ICommandBus>(TOKENS.ICommandBus));
         await eventBus.start();
         server.log.info('Embedded event handlers registered (projections + audit + notifications)');
       } catch (err) {

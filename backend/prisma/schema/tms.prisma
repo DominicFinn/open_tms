@@ -64,6 +64,7 @@ model Shipment {
   events                 ShipmentEvent[]
   orderShipments         OrderShipment[]
   stops                  ShipmentStop[] // Multi-stop route support
+  route                  ShipmentRoute? // Own planned route for a custom-route shipment (#328)
   tenders                Tender[] // Carrier tenders for this shipment
   deviceAssignments      DeviceAssignment[] // IoT device assignments
   sensorReadings         SensorReading[] // Sensor telemetry data
@@ -2404,6 +2405,31 @@ model CarrierTrackingEvent {
 }
 
 // ─── Lane Route (Planned Route Polyline) ──────────────────────────────────────
+
+// Planned road route for a shipment on a custom route (no lane), calculated from its own stops
+// (#328). A lane shipment uses its lane's LaneRoute instead and has no row here.
+// Table role: reference (one row per custom-route shipment, rewritten when its stops change).
+model ShipmentRoute {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String   @unique
+  orgId      String
+
+  encodedPolyline String  @db.Text
+  waypoints       Json // [{lat, lng}, ...] decoded from the polyline
+  distanceMeters  Int
+  durationSeconds Int
+  summary         String?
+  corridorMeters  Int     @default(5000) // How far off-route before a deviation alert
+  provider        String  @default("google")
+
+  // The stop location ids, in sequence, the route was calculated for. A different value means the
+  // stops changed and the route is stale.
+  stopsKey String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 model LaneRoute {
   id     String @id @default(uuid())
