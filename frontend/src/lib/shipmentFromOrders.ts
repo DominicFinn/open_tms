@@ -115,3 +115,18 @@ export function canJoin(candidate: OrderForShipment, orders: OrderForShipment[])
     && candidate.serviceLevel === first.serviceLevel
     && candidate.serviceLevel !== 'FTL';
 }
+
+/**
+ * Why the selected orders can't be shipped together, or null when they can. "Ship together" on the
+ * orders list stays disabled until this is null, so the create page only opens for a valid set.
+ */
+export function shipTogetherProblem(
+  orders: Array<{ status?: string | null; serviceLevel?: string | null; customerId?: string | null; originId?: string | null }>,
+): string | null {
+  if (orders.length < 2) return 'Select two or more orders to ship together.';
+  if (orders.some((o) => o.status?.toLowerCase() !== 'verified')) return 'Only available orders can be shipped.';
+  if (orders.some((o) => o.serviceLevel === 'FTL')) return 'FTL orders ship on their own shipment.';
+  if (new Set(orders.map((o) => o.customerId)).size > 1) return 'The orders belong to different customers.';
+  if (new Set(orders.map((o) => o.originId)).size > 1) return 'The orders are picked up from different origins.';
+  return null;
+}

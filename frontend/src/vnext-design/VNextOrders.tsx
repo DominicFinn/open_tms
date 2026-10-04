@@ -61,6 +61,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { deliveryStatusLabel, deliveryStatusVariant } from '@/lib/orderDeliveryStatus';
+import { shipTogetherProblem } from '@/lib/shipmentFromOrders';
 
 interface Order {
   id: string;
@@ -231,9 +232,9 @@ export default function VNextOrders() {
   const filteredIds = useMemo(() => filtered.map(o => o.id), [filtered]);
   const selectedInView = filteredIds.filter(idv => selected.has(idv));
   const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
-  // "Ship together" opens the create page with these orders; it checks whether they can share one.
-  const selectedAvailable = selectedInView.length > 0
-    && orders.filter(o => selected.has(o.id)).every(o => o.status?.toLowerCase() === 'verified');
+  // "Ship together" is only clickable for a set of orders that can share one shipment.
+  const selectedOrders = useMemo(() => orders.filter(o => selected.has(o.id)), [orders, selected]);
+  const shipTogetherBlocker = useMemo(() => shipTogetherProblem(selectedOrders), [selectedOrders]);
 
   // Selection is keyed by id and otherwise persists across filter changes, which lets a stale
   // selection made under one filter silently apply under another. Prune it back to whatever's
@@ -587,16 +588,21 @@ export default function VNextOrders() {
             </Button>
             <div className="ml-auto flex items-center gap-2">
               {hasPermission('shipments:write') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!selectedAvailable}
-                  title={selectedAvailable ? undefined : 'Only available (verified) orders can be shipped'}
-                  onClick={() => navigate(`/shipments/create?${buildShipQueryString(...orders.filter(o => selected.has(o.id)))}`)}
-                >
-                  <Truck className="h-4 w-4" />
-                  Ship together
-                </Button>
+                <>
+                  {shipTogetherBlocker && selectedOrders.length > 1 && (
+                    <span className="text-xs text-muted-foreground">{shipTogetherBlocker}</span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={Boolean(shipTogetherBlocker)}
+                    title={shipTogetherBlocker ?? undefined}
+                    onClick={() => navigate(`/shipments/create?${buildShipQueryString(...selectedOrders)}`)}
+                  >
+                    <Truck className="h-4 w-4" />
+                    Ship together
+                  </Button>
+                </>
               )}
               {hasPermission('orders:write') && (
                 <Button variant="outline" size="sm" disabled={bulkArchiving} onClick={handleBulkArchive}>

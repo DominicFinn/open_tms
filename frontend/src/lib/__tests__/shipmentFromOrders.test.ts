@@ -1,4 +1,4 @@
-import { applyOrders, canJoin, orderConflicts, RouteForm, OrderForShipment } from '../shipmentFromOrders';
+import { applyOrders, canJoin, orderConflicts, shipTogetherProblem, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
   customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', waypoints: [],
@@ -72,3 +72,20 @@ describe('canJoin', () => {
     expect(canJoin(order({ serviceLevel: 'FTL' }), [])).toBe(true);
   });
 });
+
+describe('shipTogetherProblem', () => {
+  const available = (overrides: Partial<OrderForShipment> = {}) => ({ ...order(overrides), status: 'verified' });
+
+  it('allows two or more available LTL orders for one customer from one origin', () => {
+    expect(shipTogetherProblem([available(), available({ id: 'o2', destinationId: 'drop-b' })])).toBeNull();
+  });
+
+  it('explains why a selection cannot be shipped together', () => {
+    expect(shipTogetherProblem([available()])).toBe('Select two or more orders to ship together.');
+    expect(shipTogetherProblem([available(), { ...available({ id: 'o2' }), status: 'assigned' }])).toBe('Only available orders can be shipped.');
+    expect(shipTogetherProblem([available(), available({ id: 'o2', serviceLevel: 'FTL' })])).toBe('FTL orders ship on their own shipment.');
+    expect(shipTogetherProblem([available(), available({ id: 'o2', customerId: 'cust-2' })])).toBe('The orders belong to different customers.');
+    expect(shipTogetherProblem([available(), available({ id: 'o2', originId: 'other' })])).toBe('The orders are picked up from different origins.');
+  });
+});
+

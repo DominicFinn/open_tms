@@ -393,8 +393,10 @@ shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are c
 there is still no GPS-jitter hysteresis on the geofence boundary.
 
 **Creating a shipment from orders (#328).** The create-shipment page takes `?orderIds=a,b` (from an
-order's "Create shipment" or the orders list's "Ship together"; the older `?fromOrderId=` still works)
-and has an Orders card with an "Add order" search limited to orders that can join (same customer,
+order's "Create shipment" or the orders list's "Ship together"; the older `?fromOrderId=` still works).
+"Ship together" is only clickable for two or more available orders that can share a shipment (one
+customer, one origin, LTL); otherwise it's disabled and the reason from `shipTogetherProblem` is
+shown beside it. The page has an Orders card with an "Add order" search limited to orders that can join (same customer,
 origin and service level, available, LTL only when there's more than one). The rules live in
 `frontend/src/lib/shipmentFromOrders.ts`: adding orders fills empty fields, widens the dates, adds
 each drop as a stop and turns on temperature/hazmat handling, but never overwrites an edit, and no
