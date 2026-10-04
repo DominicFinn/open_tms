@@ -1,7 +1,8 @@
 /**
  * What a customer portal user may see of a shipment (#325).
  *
- * A mixed-customer LTL shipment also carries other customers' freight. Their drop stops are those
+ * A shipment belongs to one customer (#325), but shipments created before that rule may still carry
+ * other customers' freight, so this stays as a safeguard. Their drop stops are those
  * customers' consignee names and addresses, and their items are their goods and order numbers, so
  * a customer sees only: the pickup, their own drops, stops with no orders on them, and their own
  * items. If the shipment's final destination is someone else's drop, the customer sees their own

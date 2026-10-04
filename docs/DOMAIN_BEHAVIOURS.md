@@ -140,14 +140,10 @@ ones for review.
 
 **Orders on a shipment (#325).** `GET /api/v1/shipments/:id` returns, per linked order, its status,
 delivery status, `deliveredAt`, service level, customer and drop stop; the shipment's Orders tab shows
-them, with the shipment's service level and, for a mixed-customer LTL shipment, a customer count and
-the orders grouped by customer. In the customer portal, a shipment's detail goes through
-`scopeShipmentToCustomer` (`services/portal/customerShipmentView.ts`): it shows the pickup, that
-customer's own drops, stops with no orders and that customer's own items, never another customer's
-drop locations or goods; if the shipment's destination is someone else's drop, the customer sees
-their own last drop as the destination. Known
-gap: shipments are listed in the portal only for the customer they're filed under, so the other
-customers on a mixed LTL shipment can't see it there yet.
+them, with the shipment's service level. In the customer portal, a shipment's detail goes through
+`scopeShipmentToCustomer` (`services/portal/customerShipmentView.ts`), which shows only the
+customer's own stops and items. A shipment now belongs to one customer, so this is a safeguard; it
+also covers shipments that mixed customers before that rule.
 
 **Order delivery events (#325).** Every delivery status write goes through a command, so it runs in
 a transaction and emits after commit: `order.delivered` (carrying `deliveredAt`, the device time

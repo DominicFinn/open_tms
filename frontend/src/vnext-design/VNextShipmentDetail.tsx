@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -2292,11 +2292,6 @@ export default function VNextShipmentDetail() {
   const origin = shipment.origin || {};
   const destination = shipment.destination || {};
   const orders = shipment.orderShipments || [];
-  const orderCustomerCount = new Set(orders.map((os: any) => os.order?.customerId).filter(Boolean)).size;
-  // Mixed-customer LTL: group the list by customer so it's clear whose freight is whose.
-  const ordersByCustomer = orderCustomerCount > 1
-    ? [...orders].sort((a: any, b: any) => (a.order?.customer?.name ?? '').localeCompare(b.order?.customer?.name ?? ''))
-    : orders;
 
   const filteredEligibleOrders = eligibleSearch.trim()
     ? eligibleOrders.filter(o => {
@@ -2859,11 +2854,6 @@ export default function VNextShipmentDetail() {
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-base">Orders ({orders.length})</CardTitle>
                     {shipment.serviceLevel && <Badge variant="muted">{shipment.serviceLevel}</Badge>}
-                    {orderCustomerCount > 1 && (
-                      <Badge variant="warning" title="LTL consolidation: orders on this shipment belong to different customers">
-                        {orderCustomerCount} customers
-                      </Badge>
-                    )}
                   </div>
                   {(shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write') && (
                     <Button variant="outline" size="sm" onClick={openAddOrderModal}>
@@ -2876,24 +2866,19 @@ export default function VNextShipmentDetail() {
                   {orders.length === 0 ? (
                     <p className="text-muted-foreground">No orders linked to this shipment yet.</p>
                   ) : (
-                    ordersByCustomer.map((os: any, index: number) => {
+                    orders.map((os: any) => {
                       const order = os.order || {};
-                      const startsCustomerGroup = orderCustomerCount > 1
-                        && (index === 0 || ordersByCustomer[index - 1].order?.customerId !== order.customerId);
                       const canModify = (shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write');
                       const busy = orderActionBusyId === order.id;
                       return (
-                        <Fragment key={os.id}>
-                        {startsCustomerGroup && (
-                          <p className="pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground first:pt-0">
-                            {order.customer?.name ?? 'Unknown customer'}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-muted/40">
+                        <div
+                          key={os.id}
+                          className="flex items-center gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-muted/40"
+                        >
                           <Link to={`/orders/${order.id}`} className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-medium">{order.orderNumber}</span>
-                              {orderCustomerCount <= 1 && <span className="text-muted-foreground">{order.customer?.name}</span>}
+                              <span className="text-muted-foreground">{order.customer?.name}</span>
                               <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{deliveryStatusLabel(order.deliveryStatus)}</Badge>
                               {order.serviceLevel && <Badge variant="muted">{order.serviceLevel}</Badge>}
                             </div>
@@ -2955,7 +2940,6 @@ export default function VNextShipmentDetail() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                        </Fragment>
                       );
                     })
                   )}
