@@ -48,7 +48,7 @@ export async function linkOrdersToShipment(
   describe: (order: any) => string,
   emit: EmitFn,
   extraChanges?: Record<string, unknown>,
-): Promise<void> {
+): Promise<{ stopsCreated: number }> {
   const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
   const newItems = buildItemsPayload(orders);
   await tx.shipment.update({
@@ -63,12 +63,14 @@ export async function linkOrdersToShipment(
   let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
 
   const userId = ctx.actorId ?? undefined;
+  let stopsCreated = 0;
 
   for (const order of orders) {
     let stop = await tx.shipmentStop.findFirst({
       where: { shipmentId: shipment.id, locationId: order.destinationId!, shipment: { orgId: ctx.orgId } },
     });
     if (!stop) {
+      stopsCreated++;
       stop = await tx.shipmentStop.create({
         data: {
           shipmentId: shipment.id,
@@ -124,6 +126,7 @@ export async function linkOrdersToShipment(
       source: ctx.source,
     }));
   }
+  return { stopsCreated };
 }
 
 function buildItemsPayload(orders: any[]): any[] {

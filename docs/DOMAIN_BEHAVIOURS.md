@@ -392,6 +392,20 @@ has a `LaneRoute`, and hasn't yet arrived at its destination, its position is lo
 shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are covered by #324 below;
 there is still no GPS-jitter hysteresis on the geofence boundary.
 
+**Changing a shipment's stops (#328).** `syncShipmentStops` (create, and update of a draft with
+`waypoints`) reconciles the stored stops with the route instead of rebuilding them: a stop whose
+location stays on the route keeps its row and is only renumbered, so the orders dropping there keep
+their `deliveryStopId` (before, every edit deleted and recreated the stops and cut that link); new
+locations get new stops; stops off the route are deleted, and if orders still drop at one the update
+is refused (`StopStillHasOrdersError`). Adding an order whose drop isn't a stop yet
+(`AddOrdersToShipmentCommand`) inserts it before the destination, renumbers the stops 1..n and emits
+`shipment.updated`, so a custom-route shipment is re-planned. Combine and convert put the new
+shipment on a lane only when one matches its stops exactly (same first and last stop, the same
+stops in between in order) and supports its service level (`assignMatchingLane`); otherwise it stays
+a custom route. `PUT /api/v1/shipments/:id` accepts `laneId: null` to take a shipment off its lane.
+The shipment page warns while a draft or ready lane shipment's stops don't match its lane, offering
+"Switch to custom route" or "Save as new lane" (a lane with the shipment's stops, then assigned).
+
 **Creating a shipment from orders (#328).** The create-shipment page takes `?orderIds=a,b` (from an
 order's "Create shipment" or the orders list's "Ship together"; the older `?fromOrderId=` still works).
 "Ship together" is only clickable for two or more available orders that can share a shipment (one

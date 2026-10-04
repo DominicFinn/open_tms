@@ -46,6 +46,9 @@ function makeTx(shipment: any = makeShipment()) {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({ id: 'stop-1' }),
       aggregate: jest.fn().mockResolvedValue({ _max: { sequenceNumber: null } }),
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     auditLog: { create: jest.fn().mockResolvedValue({}) },
   } as any;
@@ -193,6 +196,36 @@ describe('AddOrdersToShipmentCommandHandler', () => {
       expect(result.success).toBe(true);
       expect(tx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { serviceLevel: 'FTL' } }));
     });
+  });
+
+  it('adds a new drop before the destination and announces the stop change (#328)', async () => {
+    const tx = makeTx(makeShipment({ destinationId: 'loc-final' }));
+    tx.order.findMany.mockResolvedValue([makeOrder({ destinationId: 'loc-new' })]);
+    tx.orderShipment.count.mockResolvedValue(1);
+    tx.shipmentStop.findMany.mockResolvedValue([
+      { id: 'stop-new', locationId: 'loc-new', sequenceNumber: 3 },
+      { id: 'stop-final', locationId: 'loc-final', sequenceNumber: 2 },
+      { id: 'stop-pickup', locationId: 'loc-origin', sequenceNumber: 1 },
+    ]);
+    const handler = new AddOrdersToShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(ADD_ORDERS_TO_SHIPMENT, { shipmentId: 'ship-1', orderIds: ['order-1'] }));
+
+    const renumbered = tx.shipmentStop.update.mock.calls.map((c: any) => [c[0].where.id, c[0].data.sequenceNumber]);
+    expect(renumbered).toEqual([['stop-pickup', 1], ['stop-new', 2], ['stop-final', 3]]);
+    expect(result.events.map((e) => e.type)).toContain(EVENT_TYPES.SHIPMENT_UPDATED);
+  });
+
+  it('changes no stops and sends no update when the drop is already a stop', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([makeOrder()]);
+    tx.shipmentStop.findFirst.mockResolvedValue({ id: 'stop-existing' });
+    const handler = new AddOrdersToShipmentCommandHandler(makePrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(ADD_ORDERS_TO_SHIPMENT, { shipmentId: 'ship-1', orderIds: ['order-1'] }));
+
+    expect(tx.shipmentStop.update).not.toHaveBeenCalled();
+    expect(result.events.map((e) => e.type)).not.toContain(EVENT_TYPES.SHIPMENT_UPDATED);
   });
 });
 
