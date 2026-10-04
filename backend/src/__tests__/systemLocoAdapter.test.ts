@@ -1,4 +1,4 @@
-import { SystemLocoAdapter, DeviceTenantMismatchError } from '../integrations/SystemLocoAdapter';
+import { SystemLocoAdapter, DeviceTenantMismatchError, fanOutKey } from '../integrations/SystemLocoAdapter';
 
 const ORG = 'test-org';
 
@@ -265,6 +265,29 @@ describe('SystemLocoAdapter', () => {
       expect(result.matched).toBe(true);
       // Should create ShipmentEvent since we have shipment + location
       expect(prisma.shipmentEvent.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies a ping on a consolidation\'s device to every shipment on it (#329)', async () => {
+      const prisma = mockPrisma();
+      prisma.deviceAssignment.findFirst.mockResolvedValue({ shipmentId: null, orderId: null, consolidationId: 'con-1' });
+      prisma.consolidationShipment = { findMany: jest.fn().mockResolvedValue([{ shipmentId: 'ship-a' }, { shipmentId: 'ship-b' }]) };
+      const adapter = new SystemLocoAdapter(prisma);
+
+      const result = await adapter.processDeviceEvent({ ...DEVICE_TEMP_EVENT, id: 'evt-1' }, ORG);
+
+      expect(prisma.consolidationShipment.findMany.mock.calls[0][0].where).toMatchObject({ consolidationId: 'con-1', consolidation: { orgId: ORG } });
+      expect(result).toMatchObject({ shipmentId: 'ship-a', shipmentIds: ['ship-a', 'ship-b'], matched: true });
+      // One reading and one position per customer's shipment; the device event is the device's, once.
+      expect(prisma._created.sensorReading.map((r: any) => [r.shipmentId, r.sourceReportId])).toEqual([['ship-a', 'evt-1'], ['ship-b', 'evt-1:ship-b']]);
+      expect(prisma._created.shipmentEvent.map((e: any) => e.shipmentId)).toEqual(['ship-a', 'ship-b']);
+      expect(prisma.deviceEvent.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('keys fanned-out copies apart while the first keeps the feed id', () => {
+      expect(fanOutKey('evt-1', 'ship-a', 0)).toBe('evt-1');
+      expect(fanOutKey('evt-1', 'ship-b', 1)).toBe('evt-1:ship-b');
+      expect(fanOutKey(null, 'ship-b', 1)).toBeNull();
+      expect(fanOutKey('evt-1', null, 0)).toBe('evt-1');
     });
 
     it('falls back to shipment reference matching when no assignment', async () => {

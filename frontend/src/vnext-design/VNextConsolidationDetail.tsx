@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Archive, ArrowLeft, CircleAlert, Loader2, MapPin, PackagePlus, X } from 'lucide-react';
+import { Archive, ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, CircleAlert, Loader2, MapPin, PackagePlus, Radio, Undo2, X } from 'lucide-react';
 
 import { API_URL } from '../api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import ConsolidationShipmentPicker from './ConsolidationShipmentPicker';
+import ConsolidationRunMap from './ConsolidationRunMap';
 import { consolidationStatusVariant } from './consolidationStatus';
 
 interface ConsolidationStop {
@@ -18,7 +20,7 @@ interface ConsolidationStop {
   sequenceNumber: number;
   stopType: string;
   status: string;
-  location: { id: string; name: string; city: string | null; state: string | null };
+  location: { id: string; name: string; city: string | null; state: string | null; lat: number | null; lng: number | null };
   shipmentStops: Array<{ shipmentId: string }>;
 }
 
@@ -40,6 +42,8 @@ interface Consolidation {
   notes: string | null;
   archived: boolean;
   carrier: { id: string; name: string } | null;
+  devices: Array<{ id: string; device: { id: string; name: string; externalId: string } }>;
+  position: { lat: number; lng: number; at: string | null } | null;
   stops: ConsolidationStop[];
   shipments: Array<{ addedAt: string; shipment: MemberShipment }>;
 }
@@ -60,6 +64,8 @@ export default function VNextConsolidationDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceExternalId, setDeviceExternalId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +115,22 @@ export default function VNextConsolidationDetail() {
     if (problem) setActionError(problem);
   }
 
+  /** Moves a stop one place within its own section, so pickups always stay before drops. */
+  function move(stopId: string, delta: -1 | 1) {
+    if (!consolidation) return;
+    const order = consolidation.stops.map((s) => s.id);
+    const i = order.indexOf(stopId);
+    const j = i + delta;
+    const typeAt = (k: number) => consolidation.stops[k]?.stopType;
+    if (j < 0 || j >= order.length || typeAt(i) !== typeAt(j)) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    act('/stops/order', { stopIds: order });
+  }
+
+  function saveDevices(next: Array<{ name: string; externalId: string }>) {
+    act('', { devices: next });
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
@@ -153,6 +175,16 @@ export default function VNextConsolidationDetail() {
                 <PackagePlus className="h-4 w-4" /> Add shipments
               </Button>
             )}
+            {consolidation.status === 'draft' && (
+              <Button onClick={() => act('/status', { to: 'ready' })} disabled={busy || shipments.length === 0}>
+                <CheckCircle2 className="h-4 w-4" /> Mark ready
+              </Button>
+            )}
+            {consolidation.status === 'ready' && (
+              <Button variant="outline" onClick={() => act('/status', { to: 'draft' })} disabled={busy}>
+                <Undo2 className="h-4 w-4" /> Back to draft
+              </Button>
+            )}
             <Button
               variant="outline"
               disabled={busy}
@@ -173,6 +205,13 @@ export default function VNextConsolidationDetail() {
         </div>
       )}
 
+      <Card>
+        <CardHeader><CardTitle>Map</CardTitle></CardHeader>
+        <CardContent>
+          <ConsolidationRunMap reference={consolidation.reference} stops={consolidation.stops} position={consolidation.position} />
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Stops</CardTitle></CardHeader>
@@ -181,7 +220,7 @@ export default function VNextConsolidationDetail() {
               <p className="text-sm text-muted-foreground">No stops. Add shipments to build the run.</p>
             ) : (
               <ol className="space-y-2">
-                {consolidation.stops.map((stop) => (
+                {consolidation.stops.map((stop, i) => (
                   <li key={stop.id} className="flex items-start gap-3 rounded-md border p-3">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
                       {stop.sequenceNumber}
@@ -200,6 +239,30 @@ export default function VNextConsolidationDetail() {
                         )}
                       </div>
                     </div>
+                    {editable && (
+                      <div className="flex shrink-0 flex-col">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          aria-label={`Move ${stop.location.name} earlier`}
+                          disabled={busy || consolidation.stops[i - 1]?.stopType !== stop.stopType}
+                          onClick={() => move(stop.id, -1)}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          aria-label={`Move ${stop.location.name} later`}
+                          disabled={busy || consolidation.stops[i + 1]?.stopType !== stop.stopType}
+                          onClick={() => move(stop.id, 1)}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -240,6 +303,51 @@ export default function VNextConsolidationDetail() {
                 Save
               </Button>
             )}
+            <div className="space-y-2 border-t pt-4">
+              <Label className="flex items-center gap-2"><Radio className="h-4 w-4" /> Tracking devices</Label>
+              <p className="text-xs text-muted-foreground">Pings from a device here update every shipment on the run.</p>
+              {consolidation.devices.length === 0 && <p className="text-sm text-muted-foreground">No device yet.</p>}
+              {consolidation.devices.map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{d.device.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{d.device.externalId}</div>
+                  </div>
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove device ${d.device.name}`}
+                      disabled={busy}
+                      onClick={() => saveDevices(consolidation.devices.filter((x) => x.id !== d.id).map((x) => ({ name: x.device.name, externalId: x.device.externalId })))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {canWrite && (
+                <div className="space-y-2">
+                  <Input placeholder="Device name" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} />
+                  <Input placeholder="Device ID" value={deviceExternalId} onChange={(e) => setDeviceExternalId(e.target.value)} />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={busy || !deviceName.trim() || !deviceExternalId.trim()}
+                    onClick={() => {
+                      saveDevices([
+                        ...consolidation.devices.map((x) => ({ name: x.device.name, externalId: x.device.externalId })),
+                        { name: deviceName.trim(), externalId: deviceExternalId.trim() },
+                      ]);
+                      setDeviceName('');
+                      setDeviceExternalId('');
+                    }}
+                  >
+                    Add device
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

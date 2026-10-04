@@ -3,7 +3,8 @@ import { QueueMessage } from '../queue/IQueueAdapter.js';
 import { WebhookEvent } from '../queue/events.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
-import { SystemLocoAdapter, DeviceTenantMismatchError } from '../integrations/SystemLocoAdapter.js';
+import { SystemLocoAdapter, DeviceTenantMismatchError, fanOutKey } from '../integrations/SystemLocoAdapter.js';
+import { ConsolidationRepository } from '../repositories/ConsolidationRepository.js';
 import { ColdChainService } from '../services/ColdChainService.js';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
@@ -146,8 +147,10 @@ async function processSystemLoco(
     },
   });
 
-  if (!result.shipmentId) return;
-  await applyPingToJourney(deps, orgId, result.shipmentId, ping, rawPayload, 'system_loco_webhook');
+  // A device on a consolidation drives every shipment on it, each through its own journey (#329).
+  for (const shipmentId of result.shipmentIds) {
+    await applyPingToJourney(deps, orgId, shipmentId, ping, rawPayload, 'system_loco_webhook');
+  }
 }
 
 /**
@@ -199,7 +202,8 @@ async function applyPingToJourney(
 }
 
 interface LegacyResolution {
-  shipment: { id: string; reference: string } | null;
+  /** Usually one; every live shipment on the device's consolidation when it is on one (#329). */
+  shipments: Array<{ id: string; reference: string }>;
   /** The org's registered device, when there is one; readings can only be stored against it. */
   deviceId: string | null;
 }
@@ -216,27 +220,31 @@ async function resolveLegacyShipment(
     include: { assignments: { where: { active: true }, take: 1 } },
   });
   const deviceId = registeredDevice?.id ?? null;
-  const assignedId = registeredDevice?.assignments[0]?.shipmentId;
-  if (assignedId) {
-    const shipment = await prisma.shipment.findFirst({ where: { id: assignedId, orgId }, select: { id: true, reference: true } });
-    return { shipment, deviceId };
+  const assignment = registeredDevice?.assignments[0];
+  const byIds = async (ids: string[]) => {
+    const rows = await prisma.shipment.findMany({ where: { id: { in: ids }, orgId }, select: { id: true, reference: true } });
+    return ids.map((id) => rows.find((r) => r.id === id)).filter((r): r is { id: string; reference: string } => !!r);
+  };
+  if (assignment?.consolidationId) {
+    const ids = await new ConsolidationRepository(prisma).memberShipmentIds(orgId, assignment.consolidationId);
+    return { shipments: await byIds(ids), deviceId };
   }
+  if (assignment?.shipmentId) return { shipments: await byIds([assignment.shipmentId]), deviceId };
 
   const byReference = await prisma.shipment.findFirst({
     where: { orgId, reference: deviceName, archived: false },
     select: { id: true, reference: true },
   });
-  if (byReference) return { shipment: byReference, deviceId };
+  if (byReference) return { shipments: [byReference], deviceId };
 
   const order = await prisma.order.findFirst({
     where: { orgId, orderNumber: deviceName, archived: false },
     select: { id: true },
   });
-  if (!order) return { shipment: null, deviceId };
+  if (!order) return { shipments: [], deviceId };
   const link = await prisma.orderShipment.findFirst({ where: { orderId: order.id, order: { orgId } } });
-  if (!link) return { shipment: null, deviceId };
-  const shipment = await prisma.shipment.findFirst({ where: { id: link.shipmentId, orgId }, select: { id: true, reference: true } });
-  return { shipment, deviceId };
+  if (!link) return { shipments: [], deviceId };
+  return { shipments: await byIds([link.shipmentId]), deviceId };
 }
 
 async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, rawPayload: any): Promise<void> {
@@ -244,15 +252,17 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
   const ping = parseGenericPing(rawPayload);
   const deviceName = ping.deviceName || ping.deviceExternalId || '';
 
-  const { shipment, deviceId } = deviceName
+  const { shipments, deviceId } = deviceName
     ? await resolveLegacyShipment(prisma, orgId, ping.deviceExternalId, deviceName)
-    : { shipment: null, deviceId: null };
+    : { shipments: [], deviceId: null };
+  const shipment = shipments[0] ?? null;
   let shipmentEventId: string | null = null;
 
-  if (shipment && ping.position) {
+  for (const target of shipments) {
+    if (!ping.position) break;
     const shipmentEvent = await prisma.shipmentEvent.create({
       data: {
-        shipmentId: shipment.id,
+        shipmentId: target.id,
         eventType: ping.eventType,
         deviceId: ping.deviceExternalId,
         deviceName,
@@ -264,17 +274,20 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
         eventTime: ping.eventTime,
       },
     });
-    shipmentEventId = shipmentEvent.id;
+    shipmentEventId ??= shipmentEvent.id;
   }
 
   // Readings belong to a device, so a ping from a device the org hasn't registered keeps its
   // telemetry only in the webhook log's raw payload.
   let readingsStored = 0;
-  if (deviceId && ping.readings.length > 0) {
-    readingsStored = await deps.sensorReadings.createForDevice(
+  // On a consolidation each shipment gets its own copy, so every customer's telemetry is complete.
+  const readingTargets: Array<string | null> = shipments.length > 0 ? shipments.map((t) => t.id) : [null];
+  for (const [n, shipmentId] of readingTargets.entries()) {
+    if (!deviceId || ping.readings.length === 0) break;
+    readingsStored += await deps.sensorReadings.createForDevice(
       orgId,
       deviceId,
-      { shipmentId: shipment?.id ?? null },
+      { shipmentId },
       ping.readings.map(({ recordedAt, ...values }, i) => ({
         ...values,
         eventTime: recordedAt,
@@ -283,13 +296,13 @@ async function processLegacy(deps: Deps, orgId: string, webhookLogId: string, ra
         address: ping.position?.address,
         locationAccuracy: ping.position?.accuracyMeters,
         // One webhook log per delivered ping, so this key makes a queue retry a no-op.
-        sourceReportId: `webhook:${webhookLogId}:${i}`,
+        sourceReportId: fanOutKey(`webhook:${webhookLogId}:${i}`, shipmentId, n),
       })),
     ) ?? 0;
   }
 
-  if (shipment) {
-    await applyPingToJourney(deps, orgId, shipment.id, ping, rawPayload, 'legacy_webhook');
+  for (const target of shipments) {
+    await applyPingToJourney(deps, orgId, target.id, ping, rawPayload, 'legacy_webhook');
   }
 
   await prisma.webhookLog.update({

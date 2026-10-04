@@ -3,7 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { attachShipments, loadDraftConsolidation, rebuildConsolidationStops } from './consolidationMembership.js';
+import { attachShipments, loadDraftConsolidation, pushCarrierToShipments, rebuildConsolidationStops, shipmentUpdatedEvents } from './consolidationMembership.js';
 
 export interface AddShipmentsToConsolidationPayload {
   id: string;
@@ -27,9 +27,10 @@ export class AddShipmentsToConsolidationCommandHandler extends BaseCommandHandle
     const { orgId } = command;
     const { id, shipmentIds } = command.payload;
 
-    await loadDraftConsolidation(tx, orgId, id);
+    const consolidation = await loadDraftConsolidation(tx, orgId, id);
     await attachShipments(tx, orgId, id, shipmentIds);
-    const stopCount = await rebuildConsolidationStops(tx, orgId, id);
+    const carried = await pushCarrierToShipments(tx, orgId, consolidation.carrierId, shipmentIds);
+    const { stopCount, changedShipmentIds } = await rebuildConsolidationStops(tx, orgId, id);
 
     for (const shipmentId of new Set(shipmentIds)) {
       emit(this.createEvent(command, {
@@ -38,6 +39,9 @@ export class AddShipmentsToConsolidationCommandHandler extends BaseCommandHandle
         entityId: id,
         payload: { shipmentId, stopCount },
       }));
+    }
+    for (const e of shipmentUpdatedEvents([...carried, ...changedShipmentIds], ['consolidation'], id)) {
+      emit(this.createEvent(command, e));
     }
     return { stopCount };
   }

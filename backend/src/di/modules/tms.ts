@@ -97,6 +97,9 @@ import {
   AddShipmentsToConsolidationCommandHandler,
   RemoveShipmentFromConsolidationCommandHandler,
   ArchiveConsolidationCommandHandler,
+  TransitionConsolidationStatusCommandHandler,
+  ReorderConsolidationStopsCommandHandler,
+  SyncConsolidationProgressCommandHandler,
 } from '../../commands/consolidations/index.js';
 import {
   CreateAgentConfigCommandHandler,
@@ -686,6 +689,9 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new AddShipmentsToConsolidationCommandHandler(prisma, eventBus));
   bus.register(new RemoveShipmentFromConsolidationCommandHandler(prisma, eventBus));
   bus.register(new ArchiveConsolidationCommandHandler(prisma, eventBus));
+  bus.register(new TransitionConsolidationStatusCommandHandler(prisma, eventBus));
+  bus.register(new ReorderConsolidationStopsCommandHandler(prisma, eventBus));
+  bus.register(new SyncConsolidationProgressCommandHandler(prisma, eventBus));
 
   // Agent config commands
   bus.register(new CreateAgentConfigCommandHandler(prisma, eventBus));

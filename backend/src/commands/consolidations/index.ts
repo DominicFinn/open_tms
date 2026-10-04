@@ -3,3 +3,6 @@ export { UpdateConsolidationCommandHandler, UPDATE_CONSOLIDATION } from './Updat
 export { AddShipmentsToConsolidationCommandHandler, ADD_SHIPMENTS_TO_CONSOLIDATION } from './AddShipmentsToConsolidationCommand.js';
 export { RemoveShipmentFromConsolidationCommandHandler, REMOVE_SHIPMENT_FROM_CONSOLIDATION } from './RemoveShipmentFromConsolidationCommand.js';
 export { ArchiveConsolidationCommandHandler, ARCHIVE_CONSOLIDATION } from './ArchiveConsolidationCommand.js';
+export { TransitionConsolidationStatusCommandHandler, TRANSITION_CONSOLIDATION_STATUS } from './TransitionConsolidationStatusCommand.js';
+export { ReorderConsolidationStopsCommandHandler, REORDER_CONSOLIDATION_STOPS } from './ReorderConsolidationStopsCommand.js';
+export { SyncConsolidationProgressCommandHandler, SYNC_CONSOLIDATION_PROGRESS } from './SyncConsolidationProgressCommand.js';

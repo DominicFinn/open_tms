@@ -287,6 +287,46 @@ describe('createInboundWebhookWorker — generic ping telemetry and timing', () 
   });
 });
 
+describe('createInboundWebhookWorker — consolidation fan-out (#329)', () => {
+  it('applies a ping on a consolidation\'s device to each shipment on it, with its own copy of the readings', async () => {
+    const prisma = buildPrisma({
+      device: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'device-1', assignments: [{ shipmentId: null, consolidationId: 'con-1' }] }),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      consolidationShipment: { findMany: jest.fn().mockResolvedValue([{ shipmentId: 'ship-a' }, { shipmentId: 'ship-b' }]) },
+      shipment: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'ship-b', reference: 'SH-B' }, { id: 'ship-a', reference: 'SH-A' }]),
+        findFirst: jest.fn(),
+      },
+    });
+    const arrivalCriteriaService = { evaluateAndUpdateOrders: jest.fn().mockResolvedValue([]) } as any;
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService(), arrivalCriteriaService);
+
+    await worker(legacyMessage({
+      rawPayload: {
+        event: {
+          device: { id: 'dev-1', name: 'RUN-TRACKER' },
+          type: 'location',
+          startTime: '2026-01-01T08:00:00.000Z',
+          location: { global: { lat: 40.1, lon: -74.2 } },
+          readings: [{ time: '2026-01-01T08:00:00.000Z', temperature: 4.6 }],
+        },
+      },
+    }));
+
+    expect(prisma.consolidationShipment.findMany.mock.calls[0][0].where).toMatchObject({ consolidationId: 'con-1', consolidation: { orgId: 'org-1' } });
+    expect(arrivalCriteriaService.evaluateAndUpdateOrders.mock.calls.map((c: any[]) => c[0].shipmentId)).toEqual(['ship-a', 'ship-b']);
+    expect(prisma.shipmentEvent.create.mock.calls.map((c: any[]) => c[0].data.shipmentId)).toEqual(['ship-a', 'ship-b']);
+    const copies = prisma.sensorReading.createMany.mock.calls.map((c: any[]) => [c[0].data[0].shipmentId, c[0].data[0].sourceReportId]);
+    expect(copies).toEqual([['ship-a', 'webhook:log-1:0'], ['ship-b', 'webhook:log-1:0:ship-b']]);
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ shipmentId: 'ship-a', responseBody: expect.objectContaining({ readingsStored: 2 }) }),
+    }));
+  });
+});
+
 describe('createInboundWebhookWorker — standalone worker wiring (#287)', () => {
   it('publishes through an injected event bus instead of the DI container', async () => {
     fakeEventBus.publish.mockClear();

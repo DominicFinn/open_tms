@@ -232,6 +232,7 @@ model Consolidation {
 
   stops     ConsolidationStop[]
   shipments ConsolidationShipment[]
+  devices   DeviceAssignment[]
 
   @@unique([orgId, reference])
 }
@@ -1652,6 +1653,9 @@ model DeviceAssignment {
   shipmentId      String?
   order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId         String?
+  // A device on a consolidation tracks every shipment on it (#329)
+  consolidation   Consolidation? @relation(fields: [consolidationId], references: [id], onDelete: SetNull)
+  consolidationId String?
   trackableUnitId String?
   active          Boolean   @default(true)
   assignedAt      DateTime  @default(now())
@@ -1663,6 +1667,7 @@ model DeviceAssignment {
   @@index([deviceId, active])
   @@index([shipmentId])
   @@index([orderId])
+  @@index([consolidationId])
 }
 
 // Per-org registry of IoT tracking vendors that can be switched on/off in admin
