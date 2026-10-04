@@ -27,6 +27,7 @@ import { shipmentRoutes } from '../shipments.js';
 import { shipmentShareLinkRoutes } from '../shipmentShareLinks.js';
 import { shipmentTypeRoutes } from '../shipmentTypes.js';
 import { laneRoutes } from '../lanes.js';
+import { consolidationRoutes } from '../consolidations.js';
 import { laneRouteRoutes } from '../laneRoutes.js';
 import { orderRoutes } from '../orders.js';
 import { pendingLaneRequestRoutes } from '../pendingLaneRequests.js';
@@ -99,6 +100,7 @@ export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Prom
   await app.register(shipmentTypeRoutes);
   await app.register(laneRoutes);
   await app.register(laneRouteRoutes);
+  await app.register(consolidationRoutes);
   await app.register(orderRoutes);
   await app.register(pendingLaneRequestRoutes);
   await app.register(distanceRoutes);

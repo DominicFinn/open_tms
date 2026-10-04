@@ -24,6 +24,7 @@ import { selectSteps, type BackfillStep } from './backfillSteps.js';
 import { deriveFacilitiesFromLocations } from './deriveFacilities.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
+import { refreshConsolidationReadModel } from '../events/projections/ConsolidationProjection.js';
 
 async function backfillOrders(prisma: PrismaClient): Promise<number> {
   const orders = await prisma.order.findMany({
@@ -242,6 +243,16 @@ async function backfillCustomers(prisma: PrismaClient): Promise<number> {
   return count;
 }
 
+async function backfillConsolidations(prisma: PrismaClient): Promise<number> {
+  // Each row is rebuilt under its own orgId, read from the consolidation itself.
+  const consolidations = await prisma.consolidation.findMany({ select: { id: true, orgId: true } });
+  let count = 0;
+  for (const c of consolidations) {
+    if (await refreshConsolidationReadModel(prisma, c.orgId, c.id)) count++;
+  }
+  return count;
+}
+
 async function backfillLanes(prisma: PrismaClient): Promise<number> {
   const lanes = await prisma.lane.findMany({
     where: { archived: false },
@@ -445,6 +456,7 @@ export function buildBackfillSteps(prisma: PrismaClient): readonly BackfillStep[
     { name: 'carriers', label: 'carriers', run: () => backfillCarriers(prisma) },
     { name: 'customers', label: 'customers', run: () => backfillCustomers(prisma) },
     { name: 'lanes', label: 'lanes', run: () => backfillLanes(prisma) },
+    { name: 'consolidations', label: 'consolidations', run: () => backfillConsolidations(prisma) },
     { name: 'issues', label: 'issues', run: () => backfillIssues(prisma) },
     { name: 'agentDecisions', label: 'agent decisions', run: () => backfillAgentDecisions(prisma) },
     { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: () => backfillWmsFulfilmentOrders(prisma) },

@@ -292,6 +292,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
         },
         carrier: true,
         loads: { include: { vehicle: true, driver: true } },
+        consolidationShipment: { select: { consolidation: { select: { id: true, reference: true, status: true } } } },
         events: { orderBy: { eventTime: 'desc' } },
         deviceAssignments: {
           where: { active: true },

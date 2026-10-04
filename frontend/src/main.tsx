@@ -30,6 +30,8 @@ import VNextCustomers from './vnext-design/VNextCustomers';
 import VNextLocations from './vnext-design/VNextLocations';
 import VNextLanes from './vnext-design/VNextLanes';
 import VNextLaneDetail from './vnext-design/VNextLaneDetail';
+import VNextConsolidations from './vnext-design/VNextConsolidations';
+import VNextConsolidationDetail from './vnext-design/VNextConsolidationDetail';
 import VNextDocuments from './vnext-design/VNextDocuments';
 import VNextDailyReport from './vnext-design/VNextDailyReport';
 import VNextLocationReport from './vnext-design/VNextLocationReport';
@@ -390,6 +392,10 @@ root.render(
           <Route path="locations/create" element={<VNextCreateLocation />} />
           <Route path="locations/:id/edit" element={<VNextCreateLocation />} />
           <Route path="locations/:id/ops" element={<VNextLocationOps />} />
+
+          {/* Consolidations (#329) */}
+          <Route path="consolidations" element={<VNextConsolidations />} />
+          <Route path="consolidations/:id" element={<VNextConsolidationDetail />} />
 
           {/* Lanes */}
           <Route path="lanes" element={<VNextLanes />} />

@@ -17,6 +17,7 @@ import { ShipmentTimelineProjection } from './projections/ShipmentTimelineProjec
 import { CarrierProjection } from './projections/CarrierProjection.js';
 import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
+import { ConsolidationProjection } from './projections/ConsolidationProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
 import { IssueEngineHandler } from './handlers/IssueEngineHandler.js';
@@ -113,6 +114,7 @@ export async function registerEventHandlers(
     new CarrierProjection(prisma),
     new CustomerProjection(prisma),
     new LaneProjection(prisma),
+    new ConsolidationProjection(prisma),
     new IssueProjection(prisma),
     new AgentDecisionProjection(prisma),
     new QualityIssueSummaryProjection(prisma),

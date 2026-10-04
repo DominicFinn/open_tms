@@ -662,6 +662,52 @@ Each intermediate hub-and-spoke stop (`LaneStop`) has an optional `purpose` tag 
 
 ---
 
+## Consolidations (#329)
+
+A consolidation is one truck run carrying several shipments, usually for several customers. Each
+shipment stays one customer's (its own BOL, invoice and portal view); the consolidation owns the
+combined stops. Models: `Consolidation`, `ConsolidationStop`, `ConsolidationShipment` (join; its
+unique `shipmentId` keeps a shipment on at most one consolidation), and `ShipmentStop.consolidationStopId`
+linking each shipment stop to the consolidation stop that serves it. Lists read `ConsolidationReadModel`.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateConsolidationCommand` | `POST /api/v1/consolidations` | `consolidation.created` |
+| `UpdateConsolidationCommand` | `PATCH /api/v1/consolidations/:id` (carrier, notes) | `consolidation.updated` |
+| `AddShipmentsToConsolidationCommand` | `POST /api/v1/consolidations/:id/shipments` | `consolidation.shipment_added` (one per shipment) |
+| `RemoveShipmentFromConsolidationCommand` | `POST /api/v1/consolidations/:id/shipments/:shipmentId/remove` | `consolidation.shipment_removed` |
+| `ArchiveConsolidationCommand` | `POST /api/v1/consolidations/:id/archive` | `consolidation.archived` |
+
+Writes need `shipments:write`. `GET /api/v1/consolidations/candidates` lists shipments that can join.
+
+### Rules
+
+- A shipment can join only while `draft` or `ready`, not archived, and not on another consolidation.
+- Shipments are added and removed only while the consolidation is `draft`.
+- **Stops are rebuilt on every add and remove** (`rebuildConsolidationStops`): every pickup before
+  every drop, each in the order the shipments were added and then each shipment's own stop order.
+  Shipments sharing a location share its stop (a pickup and a drop at the same place stay separate
+  stops). Stops still needed keep their row and status; stops no longer needed are deleted, which
+  unlinks their shipment stops.
+- Archiving a draft frees its shipments (they can be consolidated again) and deletes its stops. A
+  completed or cancelled run keeps its shipments as the record. A run in progress can't be archived.
+
+### Side Effects
+
+| Event | Projection |
+|-------|-----------|
+| `consolidation.*` | `ConsolidationProjection` rebuilds the row from source: carrier name, shipment and customer counts, customer names, stop count, first and last stop, earliest pickup, latest delivery, archived |
+
+Backfill: `npx tsx backend/src/scripts/backfill-read-models.ts --only=consolidations`.
+
+Not yet: tracking at consolidation level, cost allocation, and creating per-customer shipments
+from "Ship together" (later slices of #329). Drop order isn't reorderable yet: drops follow first
+appearance, which can differ from a shipment's own drop order.
+
+---
+
 ## Issues / Triage
 
 Issues track operational problems — exceptions, delays, damage, compliance failures. They can be created manually or auto-created from domain events.

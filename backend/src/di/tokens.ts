@@ -17,6 +17,7 @@ export const TOKENS = {
   IShipmentShareService: Symbol.for('IShipmentShareService'),
   IShipmentShareViewService: Symbol.for('IShipmentShareViewService'),
   ILanesRepository: Symbol.for('ILanesRepository'),
+  IConsolidationRepository: Symbol.for('IConsolidationRepository'),
   IOrdersRepository: Symbol.for('IOrdersRepository'),
   IOrganizationRepository: Symbol.for('IOrganizationRepository'),
   IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),

@@ -16,6 +16,7 @@ import { ShipmentTypesRepository } from '../../repositories/ShipmentTypesReposit
 import { CarriersRepository } from '../../repositories/CarriersRepository.js';
 import { ShipmentsRepository } from '../../repositories/ShipmentsRepository.js';
 import { LanesRepository } from '../../repositories/LanesRepository.js';
+import { ConsolidationRepository } from '../../repositories/ConsolidationRepository.js';
 import { OrdersRepository } from '../../repositories/OrdersRepository.js';
 import { PendingLaneRequestsRepository } from '../../repositories/PendingLaneRequestsRepository.js';
 import { ArrivalCriteriaRepository } from '../../repositories/ArrivalCriteriaRepository.js';
@@ -90,6 +91,13 @@ import { ArchiveShipmentTypeCommandHandler } from '../../commands/shipmentTypes/
 import { CreateLaneCommandHandler } from '../../commands/lanes/CreateLaneCommand.js';
 import { UpdateLaneCommandHandler } from '../../commands/lanes/UpdateLaneCommand.js';
 import { ArchiveLaneCommandHandler } from '../../commands/lanes/ArchiveLaneCommand.js';
+import {
+  CreateConsolidationCommandHandler,
+  UpdateConsolidationCommandHandler,
+  AddShipmentsToConsolidationCommandHandler,
+  RemoveShipmentFromConsolidationCommandHandler,
+  ArchiveConsolidationCommandHandler,
+} from '../../commands/consolidations/index.js';
 import {
   CreateAgentConfigCommandHandler,
   UpdateAgentConfigCommandHandler,
@@ -258,6 +266,10 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.ILanesRepository).toFactory(() => {
     return new LanesRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IConsolidationRepository).toFactory(() => {
+    return new ConsolidationRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.IOrdersRepository).toFactory(() => {
@@ -667,6 +679,13 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new CreateLaneCommandHandler(prisma, eventBus));
   bus.register(new UpdateLaneCommandHandler(prisma, eventBus));
   bus.register(new ArchiveLaneCommandHandler(prisma, eventBus));
+
+  // Consolidation commands (#329)
+  bus.register(new CreateConsolidationCommandHandler(prisma, eventBus));
+  bus.register(new UpdateConsolidationCommandHandler(prisma, eventBus));
+  bus.register(new AddShipmentsToConsolidationCommandHandler(prisma, eventBus));
+  bus.register(new RemoveShipmentFromConsolidationCommandHandler(prisma, eventBus));
+  bus.register(new ArchiveConsolidationCommandHandler(prisma, eventBus));
 
   // Agent config commands
   bus.register(new CreateAgentConfigCommandHandler(prisma, eventBus));
