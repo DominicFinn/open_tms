@@ -4,7 +4,7 @@
  * This process:
  * - Does NOT start Fastify or listen on any HTTP port
  * - Creates its own PrismaClient with its own connection pool
- * - Creates its own PgBossQueueAdapter
+ * - Sets up the same DI container as the API (queue adapter, event bus, full command bus)
  * - Registers event handlers (audit, notifications, email, webhooks, triage)
  * - Optionally runs the existing operational workers (inbound webhook)
  *
@@ -20,17 +20,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { PgBossQueueAdapter } from './queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from './events/PgBossEventBus.js';
 import { registerEventHandlers } from './events/registerHandlers.js';
 import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
-import { OrderDeliveryService } from './services/OrderDeliveryService.js';
-import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
-import { RecordGeofenceArrivalCommandHandler } from './commands/tracking/RecordGeofenceArrivalCommand.js';
-import { RecordGeofenceDepartureCommandHandler } from './commands/tracking/RecordGeofenceDepartureCommand.js';
-import { RecordJourneyCheckpointCommandHandler } from './commands/tracking/RecordJourneyCheckpointCommand.js';
-import { RecordStopOrdersDeliveryCommandHandler } from './commands/orders/RecordStopOrdersDeliveryCommand.js';
 import { IEmailService } from './services/IEmailService.js';
 import { SmtpEmailService } from './services/SmtpEmailService.js';
 import { ConsoleEmailService } from './services/ConsoleEmailService.js';
@@ -39,14 +32,13 @@ import { DatabaseBinaryStorage } from './storage/DatabaseBinaryStorage.js';
 import { S3FileStorage } from './storage/S3FileStorage.js';
 import { AnthropicLlmProvider } from './services/llm/AnthropicLlmProvider.js';
 import { ILlmProvider } from './services/llm/ILlmProvider.js';
-import { CommandBus, ICommandBus } from './commands/CommandBus.js';
-import { CreateAgentDecisionCommandHandler } from './commands/agentDecisions/CreateAgentDecisionCommand.js';
-import { RecordDecisionOutcomeCommandHandler } from './commands/agentDecisions/RecordDecisionOutcomeCommand.js';
-import { PromoteDecisionCommandHandler } from './commands/agentDecisions/PromoteDecisionCommand.js';
-import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.js';
-import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
-import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
-import { SetShipmentRouteCommandHandler } from './commands/shipments/SetShipmentRouteCommand.js';
+import { ICommandBus } from './commands/CommandBus.js';
+import { registerDependencies } from './di/index.js';
+import { container } from './di/container.js';
+import { TOKENS } from './di/tokens.js';
+import type { IQueueAdapter } from './queue/IQueueAdapter.js';
+import type { IOrderDeliveryService } from './services/OrderDeliveryService.js';
+import type { IArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
 import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
 import { SkillRegistry } from './services/skills/SkillRegistry.js';
 import { DocumentGenerationService, IDocumentGenerationService } from './services/DocumentGenerationService.js';
@@ -103,15 +95,14 @@ async function startWorker() {
   await prisma.$connect();
   console.log('[Worker] Database connected');
 
-  // Own queue adapter
-  const dbUrl = process.env.DATABASE_URL || '';
-  const queue = new PgBossQueueAdapter(dbUrl);
+  // The same container as the API (#327): one queue adapter, one event bus and the full command
+  // bus, so every command-driven handler runs here whether or not an LLM is configured.
+  registerDependencies(prisma);
+  const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
   await queue.start();
   console.log('[Worker] Queue adapter started');
-
-  // One event bus for the process. Fan-out only reaches handlers registered on this bus, so the
-  // integration workers below publish through the same instance the event handlers register on.
-  const eventBus = new PgBossEventBus(prisma, queue);
+  const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   // Event handlers (audit, notifications, email, webhooks, triage)
   if (WORKER_MODE === 'all' || WORKER_MODE === 'events') {
@@ -156,7 +147,6 @@ async function startWorker() {
     // LLM key may only drive it when that org is the only tenant. With several orgs, one tenant's
     // key would pay for, and see, every other tenant's agent traffic, so the environment is used.
     let llmProvider: ILlmProvider | undefined;
-    let workerCommandBus: ICommandBus | undefined;
 
     const soleOrgId = await resolveSoleOrganizationId(prisma);
     const org = soleOrgId
@@ -177,17 +167,6 @@ async function startWorker() {
         baseURL: process.env.ANTHROPIC_BASE_URL,
       });
 
-      // Worker-local command bus for agent handlers to dispatch commands
-      const bus = new CommandBus();
-      bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
-      bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
-      bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
-      bus.register(new CreateIssueCommandHandler(prisma, eventBus));
-      bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
-      bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
-      // The route planning handler stores routes through this bus (#328).
-      bus.register(new SetShipmentRouteCommandHandler(prisma, eventBus));
-      workerCommandBus = bus;
 
       const source = org?.llmApiKey ? 'org config' : 'env var';
       console.log(`[Worker] LLM provider configured (Anthropic via ${source}), AI agents enabled`);
@@ -199,10 +178,8 @@ async function startWorker() {
 
     // Build skill registry for automation rules (always available, even without LLM)
     const skillRegistry = new SkillRegistry();
-    if (workerCommandBus) {
-      skillRegistry.register(new CreateIssueSkill(workerCommandBus));
-      skillRegistry.register(new EscalateIssueSkill(workerCommandBus));
-    }
+    skillRegistry.register(new CreateIssueSkill(commandBus));
+    skillRegistry.register(new EscalateIssueSkill(commandBus));
     skillRegistry.register(new CallWebhookSkill());
     if (emailService) {
       skillRegistry.register(new SendEmailSkill(emailService));
@@ -221,7 +198,7 @@ async function startWorker() {
         )
       : undefined;
 
-    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus, skillRegistry, documentService);
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, commandBus, skillRegistry, documentService);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }
@@ -229,18 +206,11 @@ async function startWorker() {
   // Integration workers (inbound webhook). The legacy outbound carrier and
   // outbound tracking workers were removed — outbound EDI is now driven by
   // Edi856AutoSendHandler and Edi810AutoSendHandler off domain events.
-  // Registered after the event handlers so the bus already knows where to fan out (#287).
+  // In integrations-only mode this process runs no handlers, so its events go to the dispatch queue
+  // for an events worker to fan out (#327).
   if (WORKER_MODE === 'all' || WORKER_MODE === 'integrations') {
-    if (WORKER_MODE === 'integrations') {
-      console.warn('[Worker] integrations-only mode: tracking events are recorded but only fan out to handlers registered in this process');
-    }
-    const trackingCommandBus = new CommandBus();
-    trackingCommandBus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
-    trackingCommandBus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
-    trackingCommandBus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
-    trackingCommandBus.register(new RecordStopOrdersDeliveryCommandHandler(prisma, eventBus));
-    const deliveryService = new OrderDeliveryService(prisma, trackingCommandBus);
-    const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(prisma, deliveryService, trackingCommandBus);
+    const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
+    const arrivalCriteriaService = container.resolve<IArrivalCriteriaEvaluationService>(TOKENS.IArrivalCriteriaEvaluationService);
     await queue.subscribe(
       QUEUES.INBOUND_WEBHOOK,
       createInboundWebhookWorker(prisma, deliveryService, arrivalCriteriaService, eventBus),

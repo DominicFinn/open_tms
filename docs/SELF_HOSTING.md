@@ -162,7 +162,8 @@ to start.
 
 Setting `DISABLE_EMBEDDED_WORKERS=true` moves that work to a separate `dist/worker.js` process, so
 the API only serves requests. That split is worth it once request latency and background work start
-competing for CPU. Check the open issues first: the separate worker process has a known problem that
+competing for CPU. Events the API publishes then go to an `evt.__dispatch` queue, which the
+worker consumes and fans out to its handlers. Check the open issues first: the separate worker process has a known problem that
 makes it unrunnable at present.
 
 ### EDI collector

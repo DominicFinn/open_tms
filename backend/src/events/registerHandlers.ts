@@ -250,14 +250,3 @@ function shipmentRoutePlanningHandler(prisma: PrismaClient, commandBus: ICommand
   ));
 }
 
-/**
- * Route planning for the embedded (API process) workers, which register the other handlers without
- * a command bus (#328). The standalone worker gets it through registerEventHandlers instead, so it
- * is never registered twice.
- */
-export async function registerShipmentRoutePlanning(eventBus: IEventBus, prisma: PrismaClient, commandBus: ICommandBus): Promise<void> {
-  const handler = shipmentRoutePlanningHandler(prisma, commandBus);
-  await eventBus.subscribe(handler.name, handler.eventPatterns, (event) => handler.handle(event), handler.options);
-  console.log(`[EventBus] Registered handler: ${handler.name} (patterns: ${handler.eventPatterns.join(', ')})`);
-}
-
