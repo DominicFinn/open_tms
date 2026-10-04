@@ -25,6 +25,16 @@ API Request → Validate (Zod) → Dispatch Command → Execute in Transaction
 
 Every event is persisted to the immutable `DomainEventLog` before handler fan-out. Events can be replayed, exported for data warehouses, or consumed by ML pipelines.
 
+**Fan-out across processes (#327).** `PgBossEventBus` fans an event out to the queues of the handlers
+registered in its own process. A process that runs no handlers (the API with
+`DISABLE_EMBEDDED_WORKERS=true`, or a `WORKER_MODE=integrations` worker) can't do that, so it puts
+the event on one `evt.__dispatch` queue instead; every process that has started handlers also
+consumes that queue and fans each event out to its own handler queues. pg-boss delivers each job
+once, so nothing is handled twice, and scaled-out workers share the dispatch queue. Both the API's
+embedded workers and the standalone worker register the event handlers with the full command bus,
+so the command-driven handlers (issue engine, auto-replenishment, route planning) run in either
+setup; the triage agent still also needs an LLM provider.
+
 ---
 
 ## Orders
@@ -473,13 +483,11 @@ its readings only in the webhook log's raw payload. The webhook log's response b
 `readingsReceived` and `readingsStored`. System Loco readings are still stored by
 `SystemLocoAdapter` (it feeds cold chain and alerting).
 
-**Standalone worker (#287).** `worker.ts` (the separate worker container) now wires the same journey
-pipeline as the embedded API worker: it builds one `PgBossEventBus` for the process, registers the
-event handlers on it first, then builds a command bus with the three tracking command handlers and an
-`ArrivalCriteriaEvaluationService`, and passes both the service and the bus into
-`createInboundWebhookWorker` (the worker has no DI container to resolve them from). Fan-out only
-reaches handlers registered in the publishing process, so in `WORKER_MODE=integrations` tracking
-events are recorded in the event log but reach no handlers.
+**Standalone worker (#287, #327).** `worker.ts` (the separate worker container) sets up the same DI
+container as the API, so it uses the same queue adapter, event bus, full command bus, order delivery
+service and arrival-criteria service, and wires the same journey pipeline as the embedded API worker.
+In `WORKER_MODE=integrations` it runs no event handlers, so its events go through the dispatch queue
+to an events worker.
 
 **Skipped checkpoints.** Pings can be far enough apart that a shipment jumps several checkpoints.
 `RecordJourneyCheckpointCommand` records every checkpoint between the last recorded one and the one

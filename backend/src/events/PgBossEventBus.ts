@@ -19,6 +19,14 @@ import { IQueueAdapter, QueueMessage } from '../queue/IQueueAdapter.js';
 
 const QUEUE_PREFIX = 'evt.';
 
+/**
+ * Events published by a process that doesn't run handlers (the API with DISABLE_EMBEDDED_WORKERS,
+ * or an integrations-only worker) can't be fanned out there: fan-out only knows the handlers
+ * registered in its own process (#327). They go to this queue instead, and whichever process does
+ * run handlers consumes it and fans them out to its handler queues.
+ */
+const DISPATCH_QUEUE = QUEUE_PREFIX + '__dispatch';
+
 interface HandlerRegistration {
   patterns: string[];
   handler: EventHandler;
@@ -31,6 +39,8 @@ type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transa
 export class PgBossEventBus implements IEventBus {
   private registry = new Map<string, HandlerRegistration>();
   private started = false;
+  /** True once start() wired at least one handler: this process consumes events itself. */
+  private consuming = false;
 
   constructor(
     private prisma: PrismaClient,
@@ -61,22 +71,26 @@ export class PgBossEventBus implements IEventBus {
    * Fan out an already-persisted event to matching handler queues.
    * Called after transaction commit. Failures are logged but don't throw
    * because the event is already safely in DomainEventLog.
+   *
+   * A process that runs handlers fans out itself; one that doesn't hands the event to the dispatch
+   * queue, for a process that does (#327).
    */
   async fanOut<T>(event: DomainEvent<T>): Promise<void> {
+    if (!this.consuming) {
+      await this.queue.publish(DISPATCH_QUEUE, toMessage(event)).catch((err) => {
+        console.error(`[EventBus] Dispatch failed for event ${event.id} (${event.type}): ${(err as Error).message}`);
+      });
+      return;
+    }
+    await this.fanOutLocally(event);
+  }
+
+  private async fanOutLocally<T>(event: DomainEvent<T>): Promise<void> {
     const fanOutPromises: Promise<string>[] = [];
 
     for (const [handlerName, registration] of this.registry) {
       if (this.matchesAny(event.type, registration.patterns)) {
-        const queueName = QUEUE_PREFIX + handlerName;
-        const message: QueueMessage = {
-          type: event.type,
-          payload: event,
-          metadata: {
-            timestamp: event.timestamp,
-            sourceId: event.id,
-          },
-        };
-        fanOutPromises.push(this.queue.publish(queueName, message));
+        fanOutPromises.push(this.queue.publish(QUEUE_PREFIX + handlerName, toMessage(event)));
       }
     }
 
@@ -141,11 +155,20 @@ export class PgBossEventBus implements IEventBus {
       await this.wireHandler(handlerName, reg.handler, reg.options);
     }
     this.started = true;
+
+    // A process with handlers also takes events dispatched by processes without any.
+    if (this.registry.size > 0) {
+      await this.queue.subscribe(DISPATCH_QUEUE, async (message: QueueMessage) => {
+        await this.fanOutLocally(message.payload as DomainEvent);
+      });
+      this.consuming = true;
+    }
     console.log(`[EventBus] Started with ${this.registry.size} handler(s)`);
   }
 
   async stop(): Promise<void> {
     this.started = false;
+    this.consuming = false;
     console.log('[EventBus] Stopped');
   }
 
@@ -190,3 +213,12 @@ export class PgBossEventBus implements IEventBus {
     });
   }
 }
+
+function toMessage<T>(event: DomainEvent<T>): QueueMessage {
+  return {
+    type: event.type,
+    payload: event,
+    metadata: { timestamp: event.timestamp, sourceId: event.id },
+  };
+}
+

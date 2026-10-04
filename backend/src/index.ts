@@ -24,7 +24,7 @@ import { createOrderAutoArchiveWorker, registerOrderAutoArchiveSchedule, ORDER_A
 import { OrderAutoArchiveService } from './services/OrderAutoArchiveService.js';
 import { createCarrierUserAnonymizeWorker, registerCarrierUserAnonymizeSchedule, CARRIER_USER_ANONYMIZE_QUEUE } from './workers/carrierUserAnonymizeWorker.js';
 import { CarrierUserAnonymizationService } from './services/CarrierUserAnonymizationService.js';
-import { registerEventHandlers, registerShipmentRoutePlanning } from './events/registerHandlers.js';
+import { registerEventHandlers } from './events/registerHandlers.js';
 import { ICommandBus } from './commands/CommandBus.js';
 import type { IEventBus } from './events/IEventBus.js';
 import { createWebhookRetryWorker, registerWebhookRetrySchedule, WEBHOOK_RETRY_QUEUE } from './workers/webhookRetryWorker.js';
@@ -153,16 +153,19 @@ async function start() {
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
       // CQRS event handlers (projections, audit, notifications) — wired in the
       // backend process for dev. In prod with a separate worker container,
-      // DISABLE_EMBEDDED_WORKERS=true keeps these out so they aren't processed twice.
+      // DISABLE_EMBEDDED_WORKERS=true keeps these out so they aren't processed twice; this process
+      // then runs no handlers, so its events go to the dispatch queue for the worker (#327).
       try {
         const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
         const documentService = container.has(TOKENS.IDocumentGenerationService)
           ? container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService)
           : undefined;
+        // With the command bus, the command-driven handlers (issue engine, auto-replenishment,
+        // route planning) run here too, as they do in the standalone worker (#327).
         await registerEventHandlers(
-          eventBus, server.prisma, undefined, undefined, undefined, undefined, undefined, documentService
+          eventBus, server.prisma, undefined, undefined, undefined,
+          container.resolve<ICommandBus>(TOKENS.ICommandBus), undefined, documentService
         );
-        await registerShipmentRoutePlanning(eventBus, server.prisma, container.resolve<ICommandBus>(TOKENS.ICommandBus));
         await eventBus.start();
         server.log.info('Embedded event handlers registered (projections + audit + notifications)');
       } catch (err) {
