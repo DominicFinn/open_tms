@@ -128,8 +128,8 @@ null (not moving yet) → in_transit → delivered
 **What can share a shipment (#325).** `commands/orders/shipmentLoadRules.ts`, enforced inside
 `AddOrdersToShipmentCommand`, `CombineOrdersIntoShipmentCommand`, `ConvertOrderToShipmentCommand` and
 `SplitOrderCommand`: an FTL shipment carries exactly one order; FTL and LTL orders never share a
-shipment; LTL orders from different customers may (the shipment is filed under the first order's
-customer); a shipment is `tempControlled` / `hazmat` if any order on it needs that. Every path that
+shipment; a shipment belongs to one customer (several customers' freight on one truck will be a
+consolidation of per-customer shipments, not a shared shipment); a shipment is `tempControlled` / `hazmat` if any order on it needs that. Every path that
 creates a shipment from orders sets `serviceLevel`, `tempControlled` and `hazmat` from them, and
 starts it with a pickup stop at the origin (sequence 1) so leaving the origin is tracked (#324);
 combining orders bound for different places sets the shipment's destination to its last drop; adding

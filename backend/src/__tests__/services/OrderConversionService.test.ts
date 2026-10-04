@@ -316,7 +316,7 @@ describe('OrderConversionService', () => {
   });
 
   describe('checkCompatibility', () => {
-    it('flags different origins as an error and different customers as a warning only', async () => {
+    it('flags different origins and different customers as errors (#325)', async () => {
       const orderA = makeOrder({ id: 'order-a', customerId: 'cust-a', originId: 'loc-origin-1' });
       const orderB = makeOrder({ id: 'order-b', customerId: 'cust-b', originId: 'loc-origin-2' });
       const prisma = {
@@ -335,8 +335,8 @@ describe('OrderConversionService', () => {
         expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org' }) }),
       );
       expect(check.compatible).toBe(false);
-      expect(check.errors[0]).toMatch(/different origins/);
-      expect(check.warnings.some((w) => w.includes('different customers'))).toBe(true);
+      expect(check.errors.some((e) => /different origins/.test(e))).toBe(true);
+      expect(check.errors.some((e) => /different customers/.test(e))).toBe(true);
     });
   });
 });

@@ -4,7 +4,9 @@
  * BUSINESS RULES:
  * - FTL is a dedicated truck: an FTL shipment carries exactly one order.
  * - FTL and LTL orders never share a shipment.
- * - LTL consolidates freight, so its orders may belong to different customers.
+ * - A shipment belongs to one customer. Several customers' freight on one truck is a consolidation
+ *   of per-customer shipments (planned), not one shared shipment: each customer needs their own
+ *   bill of lading, invoice and portal view.
  * - A shipment is temperature-controlled / hazmat if any order on it needs that.
  *
  * Enforced inside the add/combine/convert/split commands, so a race between two requests can't
@@ -13,6 +15,7 @@
 
 export interface LoadOrder {
   orderNumber: string;
+  customerId: string;
   serviceLevel: string;
   temperatureControl: string;
   requiresHazmat: boolean;
@@ -33,6 +36,7 @@ export class ShipmentLoadRuleError extends Error {
 
 /** The profile a new shipment takes from the orders it's created for. */
 export function loadProfileFor(orders: LoadOrder[]): ShipmentLoadProfile {
+  singleCustomer(orders);
   const serviceLevel = singleServiceLevel(orders);
   if (serviceLevel === 'FTL' && orders.length > 1) {
     throw new ShipmentLoadRuleError(`An FTL shipment carries one order; got ${orders.length} FTL orders`);
@@ -49,10 +53,14 @@ export function loadProfileFor(orders: LoadOrder[]): ShipmentLoadProfile {
  * the service level the shipment should have afterwards (its own, or the orders' when it has none).
  */
 export function assertCanAdd(
-  shipment: { serviceLevel: string | null; tempControlled: boolean; hazmat: boolean },
+  shipment: { customerId: string | null; serviceLevel: string | null; tempControlled: boolean; hazmat: boolean },
   existingOrderCount: number,
   orders: LoadOrder[],
 ): string {
+  const customerId = singleCustomer(orders);
+  if (shipment.customerId && customerId !== shipment.customerId) {
+    throw new ShipmentLoadRuleError('Orders for another customer can\'t join this shipment');
+  }
   const ordersLevel = singleServiceLevel(orders);
   const serviceLevel = shipment.serviceLevel ?? ordersLevel;
   if (ordersLevel !== serviceLevel) {
@@ -66,6 +74,12 @@ export function assertCanAdd(
   const needsTemp = orders.find((o) => o.temperatureControl !== 'ambient' && !shipment.tempControlled);
   if (needsTemp) throw new ShipmentLoadRuleError(`${needsTemp.orderNumber} requires temperature control, which this shipment isn't flagged for`);
   return serviceLevel;
+}
+
+function singleCustomer(orders: LoadOrder[]): string {
+  const customers = new Set(orders.map((o) => o.customerId));
+  if (customers.size > 1) throw new ShipmentLoadRuleError('Orders for different customers can\'t share a shipment');
+  return [...customers][0];
 }
 
 function singleServiceLevel(orders: LoadOrder[]): string {

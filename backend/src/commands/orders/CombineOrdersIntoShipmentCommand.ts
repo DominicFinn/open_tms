@@ -71,7 +71,6 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
         destinationId: firstOrder.destinationId!,
         items: [],
         status: 'draft',
-        // LTL may mix customers; the shipment is filed under the first order's.
         ...loadProfileFor(orders),
       },
     });

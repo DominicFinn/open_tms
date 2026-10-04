@@ -25,6 +25,7 @@ function makeShipment(overrides: any = {}) {
     id: 'ship-1',
     orgId: 'test-org',
     reference: 'SH-EXISTING',
+    customerId: 'cust-1',
     serviceLevel: 'LTL',
     tempControlled: false,
     hazmat: false,
@@ -181,9 +182,10 @@ describe('AddOrdersToShipmentCommandHandler', () => {
       expect(result.error).toMatch(/FTL orders can't join a LTL shipment/);
     });
 
-    it('lets LTL orders from different customers share a shipment', async () => {
-      const { result } = await add({}, [makeOrder({ id: 'a', customerId: 'cust-1' }), makeOrder({ id: 'b', customerId: 'cust-2' })]);
-      expect(result.success).toBe(true);
+    it('refuses an order for another customer, even on LTL', async () => {
+      const { result } = await add({ customerId: 'cust-1' }, [makeOrder({ id: 'b', customerId: 'cust-2' })]);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/another customer/);
     });
 
     it('gives a shipment with no service level the orders\' one', async () => {

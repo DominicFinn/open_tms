@@ -1,6 +1,6 @@
 import { assertCanAdd, loadProfileFor, ShipmentLoadRuleError } from '../../commands/orders/shipmentLoadRules';
 
-const order = (overrides: object = {}) => ({ orderNumber: 'ORD-1', serviceLevel: 'LTL', temperatureControl: 'ambient', requiresHazmat: false, ...overrides });
+const order = (overrides: object = {}) => ({ orderNumber: 'ORD-1', customerId: 'cust-1', serviceLevel: 'LTL', temperatureControl: 'ambient', requiresHazmat: false, ...overrides });
 
 describe('shipmentLoadRules (#325)', () => {
   it('takes the service level and the strictest handling from the orders', () => {
@@ -15,9 +15,16 @@ describe('shipmentLoadRules (#325)', () => {
   });
 
   it('refuses an order needing handling the shipment is not flagged for', () => {
-    const shipment = { serviceLevel: 'LTL', tempControlled: false, hazmat: false };
+    const shipment = { customerId: 'cust-1', serviceLevel: 'LTL', tempControlled: false, hazmat: false };
     expect(() => assertCanAdd(shipment, 1, [order({ requiresHazmat: true })])).toThrow(/hazmat/);
     expect(() => assertCanAdd(shipment, 1, [order({ temperatureControl: 'refrigerated' })])).toThrow(/temperature control/);
     expect(assertCanAdd(shipment, 3, [order()])).toBe('LTL');
   });
+
+  it('keeps a shipment to one customer', () => {
+    expect(() => loadProfileFor([order(), order({ customerId: 'cust-2' })])).toThrow(/different customers/);
+    const shipment = { customerId: 'cust-1', serviceLevel: 'LTL', tempControlled: false, hazmat: false };
+    expect(() => assertCanAdd(shipment, 1, [order({ customerId: 'cust-2' })])).toThrow(/another customer/);
+  });
 });
+

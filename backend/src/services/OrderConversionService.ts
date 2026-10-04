@@ -133,11 +133,11 @@ export class OrderConversionService implements IOrderConversionService {
     }
 
     // Check customer consistency
+    // BUSINESS RULE (#325): a shipment belongs to one customer; several customers on one truck
+    // will be a consolidation of per-customer shipments.
     const customerIds = new Set(orders.map((o) => o.customerId));
     if (customerIds.size > 1) {
-      warnings.push(
-        'Orders belong to different customers. Combined shipment will use the first order\'s customer.'
-      );
+      errors.push('Orders belong to different customers, which can\'t share a shipment.');
     }
 
     // Check origin consistency
