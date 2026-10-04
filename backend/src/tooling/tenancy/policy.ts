@@ -30,6 +30,8 @@ export const INHERITED_MODELS: Readonly<Record<string, string>> = {
   CarrierTrackingEvent: 'shipment',
   CarrierTrackingIntegration: 'carrier',
   CarrierUser: 'carrier',
+  ConsolidationShipment: 'consolidation',
+  ConsolidationStop: 'consolidation',
   CustomerLane: 'customer',
   CustomerUser: 'customer',
   CustomFieldDefinition: 'version',

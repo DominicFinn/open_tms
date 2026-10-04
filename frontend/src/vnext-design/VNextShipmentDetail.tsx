@@ -2488,6 +2488,13 @@ export default function VNextShipmentDetail() {
           <p className="mt-1 text-sm text-muted-foreground">
             {shipment.proNumber && <>PRO# {shipment.proNumber}</>}
             {shipment.customer?.name && <> &middot; {shipment.customer.name}</>}
+            {shipment.consolidationShipment?.consolidation && (
+              <> &middot; Rides on{' '}
+                <Link to={`/consolidations/${shipment.consolidationShipment.consolidation.id}`} className="text-primary hover:underline">
+                  {shipment.consolidationShipment.consolidation.reference}
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

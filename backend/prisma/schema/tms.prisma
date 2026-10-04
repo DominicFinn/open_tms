@@ -131,6 +131,7 @@ model Shipment {
   // Public sharing
   shareLinks ShipmentShareLink[]
 
+  consolidationShipment ConsolidationShipment?
   @@index([customerId])
   @@index([status])
   @@index([originId])
@@ -197,13 +198,92 @@ model ShipmentStop {
   discrepanciesActual   CargoDiscrepancy[] @relation("ActualStop")
   trackableUnitsHere    TrackableUnit[]    @relation("UnitCurrentStop")
 
+  // The consolidation stop that serves this stop, when the shipment rides a consolidation (#329)
+  consolidationStop   ConsolidationStop? @relation(fields: [consolidationStopId], references: [id], onDelete: SetNull)
+  consolidationStopId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // (shipmentId) is served by the unique's leftmost prefix, so it has no index of its own (#329).
   @@unique([shipmentId, sequenceNumber])
-  @@index([shipmentId])
   @@index([locationId])
   @@index([status])
+  @@index([consolidationStopId])
+}
+
+// ─── Consolidations (#329) ───────────────────────────────────────────────────
+// One truck run carrying several shipments, usually for several customers. Each shipment stays one
+// customer's; the consolidation owns the combined stops, and each shipment stop links to the
+// consolidation stop that serves it. Lists read ConsolidationReadModel.
+model Consolidation {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+  reference    String
+  status       String       @default("draft") // draft, ready, in_progress, complete, cancelled
+  carrier      Carrier?     @relation(fields: [carrierId], references: [id])
+  carrierId    String?
+  notes        String?
+  archived     Boolean      @default(false)
+  archivedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  stops     ConsolidationStop[]
+  shipments ConsolidationShipment[]
+
+  @@unique([orgId, reference])
+}
+
+model ConsolidationStop {
+  id              String         @id @default(uuid())
+  consolidation   Consolidation  @relation(fields: [consolidationId], references: [id], onDelete: Cascade)
+  consolidationId String
+  location        Location       @relation(fields: [locationId], references: [id])
+  locationId      String
+  sequenceNumber  Int
+  stopType        String // pickup, delivery
+  status          String         @default("pending") // pending, arrived, completed, skipped
+  shipmentStops   ShipmentStop[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([consolidationId, sequenceNumber])
+}
+
+model ConsolidationShipment {
+  id              String        @id @default(uuid())
+  consolidation   Consolidation @relation(fields: [consolidationId], references: [id], onDelete: Cascade)
+  consolidationId String
+  shipment        Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  // Unique: a shipment rides at most one consolidation.
+  shipmentId      String        @unique
+  addedAt         DateTime      @default(now())
+
+  @@index([consolidationId, addedAt])
+}
+
+model ConsolidationReadModel {
+  id            String       @id
+  organization  Organization @relation(fields: [orgId], references: [id])
+  orgId         String
+  reference     String
+  status        String
+  archived      Boolean      @default(false)
+  carrierName   String?
+  shipmentCount Int          @default(0)
+  customerCount Int          @default(0)
+  customerNames String[]
+  stopCount     Int          @default(0)
+  firstStopName String?
+  lastStopName  String?
+  pickupDate    DateTime?
+  deliveryDate  DateTime?
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  @@index([orgId, archived, createdAt])
 }
 
 // ─── Arrival Criteria ─────────────────────────────────────────────────────────
@@ -384,6 +464,7 @@ model Carrier {
   trackingIntegration CarrierTrackingIntegration?
   trackingEvents      CarrierTrackingEvent[]
 
+  consolidations Consolidation[]
   @@index([orgId])
 }
 

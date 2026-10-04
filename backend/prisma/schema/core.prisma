@@ -143,6 +143,7 @@ model Location {
   inventoryObservations InventoryObservation[]
   manifestUploads       ManifestUpload[]
 
+  consolidationStops ConsolidationStop[]
   @@index([orgId])
 }
 
@@ -243,6 +244,8 @@ model Organization {
   customerReadModels CustomerReadModel[]
   issueReadModels    IssueReadModel[]
   laneReadModels     LaneReadModel[]
+  consolidations          Consolidation[]
+  consolidationReadModels ConsolidationReadModel[]
   orderReadModels    OrderReadModel[]
   shipmentReadModels ShipmentReadModel[]
 
