@@ -399,8 +399,8 @@ origin and service level, available, LTL only when there's more than one). The r
 `frontend/src/lib/shipmentFromOrders.ts`: adding orders fills empty fields, widens the dates, adds
 each drop as a stop and turns on temperature/hazmat handling, but never overwrites an edit, and no
 field is locked; `orderConflicts` blocks saving when the form no longer fits the orders. On open, a
-lane from the orders' origin to their last drop is preselected (`GET /api/v1/lanes/between`),
-preferring one whose stops cover the other drops; its stops plus any uncovered drops become the
+lane from the orders' origin to their last drop is preselected (`GET /api/v1/lanes/between`), if it
+supports the orders' service level (or Both), preferring one whose stops cover the other drops; its stops plus any uncovered drops become the
 shipment's stops, with a warning that the lane's route won't pass through the extra ones. With no
 lane, the shipment gets a custom route through the drops. The Waypoints card is only shown for a
 custom route. Saving creates the shipment through `CreateShipmentCommand`, then attaches every order

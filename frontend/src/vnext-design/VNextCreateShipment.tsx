@@ -115,8 +115,8 @@ function laneWaypoints(detail: any, orders: OrderForShipment[]): string[] {
 }
 
 /**
- * A lane from the orders' origin to their last drop, preferring one whose stops cover the other
- * drops. Null when no lane runs between them.
+ * A lane from the orders' origin to their last drop that supports their service level (or both),
+ * preferring one whose stops cover the other drops. Null when no lane fits.
  */
 async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: string } | null> {
   const origin = orders[0]?.originId;
@@ -125,7 +125,9 @@ async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: strin
   const params = new URLSearchParams({ originId: origin, destinationId: drops[drops.length - 1] });
   try {
     const json = await fetch(`${API_URL}/api/v1/lanes/between?${params}`).then(r => r.json());
-    const lanes: Array<{ id: string; stopLocationIds: string[] }> = json.data || [];
+    const level = orders[0].serviceLevel;
+    const lanes: Array<{ id: string; serviceLevel: string; stopLocationIds: string[] }> = (json.data || [])
+      .filter((l: { serviceLevel: string }) => l.serviceLevel === level || l.serviceLevel === 'Both');
     const middle = drops.slice(0, -1);
     return lanes.find(l => middle.every(d => l.stopLocationIds.includes(d))) ?? lanes[0] ?? null;
   } catch {
