@@ -91,6 +91,25 @@ describe('CombineOrdersIntoShipmentCommandHandler', () => {
     }
   });
 
+  it('only loads orders inside the command org, and creates the shipment in that org (#326)', async () => {
+    const tx = makeTx();
+    tx.order.findMany.mockResolvedValue([makeOrder()]);
+    const prisma = makePrisma(tx);
+    const { bus } = mockEventBus();
+    const handler = new CombineOrdersIntoShipmentCommandHandler(prisma, bus);
+
+    await handler.execute(
+      createTestCommand(COMBINE_ORDERS_INTO_SHIPMENT, { orderIds: ['order-a'] }, { orgId: 'test-org', actorId: 'user-1' })
+    );
+
+    expect(tx.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: ['order-a'] }, orgId: 'test-org' }) })
+    );
+    expect(tx.shipment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ orgId: 'test-org' }) })
+    );
+  });
+
   it('rejects when no valid orders are found', async () => {
     const tx = makeTx();
     tx.order.findMany.mockResolvedValue([]);
