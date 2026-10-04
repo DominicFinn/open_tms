@@ -17,6 +17,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
+import { assignMatchingLane } from '../shipments/assignMatchingLane.js';
 import { Command } from '../types.js';
 import { loadProfileFor } from './shipmentLoadRules.js';
 
@@ -116,6 +117,8 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
     if (finalStop && finalStop.locationId !== shipment.destinationId) {
       await tx.shipment.update({ where: { id: shipment.id, orgId: command.orgId }, data: { destinationId: finalStop.locationId } });
     }
+
+    await assignMatchingLane(tx, command.orgId, shipment);
 
     return { shipmentId: shipment.id };
   }

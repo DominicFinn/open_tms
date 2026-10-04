@@ -16,6 +16,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { loadProfileFor } from './shipmentLoadRules.js';
 import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
+import { assignMatchingLane } from '../shipments/assignMatchingLane.js';
 import { Command } from '../types.js';
 
 export interface ConvertOrderToShipmentPayload {
@@ -109,6 +110,8 @@ export class ConvertOrderToShipmentCommandHandler extends BaseCommandHandler<Con
       () => `Order converted to shipment ${reference}`,
       emit,
     );
+
+    await assignMatchingLane(tx, command.orgId, shipment);
 
     return { shipmentId: shipment.id };
   }

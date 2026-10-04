@@ -20,7 +20,8 @@ export interface UpdateShipmentPayload {
     shipmentTypeId?: string | null;
     serviceLevel?: string | null;
     customerId?: string;
-    laneId?: string;
+    /** null moves the shipment off its lane onto a custom route. */
+    laneId?: string | null;
     carrierId?: string | null;
     proNumber?: string | null;
     originId?: string;

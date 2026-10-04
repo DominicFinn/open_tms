@@ -621,7 +621,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       deliveryWindowEnd: flexibleDate.optional(),
       shipmentTypeId: z.string().uuid().nullable().optional(),
       customerId: z.string().uuid().optional(),
-      laneId: z.string().uuid().optional(),
+      // null takes the shipment off its lane, onto a custom route (#328)
+      laneId: z.string().uuid().nullable().optional(),
       carrierId: z.string().uuid().nullable().optional(),
       proNumber: z.string().nullable().optional(),
       serviceLevel: z.enum(['FTL', 'LTL']).nullable().optional(),

@@ -19,6 +19,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { assertCanAdd } from './shipmentLoadRules.js';
+import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
 import { Command } from '../types.js';
 
@@ -68,7 +69,7 @@ export class AddOrdersToShipmentCommandHandler extends BaseCommandHandler<AddOrd
       await tx.shipment.update({ where: { id: shipmentId, orgId: command.orgId }, data: { serviceLevel } });
     }
 
-    await linkOrdersToShipment(
+    const { stopsCreated } = await linkOrdersToShipment(
       tx,
       shipment,
       orders,
@@ -82,6 +83,45 @@ export class AddOrdersToShipmentCommandHandler extends BaseCommandHandler<AddOrd
       emit,
     );
 
+    if (stopsCreated > 0) {
+      await keepDestinationLast(tx, command.orgId, shipment);
+      // The stops changed: the projection refreshes its counts and a custom route is re-planned.
+      emit(this.createEvent(command, {
+        type: EVENT_TYPES.SHIPMENT_UPDATED,
+        entityType: 'shipment',
+        entityId: shipment.id,
+        payload: { shipmentReference: shipment.reference, stopsAdded: stopsCreated },
+      }));
+    }
+
     return { shipmentId: shipment.id, addedOrderIds: orders.map((o) => o.id) };
+  }
+}
+
+/**
+ * New drops are appended after the existing stops; the shipment's destination stays its last stop,
+ * so the new drops sit before it, and the stops are renumbered 1..n.
+ */
+async function keepDestinationLast(
+  tx: TransactionClient,
+  orgId: string,
+  shipment: { id: string; destinationId: string | null },
+): Promise<void> {
+  if (!shipment.destinationId) return;
+  const stops = await tx.shipmentStop.findMany({
+    where: { shipmentId: shipment.id, shipment: { orgId } },
+    orderBy: { sequenceNumber: 'desc' },
+    select: { id: true, locationId: true, sequenceNumber: true },
+  });
+  const last = stops[0];
+  const destination = stops.find((st) => st.locationId === shipment.destinationId);
+  if (!last || !destination || destination.id === last.id) return;
+
+  // Renumber 1..n with the destination last, so stop numbers stay contiguous. Sequence numbers are
+  // unique per shipment, so move them all out of the way first.
+  const ordered = [...stops].reverse().filter((st) => st.id !== destination.id).concat(destination);
+  await tx.shipmentStop.updateMany({ where: { shipmentId: shipment.id, shipment: { orgId } }, data: { sequenceNumber: { increment: 100000 } } });
+  for (const [i, st] of ordered.entries()) {
+    await tx.shipmentStop.update({ where: { id: st.id, shipment: { orgId } }, data: { sequenceNumber: i + 1 } });
   }
 }

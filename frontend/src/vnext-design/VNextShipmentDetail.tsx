@@ -1171,6 +1171,96 @@ const NOTE_GROUPS: {
   },
 ];
 
+// A lane shipment is measured against the lane's route. When its stops no longer match the lane's
+// (an order added a drop the lane doesn't visit), say so while it can still be changed, and offer
+// the two fixes (#328): move it to a custom route, which gets a route through its own stops, or save
+// its stops as a new lane.
+function LaneStopsMismatch({ shipment, onChanged }: { shipment: any; onChanged: () => void }) {
+  const [lane, setLane] = useState<any | null>(null);
+  const [busy, setBusy] = useState<'custom' | 'lane' | null>(null);
+  const editable = shipment.status === 'draft' || shipment.status === 'ready';
+
+  useEffect(() => {
+    if (!shipment.laneId || !editable) { setLane(null); return; }
+    fetch(`${API_URL}/api/v1/lanes/${shipment.laneId}`)
+      .then(r => r.json())
+      .then(json => setLane(json.data ?? null))
+      .catch(() => setLane(null));
+  }, [shipment.laneId, editable]);
+
+  const stopIds: string[] = [...(shipment.stops || [])]
+    .sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber)
+    .map((st: any) => st.locationId);
+  const laneIds: string[] = lane ? [lane.originId, ...(lane.stops || []).map((st: any) => st.locationId), lane.destinationId] : [];
+  if (!lane || stopIds.length < 2 || stopIds.join(',') === laneIds.join(',')) return null;
+
+  const offLane = (shipment.stops || []).filter((st: any) => !laneIds.includes(st.locationId));
+  const route = { originId: stopIds[0], destinationId: stopIds[stopIds.length - 1], waypoints: stopIds.slice(1, -1) };
+
+  const save = async (kind: 'custom' | 'lane') => {
+    setBusy(kind);
+    try {
+      let laneId: string | null = null;
+      if (kind === 'lane') {
+        const res = await fetch(`${API_URL}/api/v1/lanes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originId: route.originId,
+            destinationId: route.destinationId,
+            serviceLevel: lane.serviceLevel,
+            supportsTemperatureControl: lane.supportsTemperatureControl,
+            supportsHazmat: lane.supportsHazmat,
+            stops: route.waypoints.map((locationId, i) => ({ locationId, order: i + 1 })),
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json.error) throw new Error(json.error || 'Failed to create the lane');
+        laneId = json.data?.id;
+      }
+      const res = await fetch(`${API_URL}/api/v1/shipments/${shipment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ laneId, ...route }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) throw new Error(json.error || 'Failed to update the shipment');
+      toast.success(kind === 'lane' ? 'Saved the stops as a new lane' : 'Moved to a custom route');
+      onChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+      <AlertTriangle className="h-5 w-5 shrink-0" />
+      <div className="space-y-2">
+        <div>
+          <strong>Stops don't match the lane</strong>
+          <p className="mt-1">
+            This shipment is on the lane {lane.name}, but {offLane.length > 0
+              ? `${offLane.map((st: any) => st.location?.name || 'a stop').join(', ')} ${offLane.length === 1 ? "isn't" : "aren't"} on it`
+              : 'its stops are in a different order'}. Checkpoints and the map follow the lane's route.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => save('custom')}>
+            {busy === 'custom' && <Loader2 className="h-4 w-4 animate-spin" />}
+            Switch to custom route
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => save('lane')}>
+            {busy === 'lane' && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save as new lane
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NotesTab({ shipmentId }: { shipmentId: string }) {
   const { user, hasRole } = useCurrentUser();
   const isAdmin = hasRole('admin');
@@ -2535,6 +2625,8 @@ export default function VNextShipmentDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LaneStopsMismatch shipment={shipment} onChanged={() => loadShipment(false)} />
 
       {/* Route Deviation Alert */}
       {routeDeviation && (

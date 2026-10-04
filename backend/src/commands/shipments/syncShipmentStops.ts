@@ -1,8 +1,9 @@
 import type { TransactionClient } from '../BaseCommandHandler.js';
 
 /**
- * Rebuild a shipment's ordered stop list from its route: origin (pickup),
- * intermediate waypoints, then destination (delivery). Only ever called for
+ * Bring a shipment's ordered stop list in line with its route: origin (pickup),
+ * intermediate waypoints, then destination (delivery). Existing stops are kept and
+ * renumbered rather than rebuilt (see reconcileStops). Only ever called for
  * DRAFT shipments — in-flight shipments carry stop-level progress (actual
  * arrivals, proof of delivery, geofence state) that must not be wiped.
  *
@@ -40,8 +41,58 @@ export async function syncShipmentStops(
     rows.push({ shipmentId, locationId: destinationId, sequenceNumber: seq++, stopType: 'delivery', status: 'pending' });
   }
 
-  await tx.shipmentStop.deleteMany({ where: { shipmentId, shipment: { orgId } } });
-  if (rows.length > 0) {
-    await tx.shipmentStop.createMany({ data: rows });
+  await reconcileStops(tx, orgId, shipmentId, rows);
+}
+
+export class StopStillHasOrdersError extends Error {
+  constructor(locationIds: string[]) {
+    super(`A stop being removed still has orders dropping there (${locationIds.length}); move or remove those orders first`);
+    this.name = 'StopStillHasOrdersError';
   }
 }
+
+/**
+ * Brings the stored stops in line with `rows` without rebuilding them (#328). A stop at a location
+ * that stays on the route keeps its row, so the orders dropping there keep their link to it (before,
+ * every edit deleted and recreated the stops and silently cut that link); it's only renumbered.
+ * New locations get new stops. Stops no longer on the route are deleted, unless orders still drop
+ * there: then the change is refused rather than leave those orders without a drop.
+ */
+async function reconcileStops(
+  tx: TransactionClient,
+  orgId: string,
+  shipmentId: string,
+  rows: Array<{ shipmentId: string; locationId: string; sequenceNumber: number; stopType: string; status: string }>,
+): Promise<void> {
+  const existing = await tx.shipmentStop.findMany({
+    where: { shipmentId, shipment: { orgId } },
+    orderBy: { sequenceNumber: 'asc' },
+    select: { id: true, locationId: true, _count: { select: { orders: true } } },
+  });
+
+  const unmatched = [...existing];
+  const matches = rows.map((row) => {
+    const i = unmatched.findIndex((st) => st.locationId === row.locationId);
+    return { row, stop: i >= 0 ? unmatched.splice(i, 1)[0] : null };
+  });
+
+  const stranded = unmatched.filter((st) => st._count.orders > 0);
+  if (stranded.length > 0) throw new StopStillHasOrdersError(stranded.map((st) => st.locationId));
+
+  if (unmatched.length > 0) {
+    await tx.shipmentStop.deleteMany({ where: { id: { in: unmatched.map((st) => st.id) }, shipment: { orgId } } });
+  }
+  // Move the kept stops out of the way first: sequence numbers are unique per shipment.
+  await tx.shipmentStop.updateMany({ where: { shipmentId, shipment: { orgId } }, data: { sequenceNumber: { increment: 100000 } } });
+  for (const { row, stop } of matches) {
+    if (stop) {
+      await tx.shipmentStop.update({
+        where: { id: stop.id, shipment: { orgId } },
+        data: { sequenceNumber: row.sequenceNumber, stopType: row.stopType },
+      });
+    } else {
+      await tx.shipmentStop.create({ data: row });
+    }
+  }
+}
+
