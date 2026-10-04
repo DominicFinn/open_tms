@@ -93,6 +93,7 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import { deliveryStatusLabel, deliveryStatusVariant } from '@/lib/orderDeliveryStatus';
 import MapView from '../maps/Map';
 import type { MapMarker, MapPolyline } from '../maps/types';
 import { ShareShipmentDialog } from '../components/ShareShipmentDialog';
@@ -2850,7 +2851,10 @@ export default function VNextShipmentDetail() {
             <TabsContent value="orders" className="mt-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">Orders ({orders.length})</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-base">Orders ({orders.length})</CardTitle>
+                    {shipment.serviceLevel && <Badge variant="muted">{shipment.serviceLevel}</Badge>}
+                  </div>
                   {(shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write') && (
                     <Button variant="outline" size="sm" onClick={openAddOrderModal}>
                       <Plus className="h-4 w-4" />
@@ -2872,9 +2876,11 @@ export default function VNextShipmentDetail() {
                           className="flex items-center gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-muted/40"
                         >
                           <Link to={`/orders/${order.id}`} className="min-w-0 flex-1">
-                            <div>
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="font-medium">{order.orderNumber}</span>
-                              <span className="ml-2 text-muted-foreground">{order.customer?.name}</span>
+                              <span className="text-muted-foreground">{order.customer?.name}</span>
+                              <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{deliveryStatusLabel(order.deliveryStatus)}</Badge>
+                              {order.serviceLevel && <Badge variant="muted">{order.serviceLevel}</Badge>}
                             </div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                               <span>
@@ -2888,6 +2894,15 @@ export default function VNextShipmentDetail() {
                                   {' - '}
                                   {order.requestedDeliveryDate ? new Date(order.requestedDeliveryDate).toLocaleDateString() : '-'}
                                 </span>
+                              )}
+                              {order.deliveryStop && (
+                                <span>
+                                  Drops at stop {order.deliveryStop.sequenceNumber}
+                                  {order.deliveryStop.location?.name ? ` · ${order.deliveryStop.location.name}` : ''}
+                                </span>
+                              )}
+                              {order.deliveryStatus === 'delivered' && order.deliveredAt && (
+                                <span>Delivered {new Date(order.deliveredAt).toLocaleString()}</span>
                               )}
                             </div>
                           </Link>

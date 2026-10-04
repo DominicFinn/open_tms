@@ -33,6 +33,7 @@ import {
 } from '../commands/lineItems/index.js';
 import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { attachOrgScopeFromCustomerUserHook } from '../auth/orgScopeMiddleware.js';
+import { scopeShipmentToCustomer } from '../services/portal/customerShipmentView.js';
 
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS_SUGGEST = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
@@ -1040,13 +1041,18 @@ export async function customerPortalRoutes(server: FastifyInstance) {
         origin: true,
         destination: true,
         carrier: { select: { name: true } },
-        stops: { include: { location: true }, orderBy: { sequenceNumber: 'asc' } },
+        stops: {
+          include: { location: true, orders: { select: { customerId: true } } },
+          orderBy: { sequenceNumber: 'asc' },
+        },
+        orderShipments: { select: { order: { select: { id: true, customerId: true } } } },
         events: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
 
     if (!shipment) { reply.code(404); return { data: null, error: 'Shipment not found' }; }
-    return { data: shipment, error: null };
+    // A shared LTL shipment also carries other customers' freight; only this customer's part is shown.
+    return { data: scopeShipmentToCustomer(shipment, customerId), error: null };
   });
 
   // Documents

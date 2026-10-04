@@ -60,6 +60,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { deliveryStatusLabel, deliveryStatusVariant } from '@/lib/orderDeliveryStatus';
 
 interface Order {
   id: string;
@@ -111,24 +112,6 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 function orderStatusLabel(status: string): string {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   return ORDER_STATUS_LABEL[s] || status;
-}
-
-// Order.deliveryStatus: null (not moving yet), in_transit, delivered, exception
-// — only ever set once status is 'assigned'.
-const DELIVERY_STATUS_LABEL: Record<string, string> = {
-  in_transit: 'In transit',
-  delivered: 'Delivered',
-  exception: 'Exception',
-};
-function deliveryStatusLabel(status?: string): string {
-  if (!status) return 'Not moving yet';
-  return DELIVERY_STATUS_LABEL[status] || status;
-}
-function deliveryStatusVariant(status?: string): StatusVariant {
-  if (status === 'delivered') return 'success';
-  if (status === 'in_transit') return 'info';
-  if (status === 'exception') return 'destructive';
-  return 'muted';
 }
 
 function formatDate(d?: string): string {

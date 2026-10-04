@@ -312,6 +312,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
               select: {
                 id: true, orderNumber: true,
                 requestedPickupDate: true, requestedDeliveryDate: true,
+                status: true, deliveryStatus: true, deliveredAt: true, serviceLevel: true, customerId: true,
+                deliveryStop: { select: { id: true, sequenceNumber: true, status: true, location: { select: { name: true } } } },
                 customer: { select: { name: true } },
                 origin: { select: { city: true, state: true } },
                 destination: { select: { city: true, state: true } },
