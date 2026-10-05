@@ -20,6 +20,7 @@ import {
   ARCHIVE_CONSOLIDATION,
   TRANSITION_CONSOLIDATION_STATUS,
   REORDER_CONSOLIDATION_STOPS,
+  SHIP_ORDERS_TOGETHER,
 } from '../commands/consolidations/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
@@ -130,6 +131,29 @@ export async function consolidationRoutes(server: FastifyInstance) {
       actorId: req.user?.sub ?? null,
       metadata: { correlationId: randomUUID(), source: 'api' },
       payload: req.body as { shipmentIds: string[]; carrierId?: string | null; notes?: string | null; carrierRateCents?: number | null; currency?: string },
+    });
+    return send(reply, result, 201);
+  });
+
+  server.post('/api/v1/consolidations/from-orders', {
+    schema: {
+      tags: TAGS,
+      summary: 'Ship several customers\' orders together: one shipment per customer on a new consolidation',
+      body: {
+        type: 'object',
+        required: ['orderIds'],
+        additionalProperties: false,
+        properties: { orderIds: { type: 'array', minItems: 2, maxItems: 50, items: { type: 'string', format: 'uuid' } } },
+      },
+      response: { 201: envelope, 400: envelope, 404: envelope },
+    },
+  }, async (req, reply) => {
+    const result = await commandBus.dispatch({
+      type: SHIP_ORDERS_TOGETHER,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+      payload: { orderIds: (req.body as { orderIds: string[] }).orderIds },
     });
     return send(reply, result, 201);
   });

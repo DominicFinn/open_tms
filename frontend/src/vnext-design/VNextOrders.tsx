@@ -61,7 +61,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { deliveryStatusLabel, deliveryStatusVariant } from '@/lib/orderDeliveryStatus';
-import { shipTogetherProblem } from '@/lib/shipmentFromOrders';
+import { shipTogetherMode, shipTogetherProblem } from '@/lib/shipmentFromOrders';
 
 interface Order {
   id: string;
@@ -235,6 +235,31 @@ export default function VNextOrders() {
   // "Ship together" is only clickable for a set of orders that can share one shipment.
   const selectedOrders = useMemo(() => orders.filter(o => selected.has(o.id)), [orders, selected]);
   const shipTogetherBlocker = useMemo(() => shipTogetherProblem(selectedOrders), [selectedOrders]);
+  const shipTogetherPlan = useMemo(() => shipTogetherMode(selectedOrders), [selectedOrders]);
+  const [shippingTogether, setShippingTogether] = useState(false);
+
+  // Several customers' orders: one shipment each, on a new consolidation, built in one step (#329).
+  async function shipAsConsolidation(customers: number) {
+    const ok = window.confirm(`These orders are for ${customers} customers. Create one shipment per customer, all on one consolidation?`);
+    if (!ok) return;
+    setShippingTogether(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/consolidations/from-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedOrders.map(o => o.id) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Could not ship these orders together', { duration: 8000 });
+        return;
+      }
+      toast.success(`Consolidation ${json.data.reference} created with ${json.data.shipmentIds.length} shipments`);
+      navigate(`/consolidations/${json.data.consolidationId}`);
+    } finally {
+      setShippingTogether(false);
+    }
+  }
 
   // Selection is keyed by id and otherwise persists across filter changes, which lets a stale
   // selection made under one filter silently apply under another. Prune it back to whatever's
@@ -592,14 +617,21 @@ export default function VNextOrders() {
                   {shipTogetherBlocker && selectedOrders.length > 1 && (
                     <span className="text-xs text-muted-foreground">{shipTogetherBlocker}</span>
                   )}
+                  {!shipTogetherBlocker && shipTogetherPlan.kind === 'consolidation' && (
+                    <span className="text-xs text-muted-foreground">
+                      {shipTogetherPlan.customers} customers: one shipment each, on one consolidation
+                    </span>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={Boolean(shipTogetherBlocker)}
+                    disabled={Boolean(shipTogetherBlocker) || shippingTogether}
                     title={shipTogetherBlocker ?? undefined}
-                    onClick={() => navigate(`/shipments/create?${buildShipQueryString(...selectedOrders)}`)}
+                    onClick={() => (shipTogetherPlan.kind === 'consolidation'
+                      ? shipAsConsolidation(shipTogetherPlan.customers)
+                      : navigate(`/shipments/create?${buildShipQueryString(...selectedOrders)}`))}
                   >
-                    <Truck className="h-4 w-4" />
+                    {shippingTogether ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
                     Ship together
                   </Button>
                 </>

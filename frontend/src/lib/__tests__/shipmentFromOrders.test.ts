@@ -1,4 +1,4 @@
-import { applyOrders, canJoin, orderConflicts, shipTogetherProblem, RouteForm, OrderForShipment } from '../shipmentFromOrders';
+import { applyOrders, canJoin, orderConflicts, shipTogetherMode, shipTogetherProblem, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
   customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', pickupWaypoints: [], waypoints: [],
@@ -93,8 +93,16 @@ describe('shipTogetherProblem', () => {
     expect(shipTogetherProblem([available()])).toBe('Select two or more orders to ship together.');
     expect(shipTogetherProblem([available(), { ...available({ id: 'o2' }), status: 'assigned' }])).toBe('Only available orders can be shipped.');
     expect(shipTogetherProblem([available(), available({ id: 'o2', serviceLevel: 'FTL' })])).toBe('FTL orders ship on their own shipment.');
-    expect(shipTogetherProblem([available(), available({ id: 'o2', customerId: 'cust-2' })])).toBe('The orders belong to different customers.');
+    expect(shipTogetherProblem([available(), available({ id: 'o2', customerId: 'cust-2' })])).toBeNull();
     expect(shipTogetherProblem([available(), available({ id: 'o2', originId: 'other' })])).toBeNull();
   });
 });
 
+
+describe('shipTogetherMode (#329)', () => {
+  it('makes one shipment for one customer and a consolidation across customers', () => {
+    expect(shipTogetherMode([order(), order({ id: 'o2' })])).toEqual({ kind: 'shipment' });
+    expect(shipTogetherMode([order(), order({ id: 'o2', customerId: 'cust-2' }), order({ id: 'o3', customerId: 'cust-3' })]))
+      .toEqual({ kind: 'consolidation', customers: 3 });
+  });
+});

@@ -37,3 +37,15 @@ describe('scopeShipmentToCustomer (#325)', () => {
     expect(view.stops.map((s) => s.locationId)).toContain('depot');
   });
 });
+
+describe('scopeShipmentToCustomer on a consolidation (#329)', () => {
+  it('never exposes the run the shipment rides on', () => {
+    const onRun = {
+      ...shared,
+      stops: shared.stops.map((s, i) => ({ ...s, consolidationStopId: `run-stop-${i}` })),
+    };
+    const view = scopeShipmentToCustomer(onRun, 'nordic');
+    expect(view.stops.every((s) => !('consolidationStopId' in s))).toBe(true);
+    expect(JSON.stringify(view)).not.toContain('run-stop');
+  });
+});

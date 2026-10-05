@@ -100,6 +100,7 @@ import {
   TransitionConsolidationStatusCommandHandler,
   ReorderConsolidationStopsCommandHandler,
   SyncConsolidationProgressCommandHandler,
+  ShipOrdersTogetherCommandHandler,
 } from '../../commands/consolidations/index.js';
 import {
   CreateAgentConfigCommandHandler,
@@ -692,6 +693,7 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new TransitionConsolidationStatusCommandHandler(prisma, eventBus));
   bus.register(new ReorderConsolidationStopsCommandHandler(prisma, eventBus));
   bus.register(new SyncConsolidationProgressCommandHandler(prisma, eventBus));
+  bus.register(new ShipOrdersTogetherCommandHandler(prisma, eventBus));
 
   // Agent config commands
   bus.register(new CreateAgentConfigCommandHandler(prisma, eventBus));
