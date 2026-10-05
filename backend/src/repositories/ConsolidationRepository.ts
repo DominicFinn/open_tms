@@ -17,6 +17,8 @@ const detailSelect = {
       id: true,
       sequenceNumber: true,
       stopType: true,
+      purpose: true,
+      label: true,
       status: true,
       location: { select: { id: true, name: true, city: true, state: true, lat: true, lng: true } },
       shipmentStops: { select: { shipmentId: true } },

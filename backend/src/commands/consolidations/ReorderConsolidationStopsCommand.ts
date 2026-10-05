@@ -19,7 +19,8 @@ export function reorderProblem(stops: Array<{ id: string; stopType: string }>, s
   if (stopIds.length !== stops.length || new Set(stopIds).size !== stopIds.length || stopIds.some((s) => !known.has(s))) {
     return 'The new order must list every stop on the consolidation once.';
   }
-  const types = stopIds.map((sid) => stops.find((s) => s.id === sid)!.stopType);
+  // Other stops (#345) can go anywhere; only pickups and drops are held to their order.
+  const types = stopIds.map((sid) => stops.find((s) => s.id === sid)!.stopType).filter((t) => t !== 'other');
   const firstDrop = types.indexOf('delivery');
   if (firstDrop !== -1 && types.slice(firstDrop).includes('pickup')) {
     return 'Every pickup has to come before every drop.';

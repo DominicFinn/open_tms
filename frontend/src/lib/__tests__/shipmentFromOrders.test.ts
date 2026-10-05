@@ -1,4 +1,4 @@
-import { applyOrders, canJoin, orderConflicts, shipTogetherMode, shipTogetherProblem, RouteForm, OrderForShipment } from '../shipmentFromOrders';
+import { applyOrders, canJoin, dropStops, orderConflicts, shipTogetherMode, shipTogetherProblem, waypointsForApi, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
   customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', pickupWaypoints: [], waypoints: [],
@@ -104,5 +104,18 @@ describe('shipTogetherMode (#329)', () => {
     expect(shipTogetherMode([order(), order({ id: 'o2' })])).toEqual({ kind: 'shipment' });
     expect(shipTogetherMode([order(), order({ id: 'o2', customerId: 'cust-2' }), order({ id: 'o3', customerId: 'cust-3' })]))
       .toEqual({ kind: 'consolidation', customers: 3 });
+  });
+});
+
+describe('other stops (#345)', () => {
+  it('never counts a fuel or rest stop as somewhere an order can drop', () => {
+    const form = { ...emptyForm, originId: 'origin', destinationId: 'drop-b', waypoints: ['fuel-1', 'drop-a'], otherStops: { 'fuel-1': { purpose: 'fuel', label: '' } } };
+    expect(dropStops(form)).toEqual(['drop-a', 'drop-b']);
+    expect(orderConflicts(form, [order({ destinationId: 'fuel-1' })])).toEqual(["ORD-1's drop isn't a stop on this route."]);
+  });
+
+  it('sends other stops to the API with their purpose and name', () => {
+    expect(waypointsForApi(['a', '', 'f'], { f: { purpose: 'customs', label: ' Laredo ' } }))
+      .toEqual(['a', { locationId: 'f', stopType: 'other', purpose: 'customs', label: 'Laredo' }]);
   });
 });

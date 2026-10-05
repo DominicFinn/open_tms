@@ -24,8 +24,9 @@ import {
 import { API_URL } from '../api';
 import { describeProFormat, checkProFormat } from '../lib/proNumberFormat';
 import {
-  OrderForShipment, RouteForm, applyOrders, canJoin, orderConflicts, orderDrops, orderPickups,
+  OrderForShipment, OtherStopDetail, RouteForm, applyOrders, canJoin, orderConflicts, orderDrops, orderPickups, waypointsForApi,
 } from '../lib/shipmentFromOrders';
+import { OTHER_STOP_PURPOSES, OTHER_STOP_PURPOSE_LABELS, laneStopOtherPurpose } from '@open-tms/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -107,6 +108,16 @@ const BLANK_ROUTE: RouteForm = {
   pickupDate: '', deliveryDate: '', tempControlled: false, hazmat: false,
 };
 
+/** The lane's stops tagged fuel, rest, customs and the like, which become other stops on the shipment (#345). */
+function laneOtherStops(detail: any): Record<string, OtherStopDetail> {
+  const out: Record<string, OtherStopDetail> = {};
+  for (const st of detail?.stops || []) {
+    const purpose = laneStopOtherPurpose(st.purpose);
+    if (purpose) out[st.locationId] = { purpose, label: '' };
+  }
+  return out;
+}
+
 /** A lane's intermediate stops, then any of the orders' drops the lane doesn't already visit. */
 function laneWaypoints(detail: any, orders: OrderForShipment[]): string[] {
   const laneStops: string[] = (detail?.stops || []).map((st: any) => st.locationId);
@@ -136,15 +147,38 @@ async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: strin
   }
 }
 
-function StopList({ label, hint, emptyText, addLabel, stops, onChange, locations }: {
+const OTHER_KIND = 'other';
+
+function StopList({ label, hint, emptyText, addLabel, kindLabel, stops, onChange, locations, otherStops, onOtherStopsChange }: {
   label: string;
   hint: string;
   emptyText: string;
   addLabel: string;
+  /** What a stop in this list is unless marked as an other stop: "Pickup" or "Drop". */
+  kindLabel: string;
   stops: string[];
   onChange: (next: string[]) => void;
   locations: any[];
+  otherStops: Record<string, OtherStopDetail>;
+  onOtherStopsChange: (next: Record<string, OtherStopDetail>) => void;
 }) {
+  const setOther = (locationId: string, detail: OtherStopDetail | null) => {
+    const next = { ...otherStops };
+    if (detail) next[locationId] = detail;
+    else delete next[locationId];
+    onOtherStopsChange(next);
+  };
+  const moveLocation = (idx: number, locationId: string) => {
+    const previous = stops[idx];
+    onChange(stops.map((st, i) => (i === idx ? locationId : st)));
+    // The other-stop details follow the stop to its new location.
+    if (previous && otherStops[previous]) {
+      const next = { ...otherStops, [locationId]: otherStops[previous] };
+      delete next[previous];
+      onOtherStopsChange(next);
+    }
+  };
+
   return (
     <div className="space-y-2">
       <div>
@@ -154,24 +188,71 @@ function StopList({ label, hint, emptyText, addLabel, stops, onChange, locations
       {stops.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyText}</p>
       ) : (
-        stops.map((locationId, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
-            <Select value={locationId} onValueChange={v => onChange(stops.map((st, i) => (i === idx ? v : st)))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select stop location..." />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((l: any) => (
-                  <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onChange(stops.filter((_, i) => i !== idx))} aria-label={`Remove ${label.toLowerCase()} stop`}>
-              <Ban className="h-4 w-4" />
-            </Button>
-          </div>
-        ))
+        stops.map((locationId, idx) => {
+          const other = locationId ? otherStops[locationId] : undefined;
+          return (
+            <div key={idx} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
+                <Select value={locationId} onValueChange={v => moveLocation(idx, v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select stop location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((l: any) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={other ? OTHER_KIND : kindLabel}
+                  disabled={!locationId}
+                  onValueChange={v => setOther(locationId, v === OTHER_KIND ? { purpose: 'fuel', label: '' } : null)}
+                >
+                  <SelectTrigger className="w-[150px] shrink-0" aria-label="Stop type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={kindLabel}>{kindLabel}</SelectItem>
+                    <SelectItem value={OTHER_KIND}>Other stop</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    onChange(stops.filter((_, i) => i !== idx));
+                    if (other) setOther(locationId, null);
+                  }}
+                  aria-label={`Remove ${label.toLowerCase()} stop`}
+                >
+                  <Ban className="h-4 w-4" />
+                </Button>
+              </div>
+              {other && (
+                <div className="ml-7 flex items-center gap-2">
+                  <Select value={other.purpose} onValueChange={v => setOther(locationId, { ...other, purpose: v })}>
+                    <SelectTrigger className="w-[160px] shrink-0" aria-label="What the stop is for">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OTHER_STOP_PURPOSES.map(p => (
+                        <SelectItem key={p} value={p}>{OTHER_STOP_PURPOSE_LABELS[p]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder={other.purpose === 'other' ? 'Name this stop' : 'Name (optional)'}
+                    maxLength={100}
+                    value={other.label}
+                    onChange={e => setOther(locationId, { ...other, label: e.target.value })}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
       <Button type="button" variant="outline" size="sm" onClick={() => onChange([...stops, ''])}>
         <Plus className="h-4 w-4" />
@@ -265,6 +346,8 @@ export default function VNextCreateShipment() {
   const [waypoints, setWaypoints] = useState<string[]>([]);
   // Further pickups after the origin, on a custom route (#329).
   const [pickupWaypoints, setPickupWaypoints] = useState<string[]>([]);
+  // Waypoints that are fuel, rest, customs and similar stops rather than pickups or drops (#345).
+  const [otherStops, setOtherStops] = useState<Record<string, OtherStopDetail>>({});
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -278,13 +361,14 @@ export default function VNextCreateShipment() {
     destinationId: destLocation,
     pickupWaypoints,
     waypoints,
+    otherStops,
     laneOriginId: laneDetail?.originId ?? null,
     laneDestinationId: laneDetail?.destinationId ?? null,
     pickupDate,
     deliveryDate,
     tempControlled,
     hazmat,
-  }), [customer, mode, useCustomRoute, originLocation, destLocation, pickupWaypoints, waypoints, laneDetail, pickupDate, deliveryDate, tempControlled, hazmat]);
+  }), [customer, mode, useCustomRoute, originLocation, destLocation, pickupWaypoints, waypoints, otherStops, laneDetail, pickupDate, deliveryDate, tempControlled, hazmat]);
 
   const setRouteForm = (f: RouteForm) => {
     setCustomer(f.customerId);
@@ -294,6 +378,7 @@ export default function VNextCreateShipment() {
     setDestLocation(f.destinationId);
     setPickupWaypoints(f.pickupWaypoints);
     setWaypoints(f.waypoints);
+    setOtherStops(f.otherStops ?? {});
     setPickupDate(f.pickupDate);
     setDeliveryDate(f.deliveryDate);
     setTempControlled(f.tempControlled);
@@ -367,6 +452,7 @@ export default function VNextCreateShipment() {
     const assigned = detail?.laneCarriers?.find((lc: any) => lc.assigned);
     setCarrierId(assigned ? assigned.carrierId : '');
     setWaypoints(laneWaypoints(detail, attachedOrders));
+    setOtherStops(laneOtherStops(detail));
   };
 
   const handleToggleCustomRoute = (checked: boolean) => {
@@ -383,6 +469,7 @@ export default function VNextCreateShipment() {
       setDestLocation('');
       setWaypoints([]);
       setPickupWaypoints([]);
+      setOtherStops({});
     }
   };
 
@@ -611,6 +698,7 @@ export default function VNextCreateShipment() {
           ...BLANK_ROUTE, useCustomRoute: false,
           laneOriginId: detail.originId, laneDestinationId: detail.destinationId,
           waypoints: laneWaypoints(detail, []),
+          otherStops: laneOtherStops(detail),
         }, orders));
       } else {
         setRouteForm(applyOrders({ ...BLANK_ROUTE, useCustomRoute: true }, orders));
@@ -670,8 +758,13 @@ export default function VNextCreateShipment() {
         // Intermediate stops (between the origin and destination stops).
         if (Array.isArray(s.stops) && s.stops.length > 2) {
           const middle = [...s.stops].sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber).slice(1, -1);
-          setPickupWaypoints(middle.filter((st: any) => st.stopType === 'pickup').map((st: any) => st.locationId));
-          setWaypoints(middle.filter((st: any) => st.stopType !== 'pickup').map((st: any) => st.locationId));
+          // Other stops sit in whichever list keeps their place: with the pickups if a pickup follows (#345).
+          const lastPickup = middle.map((st: any) => st.stopType).lastIndexOf('pickup');
+          const inPickups = (st: any, i: number) => st.stopType === 'pickup' || (st.stopType === 'other' && i < lastPickup);
+          setPickupWaypoints(middle.filter(inPickups).map((st: any) => st.locationId));
+          setWaypoints(middle.filter((st: any, i: number) => !inPickups(st, i)).map((st: any) => st.locationId));
+          setOtherStops(Object.fromEntries(middle.filter((st: any) => st.stopType === 'other')
+            .map((st: any) => [st.locationId, { purpose: st.purpose || 'other', label: st.label || '' }])));
         }
         if (Array.isArray(s.deviceAssignments)) {
           const initial = s.deviceAssignments.map((a: any) => ({
@@ -755,8 +848,8 @@ export default function VNextCreateShipment() {
         properShippingName: hazmat && properShippingName ? properShippingName : null,
         requiredEquipmentType: equipmentType || null,
       };
-      body.waypoints = waypoints.filter(Boolean);
-      body.pickupWaypoints = useCustomRoute ? pickupWaypoints.filter(Boolean) : [];
+      body.waypoints = waypointsForApi(waypoints, otherStops);
+      body.pickupWaypoints = useCustomRoute ? waypointsForApi(pickupWaypoints, otherStops) : [];
       if (!isEdit) body.status = 'draft';
       const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
       const res = await fetch(url, {
@@ -1146,6 +1239,9 @@ export default function VNextCreateShipment() {
                       <li key={`${locId}-${idx}`} className="flex items-center gap-2">
                         <span className="w-5 text-xs">{idx + 1}</span>
                         {locationName(locId)}
+                        {otherStops[locId] && (
+                          <Badge variant="muted">{otherStops[locId].label.trim() || OTHER_STOP_PURPOSE_LABELS[otherStops[locId].purpose as keyof typeof OTHER_STOP_PURPOSE_LABELS] || 'Stop'}</Badge>
+                        )}
                       </li>
                     ))}
                   </ol>
@@ -1302,21 +1398,27 @@ export default function VNextCreateShipment() {
         <CardContent className="space-y-5">
           <StopList
             label="Pickups"
-            hint="Further collection points after the origin. Every pickup comes before the drops."
+            hint="Further collection points after the origin. Every pickup comes before the drops. Mark a stop as an other stop for fuel, rest, customs and the like: nothing is loaded or unloaded there."
             emptyText="No further pickups."
             addLabel="Add pickup"
+            kindLabel="Pickup"
             stops={pickupWaypoints}
             onChange={setPickupWaypoints}
             locations={locations}
+            otherStops={otherStops}
+            onOtherStopsChange={setOtherStops}
           />
           <StopList
             label="Drops"
             hint="Deliveries before the destination."
             emptyText="No drops before the destination."
             addLabel="Add drop"
+            kindLabel="Drop"
             stops={waypoints}
             onChange={setWaypoints}
             locations={locations}
+            otherStops={otherStops}
+            onOtherStopsChange={setOtherStops}
           />
         </CardContent>
       </Card>

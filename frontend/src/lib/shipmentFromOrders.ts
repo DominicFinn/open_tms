@@ -18,6 +18,11 @@ export interface OrderForShipment {
   requestedDeliveryDate?: string | null;
 }
 
+export interface OtherStopDetail {
+  purpose: string;
+  label: string;
+}
+
 export interface RouteForm {
   customerId: string;
   mode: string;
@@ -28,6 +33,11 @@ export interface RouteForm {
   pickupWaypoints: string[];
   /** Intermediate drops, in order. With a lane: the lane's stops plus any extra drops. */
   waypoints: string[];
+  /**
+   * Waypoints that are neither pickups nor drops (fuel, rest, customs…, #345), by location id.
+   * Orders are never collected or dropped at these.
+   */
+  otherStops?: Record<string, OtherStopDetail>;
   /** The selected lane's endpoints, when not on a custom route. */
   laneOriginId?: string | null;
   laneDestinationId?: string | null;
@@ -50,13 +60,15 @@ export function orderPickups(orders: OrderForShipment[]): string[] {
 /** The stops the form's route collects at, origin first. */
 export function pickupStops(form: RouteForm): string[] {
   const origin = form.useCustomRoute ? form.originId : form.laneOriginId ?? '';
-  return [origin, ...(form.useCustomRoute ? form.pickupWaypoints : [])].filter(Boolean);
+  const others = form.otherStops ?? {};
+  return [origin, ...(form.useCustomRoute ? form.pickupWaypoints.filter((id) => !others[id]) : [])].filter(Boolean);
 }
 
 /** The stops the form's route drops at, destination last. */
 export function dropStops(form: RouteForm): string[] {
   const destination = form.useCustomRoute ? form.destinationId : form.laneDestinationId ?? '';
-  return [...form.waypoints, destination].filter(Boolean);
+  const others = form.otherStops ?? {};
+  return [...form.waypoints.filter((id) => !others[id]), destination].filter(Boolean);
 }
 
 /** Every stop the form's route visits: the pickups, then the drops. */
@@ -157,4 +169,15 @@ export function shipTogetherProblem(orders: ShippableOrder[]): string | null {
 export function shipTogetherMode(orders: ShippableOrder[]): { kind: 'shipment' } | { kind: 'consolidation'; customers: number } {
   const customers = new Set(orders.map((o) => o.customerId)).size;
   return customers > 1 ? { kind: 'consolidation', customers } : { kind: 'shipment' };
+}
+
+/**
+ * A waypoint list as the API takes it: a plain location id for a pickup or drop, or an object for
+ * an other stop with its purpose and name (#345).
+ */
+export function waypointsForApi(ids: string[], otherStops: Record<string, OtherStopDetail> = {}) {
+  return ids.filter(Boolean).map((id) => {
+    const other = otherStops[id];
+    return other ? { locationId: id, stopType: 'other' as const, purpose: other.purpose, label: other.label.trim() || null } : id;
+  });
 }

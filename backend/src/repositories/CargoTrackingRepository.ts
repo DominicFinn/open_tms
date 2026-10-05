@@ -27,6 +27,9 @@ export interface CargoManifestStop {
   sequenceNumber: number;
   locationName: string;
   stopType: string;
+  /** For other stops (#345): what the stop is for, and its own name. */
+  purpose: string | null;
+  label: string | null;
   status: string;
   expectedUnits: ManifestUnit[];
   scannedUnits: ManifestUnit[];
@@ -231,6 +234,8 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
         sequenceNumber: stop.sequenceNumber,
         locationName: stop.location.name,
         stopType: stop.stopType,
+        purpose: stop.purpose,
+        label: stop.label,
         status: stop.status,
         expectedUnits,
         scannedUnits,

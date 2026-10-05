@@ -382,3 +382,28 @@ describe('Carrier rate (#329)', () => {
     expect(db.tx.charge.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('Other stops on a run (#345)', () => {
+  const withFuel = (): FakeShipment[] => [
+    { id: 'ship-a', reference: 'SH-A', status: 'draft', archived: false, orgId: 'test-org', stops: [stop('a1', 'GB', 1, 'pickup'), { ...stop('a2', 'FUEL', 2, 'other'), purpose: 'fuel' } as any, stop('a3', 'ATL', 3)] },
+    { id: 'ship-b', reference: 'SH-B', status: 'draft', archived: false, orgId: 'test-org', stops: [stop('b1', 'CHI', 1, 'pickup'), stop('b2', 'MEM', 2), { ...stop('b3', 'REST', 3, 'other'), purpose: 'rest' } as any, stop('b4', 'ATL', 4)] },
+  ];
+
+  it('keeps other stops on the run: before the drops when visited before any, after them otherwise', async () => {
+    const db = fakeDb(withFuel());
+    await create(db, ['ship-a', 'ship-b']);
+    expect(db.route()).toEqual(['1:pickup:GB', '2:other:FUEL', '3:pickup:CHI', '4:delivery:ATL', '5:delivery:MEM', '6:other:REST']);
+    expect(db.linkOf('a2')).toBe('other:FUEL');
+    // B now ends at its rest stop, but its destination stays its last drop.
+    expect(db.shipmentRoute('ship-b')).toEqual(['CHI', 'ATL', 'MEM', 'REST']);
+    expect(db.shipments[1].destinationId).toBe('MEM');
+    expect(db.tx.consolidationStop.create).toHaveBeenCalledWith({ data: expect.objectContaining({ locationId: 'FUEL', stopType: 'other', purpose: 'fuel' }) });
+  });
+
+  it('lets other stops go anywhere when reordering, but never a pickup after a drop', () => {
+    const stops = [{ id: 'p1', stopType: 'pickup' }, { id: 'o1', stopType: 'other' }, { id: 'd1', stopType: 'delivery' }];
+    expect(reorderProblem(stops, ['o1', 'p1', 'd1'])).toBeNull();
+    expect(reorderProblem(stops, ['p1', 'd1', 'o1'])).toBeNull();
+    expect(reorderProblem(stops, ['d1', 'o1', 'p1'])).toBe('Every pickup has to come before every drop.');
+  });
+});

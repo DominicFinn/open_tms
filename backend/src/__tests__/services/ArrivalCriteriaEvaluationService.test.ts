@@ -196,5 +196,41 @@ describe('ArrivalCriteriaEvaluationService', () => {
       expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-mid', 'completed', 'geofence', expect.any(Date));
     });
   });
-});
 
+  describe('an other stop (#345)', () => {
+    const viaFuel = (mid: Partial<StopSpec>): StopSpec[] => [
+      { id: 'stop-origin', locationId: 'loc-origin', sequenceNumber: 1, stopType: 'pickup', status: 'completed' },
+      { id: 'stop-fuel', locationId: 'loc-mid', sequenceNumber: 2, stopType: 'other', ...mid },
+      { id: 'stop-dest', locationId: 'loc-dest', sequenceNumber: 3, stopType: 'delivery' },
+    ];
+
+    it('arrives on entry without completing, like a pickup', async () => {
+      const { ping, dispatched, deliveryService } = setup(viaFuel({}));
+      await ping('loc-mid');
+      expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-fuel', completesStop: false })]]);
+      expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-fuel', 'arrived', 'geofence', expect.any(Date));
+    });
+
+    it('completes when the vehicle leaves, so both times are recorded', async () => {
+      const { ping, dispatched, deliveryService } = setup(viaFuel({ status: 'arrived' }));
+      await ping('loc-mid', { lat: 40.75 });
+      expect(dispatched()).toEqual([[RECORD_GEOFENCE_DEPARTURE, expect.objectContaining({ stopId: 'stop-fuel' })]]);
+      expect(deliveryService.updateOrdersForStop).toHaveBeenCalledWith('org-1', 'stop-fuel', 'completed', 'geofence', expect.any(Date));
+    });
+
+    it('departs an other stop once, with the position, when the next ping is already at a later stop', async () => {
+      const { ping, dispatched } = setup(viaFuel({ status: 'arrived' }));
+      await ping('loc-dest');
+      expect(dispatched()).toEqual([
+        [RECORD_GEOFENCE_DEPARTURE, expect.objectContaining({ stopId: 'stop-fuel', lat: 41 })],
+        [RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-dest', completesStop: true })],
+      ]);
+    });
+
+    it('does not invent a visit to an other stop the vehicle never reached', async () => {
+      const { ping, dispatched } = setup(viaFuel({}));
+      await ping('loc-dest');
+      expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-dest' })]]);
+    });
+  });
+});

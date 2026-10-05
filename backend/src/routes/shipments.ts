@@ -11,6 +11,7 @@ import { TRANSITION_SHIPMENT_STATUS } from '../commands/shipments/TransitionShip
 import { SOFT_DELETE_SHIPMENT } from '../commands/shipments/SoftDeleteShipmentCommand.js';
 import { UNARCHIVE_SHIPMENT } from '../commands/shipments/UnarchiveShipmentCommand.js';
 import {
+  OTHER_STOP_PURPOSES,
   SHIPMENT_LIFECYCLE,
   allowedTransitions,
   validateShipmentReadiness,
@@ -31,6 +32,17 @@ const flexibleDate = z.string().trim().min(1).transform((v, ctx) => {
   }
   return parsed.toISOString();
 });
+
+// A route stop: a location id, or a stop that is neither pickup nor drop with its purpose (#345).
+const waypointSchema = z.union([
+  z.string().uuid(),
+  z.object({
+    locationId: z.string().uuid(),
+    stopType: z.literal('other'),
+    purpose: z.enum(OTHER_STOP_PURPOSES),
+    label: z.string().max(100).nullish(),
+  }),
+]);
 
 export async function shipmentRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
@@ -186,8 +198,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       carrierId: z.string().uuid().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
-      waypoints: z.array(z.string().uuid()).optional(),
-      pickupWaypoints: z.array(z.string().uuid()).optional(),
+      waypoints: z.array(waypointSchema).optional(),
+      pickupWaypoints: z.array(waypointSchema).optional(),
       originData: addressSchema.optional(),
       destinationData: addressSchema.optional(),
       pickupDate: flexibleDate.optional(),
@@ -630,8 +642,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       serviceLevel: z.enum(['FTL', 'LTL']).nullable().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
-      waypoints: z.array(z.string().uuid()).optional(),
-      pickupWaypoints: z.array(z.string().uuid()).optional(),
+      waypoints: z.array(waypointSchema).optional(),
+      pickupWaypoints: z.array(waypointSchema).optional(),
       items: z.array(z.object({
         sku: z.string(),
         description: z.string().optional(),

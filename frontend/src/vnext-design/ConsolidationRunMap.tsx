@@ -2,12 +2,14 @@ import React, { useMemo } from 'react';
 
 import MapView from '../maps/Map';
 import type { MapMarker, MapPolyline } from '../maps/types';
+import { stopTypeLabel } from '@open-tms/shared';
 
 // Hex colors used inside map HTML strings (cannot use Tailwind/var(--*)); same palette as the
 // shipment detail map.
 const COLOR_PICKUP = '#3b82f6';
 const COLOR_DROP = '#22c55e';
 const COLOR_DONE = '#94a3b8';
+const COLOR_OTHER = '#eab308';
 const COLOR_LINE = '#a855f7';
 const COLOR_POSITION = '#6366f1';
 
@@ -15,6 +17,8 @@ interface RunStop {
   id: string;
   sequenceNumber: number;
   stopType: string;
+  purpose?: string | null;
+  label?: string | null;
   status: string;
   location: { name: string; lat: number | null; lng: number | null };
 }
@@ -43,9 +47,12 @@ export default function ConsolidationRunMap({ reference, stops, position }: Prop
     const out: MapMarker[] = located.map((s) => ({
       id: `stop-${s.id}`,
       position: s.point,
-      html: numberedPin(s.status === 'completed' ? COLOR_DONE : s.stopType === 'pickup' ? COLOR_PICKUP : COLOR_DROP, s.sequenceNumber),
+      html: numberedPin(
+        s.status === 'completed' ? COLOR_DONE : s.stopType === 'pickup' ? COLOR_PICKUP : s.stopType === 'other' ? COLOR_OTHER : COLOR_DROP,
+        s.sequenceNumber,
+      ),
       size: { width: 24, height: 24 },
-      popupHtml: `<strong>${s.sequenceNumber}. ${escape(s.location.name)}</strong><br/>${s.stopType === 'pickup' ? 'Pickup' : 'Drop'} · ${escape(s.status)}`,
+      popupHtml: `<strong>${s.sequenceNumber}. ${escape(s.location.name)}</strong><br/>${escape(stopTypeLabel(s))} · ${escape(s.status)}`,
       zIndex: 10,
     }));
     if (position) {
