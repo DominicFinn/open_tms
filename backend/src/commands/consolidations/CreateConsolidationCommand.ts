@@ -17,7 +17,7 @@ export interface CreateConsolidationPayload {
 
 export const CREATE_CONSOLIDATION = 'consolidation.create';
 
-function newReference(now: Date): string {
+export function newReference(now: Date): string {
   const day = now.toISOString().slice(2, 10).replace(/-/g, '');
   return `CON-${day}-${randomBytes(3).toString('hex').toUpperCase()}`;
 }

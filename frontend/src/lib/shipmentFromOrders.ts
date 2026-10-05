@@ -136,17 +136,25 @@ export function canJoin(candidate: OrderForShipment, orders: OrderForShipment[])
     && candidate.serviceLevel !== 'FTL';
 }
 
+type ShippableOrder = { status?: string | null; serviceLevel?: string | null; customerId?: string | null };
+
 /**
  * Why the selected orders can't be shipped together, or null when they can. "Ship together" on the
- * orders list stays disabled until this is null, so the create page only opens for a valid set.
- * Different origins are fine: each becomes a pickup (#329).
+ * orders list stays disabled until this is null. Different origins are fine: each becomes a pickup;
+ * different customers are fine too: each gets its own shipment on one consolidation (#329).
  */
-export function shipTogetherProblem(
-  orders: Array<{ status?: string | null; serviceLevel?: string | null; customerId?: string | null }>,
-): string | null {
+export function shipTogetherProblem(orders: ShippableOrder[]): string | null {
   if (orders.length < 2) return 'Select two or more orders to ship together.';
   if (orders.some((o) => o.status?.toLowerCase() !== 'verified')) return 'Only available orders can be shipped.';
   if (orders.some((o) => o.serviceLevel === 'FTL')) return 'FTL orders ship on their own shipment.';
-  if (new Set(orders.map((o) => o.customerId)).size > 1) return 'The orders belong to different customers.';
   return null;
+}
+
+/**
+ * One customer's orders make one shipment, built on the create page. Several customers' orders make
+ * one shipment per customer on a new consolidation, built in one step (#329).
+ */
+export function shipTogetherMode(orders: ShippableOrder[]): { kind: 'shipment' } | { kind: 'consolidation'; customers: number } {
+  const customers = new Set(orders.map((o) => o.customerId)).size;
+  return customers > 1 ? { kind: 'consolidation', customers } : { kind: 'shipment' };
 }

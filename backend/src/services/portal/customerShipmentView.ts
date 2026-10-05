@@ -11,6 +11,7 @@
 
 interface StopWithOrders {
   stopType: string;
+  consolidationStopId?: string | null;
   locationId: string;
   location?: unknown;
   orders: Array<{ customerId: string }>;
@@ -30,7 +31,8 @@ export function scopeShipmentToCustomer<T extends PortalShipmentSource>(shipment
 
   const visibleStops = stops
     .filter((s) => s.stopType === 'pickup' || s.orders.length === 0 || s.orders.some((o) => o.customerId === customerId))
-    .map(({ orders: _orders, ...stop }) => stop);
+    // The run's stop id would point a customer at the consolidation, which they never see (#329).
+    .map(({ orders: _orders, consolidationStopId: _run, ...stop }) => stop);
 
   const items = Array.isArray(shipment.items)
     ? shipment.items.filter((item: any) => !item?.orderId || ownOrderIds.has(item.orderId))

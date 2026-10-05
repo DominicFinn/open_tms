@@ -28,6 +28,24 @@ const sections = [
     ),
   },
   {
+    problem: 'Several customers\' freight goes out on one truck, and nobody can say whose cost is whose or where each load is',
+    solution: 'Consolidated runs, kept separate per customer',
+    description: 'Select orders for several customers and ship them together: each customer gets their own shipment, and the shipments ride one consolidated run with every pickup before every drop. Reorder the stops, put the carrier and a tracking device on the run once, and each ping updates every shipment on it, so each customer\'s orders move and deliver only at their own stops and their portal shows only their own load. The carrier\'s rate for the run is split across the shipments by weight, so every customer shows a real margin.',
+    illustration: (
+      <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
+        <path d="M36 100 L104 100 L176 100 L244 100" stroke="rgba(168,85,247,0.5)" strokeWidth="2" strokeDasharray="6 5" />
+        <circle cx="36" cy="100" r="13" fill="rgba(59,130,246,0.2)" stroke="rgba(59,130,246,0.6)" strokeWidth="1.5" />
+        <circle cx="104" cy="100" r="13" fill="rgba(59,130,246,0.2)" stroke="rgba(59,130,246,0.6)" strokeWidth="1.5" />
+        <circle cx="176" cy="100" r="13" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="1.5" />
+        <circle cx="244" cy="100" r="13" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="1.5" />
+        <rect x="20" y="40" width="100" height="26" rx="6" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.35)" strokeWidth="1" />
+        <rect x="160" y="134" width="100" height="26" rx="6" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.35)" strokeWidth="1" />
+        <path d="M36 66 L36 87 M176 113 L176 134" stroke="rgba(99,102,241,0.4)" strokeWidth="1.5" />
+        <path d="M104 113 L104 147 L160 147 M244 87 L244 66 L120 66" stroke="rgba(234,179,8,0.4)" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+  {
     problem: 'You\'re running shipments across spreadsheets, emails, and three different portals',
     solution: 'Single pane of glass',
     description: 'Every shipment, order, carrier assignment, and status update lives in one place. Search, filter, and act on your entire operation from a unified dashboard  - no more tab-switching between carrier portals.',

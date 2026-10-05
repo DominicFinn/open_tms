@@ -6,3 +6,4 @@ export { ArchiveConsolidationCommandHandler, ARCHIVE_CONSOLIDATION } from './Arc
 export { TransitionConsolidationStatusCommandHandler, TRANSITION_CONSOLIDATION_STATUS } from './TransitionConsolidationStatusCommand.js';
 export { ReorderConsolidationStopsCommandHandler, REORDER_CONSOLIDATION_STOPS } from './ReorderConsolidationStopsCommand.js';
 export { SyncConsolidationProgressCommandHandler, SYNC_CONSOLIDATION_PROGRESS } from './SyncConsolidationProgressCommand.js';
+export { ShipOrdersTogetherCommandHandler, SHIP_ORDERS_TOGETHER } from './ShipOrdersTogetherCommand.js';

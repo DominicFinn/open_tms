@@ -14,12 +14,9 @@
 
 import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
-import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { createPickupStop, linkOrdersToShipment } from '../shipments/linkOrdersToShipment.js';
-import { assignMatchingLane } from '../shipments/assignMatchingLane.js';
 import { Command } from '../types.js';
-import { loadProfileFor } from './shipmentLoadRules.js';
+import { combineOrdersIntoNewShipment } from './combineOrdersIntoNewShipment.js';
 
 export interface CombineOrdersIntoShipmentPayload {
   orderIds: string[];
@@ -59,67 +56,6 @@ export class CombineOrdersIntoShipmentCommandHandler extends BaseCommandHandler<
       throw new Error('No valid orders found');
     }
 
-    const firstOrder = orders[0];
-    const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
-    const reference = `SH-BATCH-${timestamp}`;
-
-    const shipment = await tx.shipment.create({
-      data: {
-        orgId: command.orgId,
-        reference,
-        customerId: firstOrder.customerId,
-        originId: firstOrder.originId!,
-        destinationId: firstOrder.destinationId!,
-        items: [],
-        status: 'draft',
-        ...loadProfileFor(orders),
-      },
-    });
-
-    emit(this.createEvent(command, {
-      type: EVENT_TYPES.SHIPMENT_CREATED,
-      entityType: 'shipment',
-      entityId: shipment.id,
-      orgId: command.orgId,
-      payload: {
-        shipmentReference: reference,
-        customerId: firstOrder.customerId,
-        originId: firstOrder.originId,
-        destinationId: firstOrder.destinationId,
-        status: 'draft',
-      },
-    }));
-
-    await createPickupStop(tx, shipment.id, shipment.originId!);
-
-    await linkOrdersToShipment(
-      tx,
-      shipment,
-      orders,
-      {
-        orgId: command.orgId,
-        actorId: command.actorId,
-        correlationId: command.metadata.correlationId,
-        source: command.metadata.source,
-      },
-      () => `Order combined into batch shipment ${reference} with ${orders.length} orders`,
-      emit,
-      { batchOrderIds: orderIds },
-    );
-
-    // With orders bound for different places, the shipment ends at its last drop, not at the first
-    // order's destination: checkpoints and the route header measure towards it (#324).
-    const finalStop = await tx.shipmentStop.findFirst({
-      where: { shipmentId: shipment.id, shipment: { orgId: command.orgId } },
-      orderBy: { sequenceNumber: 'desc' },
-      select: { locationId: true },
-    });
-    if (finalStop && finalStop.locationId !== shipment.destinationId) {
-      await tx.shipment.update({ where: { id: shipment.id, orgId: command.orgId }, data: { destinationId: finalStop.locationId } });
-    }
-
-    await assignMatchingLane(tx, command.orgId, shipment);
-
-    return { shipmentId: shipment.id };
+    return { shipmentId: await combineOrdersIntoNewShipment(tx, command, orders, emit) };
   }
 }

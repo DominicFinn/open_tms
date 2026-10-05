@@ -681,6 +681,7 @@ linking each shipment stop to the consolidation stop that serves it. Lists read 
 | `ArchiveConsolidationCommand` | `POST /api/v1/consolidations/:id/archive` | `consolidation.archived` |
 | `TransitionConsolidationStatusCommand` | `POST /api/v1/consolidations/:id/status` (`draft` ⇄ `ready`) | `consolidation.status_changed` |
 | `ReorderConsolidationStopsCommand` | `POST /api/v1/consolidations/:id/stops/order` | `consolidation.stops_reordered`, `shipment.updated` per realigned shipment |
+| `ShipOrdersTogetherCommand` | `POST /api/v1/consolidations/from-orders` ("Ship together" on the orders list across customers) | `shipment.created` and `order.assigned_to_shipment` per shipment, `consolidation.created` |
 | `SyncConsolidationProgressCommand` | `ConsolidationProgressHandler` (on `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.status_changed`) | `consolidation.status_changed`, `consolidation.stops_updated` |
 
 `UpdateConsolidationCommand` also takes `devices` (the run's tracking devices, `DeviceAssignment.consolidationId`)
@@ -746,8 +747,25 @@ share. Once any share is approved or invoiced the split is fixed and re-splittin
 shipment with charges in another currency is refused. Emits `charge.created` for each new share and
 `consolidation.cost_allocated` with the basis (`weight`, `even`, `none`) and the shares.
 
-Not yet: creating per-customer shipments from "Ship together" (the last slice of #329). Checkpoints
-are per shipment, not per run. A changed order weight is picked up the next time the run's cost
+### Shipping several customers' orders together
+
+"Ship together" on the orders list with orders for one customer opens the create page as before
+(one shipment). With orders for **several customers** it builds everything in one transaction
+(`ShipOrdersTogetherCommand`): one draft shipment per customer (the same
+`combineOrdersIntoNewShipment` that `CombineOrdersIntoShipmentCommand` uses: pickups, drops, order
+links, matching lane), all on a new draft consolidation. Refused, with nothing created, when any
+order is assigned, cancelled or delivered, is FTL, lacks a pickup or drop, or when the orders are
+all one customer's.
+
+### Customer portal
+
+A customer only ever reaches their own shipment (`customerId` scoped; another customer's shipment
+on the same run is a 404). `scopeShipmentToCustomer` drops `consolidationStopId` from the stops, so
+the run stays invisible. Live position comes from the shipment's own location events, which the
+fan-out writes for every shipment on the run. Those events are the truck's track, so they include
+positions at other customers' stops (coordinates only, no names).
+
+Checkpoints are per shipment, not per run. A changed order weight is picked up the next time the run's cost
 is re-split (saving the rate again), not automatically.
 
 ---
