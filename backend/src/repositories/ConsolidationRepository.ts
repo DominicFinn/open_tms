@@ -5,6 +5,8 @@ const detailSelect = {
   reference: true,
   status: true,
   notes: true,
+  carrierRateCents: true,
+  currency: true,
   archived: true,
   createdAt: true,
   updatedAt: true,
@@ -41,8 +43,20 @@ const detailSelect = {
   },
 } satisfies Prisma.ConsolidationSelect;
 
+export interface ShipmentCost {
+  shipmentId: string;
+  weightKg: number;
+  /** This shipment's share of the run's carrier rate, when one is set. */
+  shareCents: number | null;
+  shareStatus: string | null;
+  revenueCents: number;
+  costCents: number;
+  marginCents: number;
+}
+
 export type ConsolidationDetail = Prisma.ConsolidationGetPayload<{ select: typeof detailSelect }> & {
   position: { lat: number; lng: number; at: Date | null } | null;
+  costs: ShipmentCost[];
 };
 
 export interface ConsolidationCandidate {
@@ -56,6 +70,27 @@ export interface ConsolidationCandidate {
 }
 
 const OPEN_SHIPMENT_STATUSES = ['draft', 'ready'];
+const LB_TO_KG = 0.453592;
+
+type ShipmentWeightSource = Pick<PrismaClient, 'orderShipment'>;
+
+/**
+ * Each shipment's freight weight in kg: the weight times quantity of every line on its orders,
+ * pounds converted. Shipments with no weighed lines come back as 0. Takes a transaction client too,
+ * so cost allocation reads the same numbers the page shows.
+ */
+export async function loadShipmentWeightsKg(db: ShipmentWeightSource, orgId: string, shipmentIds: string[]): Promise<Map<string, number>> {
+  const links = await db.orderShipment.findMany({
+    where: { shipmentId: { in: shipmentIds }, order: { orgId } },
+    select: { shipmentId: true, order: { select: { lineItems: { select: { weight: true, weightUnit: true, quantity: true } } } } },
+  });
+  const weights = new Map(shipmentIds.map((id) => [id, 0]));
+  for (const link of links) {
+    const kg = link.order.lineItems.reduce((sum, li) => sum + (li.weight ?? 0) * (li.weightUnit === 'lb' ? LB_TO_KG : 1) * li.quantity, 0);
+    weights.set(link.shipmentId, (weights.get(link.shipmentId) ?? 0) + kg);
+  }
+  return weights;
+}
 
 export interface IConsolidationRepository {
   list(orgId: string, opts: { archived: boolean; limit: number; offset: number }): Promise<{ items: ConsolidationReadModel[]; total: number }>;
@@ -89,7 +124,36 @@ export class ConsolidationRepository implements IConsolidationRepository {
     });
     const p = positions[0];
     const position = p?.currentLat != null && p.currentLng != null ? { lat: p.currentLat, lng: p.currentLng, at: p.lastLocationAt } : null;
-    return { ...consolidation, position };
+    return { ...consolidation, position, costs: await this.shipmentCosts(orgId, id, consolidation.shipments.map((s) => s.shipment.id)) };
+  }
+
+  /** Each shipment's weight, its share of the run's rate, and its expected margin (#329). */
+  private async shipmentCosts(orgId: string, consolidationId: string, shipmentIds: string[]): Promise<ShipmentCost[]> {
+    if (shipmentIds.length === 0) return [];
+    const [weights, shares, summaries] = await Promise.all([
+      loadShipmentWeightsKg(this.prisma, orgId, shipmentIds),
+      this.prisma.charge.findMany({
+        where: { orgId, shipmentId: { in: shipmentIds }, source: 'consolidation', sourceId: consolidationId },
+        select: { shipmentId: true, amountCents: true, status: true },
+      }),
+      this.prisma.shipmentFinancialSummary.findMany({
+        where: { orgId, shipmentId: { in: shipmentIds } },
+        select: { shipmentId: true, expectedRevenueCents: true, expectedCostCents: true, expectedMarginCents: true },
+      }),
+    ]);
+    return shipmentIds.map((shipmentId) => {
+      const share = shares.find((c) => c.shipmentId === shipmentId);
+      const summary = summaries.find((s) => s.shipmentId === shipmentId);
+      return {
+        shipmentId,
+        weightKg: Math.round((weights.get(shipmentId) ?? 0) * 10) / 10,
+        shareCents: share?.amountCents ?? null,
+        shareStatus: share?.status ?? null,
+        revenueCents: summary?.expectedRevenueCents ?? 0,
+        costCents: summary?.expectedCostCents ?? 0,
+        marginCents: summary?.expectedMarginCents ?? 0,
+      };
+    });
   }
 
   /** The consolidation's live shipments in the order they were added: who a ping on its device updates. */

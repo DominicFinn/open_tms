@@ -5,11 +5,15 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 import { reconcileDevices, ShipmentDeviceInput } from '../shipments/reconcileShipmentDevices.js';
 import { pushCarrierToShipments, shipmentUpdatedEvents } from './consolidationMembership.js';
+import { allocateConsolidationCost, allocationEvents } from './allocateConsolidationCost.js';
 
 export interface UpdateConsolidationPayload {
   id: string;
   carrierId?: string | null;
   notes?: string | null;
+  /** What the carrier charges for the whole run; null clears it and its shares. */
+  carrierRateCents?: number | null;
+  currency?: string;
   /** The tracking devices on the run; undefined leaves them alone, [] removes them all. */
   devices?: ShipmentDeviceInput[];
 }
@@ -29,7 +33,7 @@ export class UpdateConsolidationCommandHandler extends BaseCommandHandler<Update
     emit: EmitFn,
   ): Promise<{ id: string }> {
     const { orgId } = command;
-    const { id, carrierId, notes, devices } = command.payload;
+    const { id, carrierId, notes, devices, carrierRateCents, currency } = command.payload;
 
     const existing = await tx.consolidation.findFirst({
       where: { id, orgId },
@@ -41,11 +45,15 @@ export class UpdateConsolidationCommandHandler extends BaseCommandHandler<Update
       if (!carrier) throw new Error('Carrier not found');
     }
 
-    const data: { carrierId?: string | null; notes?: string | null } = {};
+    const data: { carrierId?: string | null; notes?: string | null; carrierRateCents?: number | null; currency?: string } = {};
     if (carrierId !== undefined) data.carrierId = carrierId;
     if (notes !== undefined) data.notes = notes;
+    if (carrierRateCents !== undefined) data.carrierRateCents = carrierRateCents;
+    if (currency !== undefined) data.currency = currency;
     await tx.consolidation.update({ where: { id, orgId }, data });
 
+    const rateChanged = carrierRateCents !== undefined || currency !== undefined;
+    const allocation = rateChanged ? await allocateConsolidationCost(tx, orgId, id) : null;
     const carried = await pushCarrierToShipments(tx, orgId, carrierId, existing.shipments.map((s) => s.shipmentId));
 
     await reconcileDevices(tx, {
@@ -73,6 +81,7 @@ export class UpdateConsolidationCommandHandler extends BaseCommandHandler<Update
       payload: { changes: [...Object.keys(data), ...(devices !== undefined ? ['devices'] : [])] },
     }));
     for (const e of shipmentUpdatedEvents(carried, ['carrierId'], id)) emit(this.createEvent(command, e));
+    if (allocation) for (const e of allocationEvents(id, allocation)) emit(this.createEvent(command, e));
 
     return { id };
   }

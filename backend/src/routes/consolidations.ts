@@ -32,6 +32,8 @@ const idParams = { type: 'object' as const, required: ['id'], properties: { id: 
 const shipmentIds = { type: 'array' as const, minItems: 1, maxItems: 50, items: { type: 'string', format: 'uuid' } };
 const nullableId = { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }] };
 const nullableNotes = { anyOf: [{ type: 'string', maxLength: 2000 }, { type: 'null' }] };
+const carrierRateCents = { anyOf: [{ type: 'integer', minimum: 0, maximum: 100000000 }, { type: 'null' }] };
+const currency = { type: 'string', pattern: '^[A-Z]{3}$' };
 const devices = {
   type: 'array' as const,
   maxItems: 10,
@@ -117,7 +119,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
         type: 'object',
         required: ['shipmentIds'],
         additionalProperties: false,
-        properties: { shipmentIds, carrierId: nullableId, notes: nullableNotes },
+        properties: { shipmentIds, carrierId: nullableId, notes: nullableNotes, carrierRateCents, currency },
       },
       response: { 201: envelope, 400: envelope, 404: envelope },
     },
@@ -127,7 +129,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
       orgId: req.orgId!,
       actorId: req.user?.sub ?? null,
       metadata: { correlationId: randomUUID(), source: 'api' },
-      payload: req.body as { shipmentIds: string[]; carrierId?: string | null; notes?: string | null },
+      payload: req.body as { shipmentIds: string[]; carrierId?: string | null; notes?: string | null; carrierRateCents?: number | null; currency?: string },
     });
     return send(reply, result, 201);
   });
@@ -137,7 +139,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
       tags: TAGS,
       summary: 'Update a consolidation',
       params: idParams,
-      body: { type: 'object', additionalProperties: false, properties: { carrierId: nullableId, notes: nullableNotes, devices } },
+      body: { type: 'object', additionalProperties: false, properties: { carrierId: nullableId, notes: nullableNotes, devices, carrierRateCents, currency } },
       response: { 200: envelope, 400: envelope, 404: envelope },
     },
   }, async (req, reply) => {
@@ -147,7 +149,7 @@ export async function consolidationRoutes(server: FastifyInstance) {
       orgId: req.orgId!,
       actorId: req.user?.sub ?? null,
       metadata: { correlationId: randomUUID(), source: 'api' },
-      payload: { id, ...(req.body as { carrierId?: string | null; notes?: string | null; devices?: Array<{ name: string; externalId: string }> }) },
+      payload: { id, ...(req.body as { carrierId?: string | null; notes?: string | null; carrierRateCents?: number | null; currency?: string; devices?: Array<{ name: string; externalId: string }> }) },
     });
     return send(reply, result);
   });

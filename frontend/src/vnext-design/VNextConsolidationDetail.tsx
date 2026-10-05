@@ -35,11 +35,24 @@ interface MemberShipment {
   stops: Array<{ id: string; sequenceNumber: number; consolidationStopId: string | null }>;
 }
 
+interface ShipmentCost {
+  shipmentId: string;
+  weightKg: number;
+  shareCents: number | null;
+  shareStatus: string | null;
+  revenueCents: number;
+  costCents: number;
+  marginCents: number;
+}
+
 interface Consolidation {
   id: string;
   reference: string;
   status: string;
   notes: string | null;
+  carrierRateCents: number | null;
+  currency: string;
+  costs: ShipmentCost[];
   archived: boolean;
   carrier: { id: string; name: string } | null;
   devices: Array<{ id: string; device: { id: string; name: string; externalId: string } }>;
@@ -50,6 +63,15 @@ interface Consolidation {
 
 const NO_CARRIER = 'none';
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '—');
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
+const centsToInput = (cents: number | null) => (cents == null ? '' : (cents / 100).toFixed(2));
+/** The rate field as cents: null when empty, undefined when it isn't a valid amount. */
+function inputToCents(value: string): number | null | undefined {
+  if (value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
+}
 
 export default function VNextConsolidationDetail() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +81,7 @@ export default function VNextConsolidationDetail() {
   const [carriers, setCarriers] = useState<Array<{ id: string; name: string }>>([]);
   const [carrierId, setCarrierId] = useState(NO_CARRIER);
   const [notes, setNotes] = useState('');
+  const [rate, setRate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -75,6 +98,7 @@ export default function VNextConsolidationDetail() {
       setConsolidation(json.data);
       setCarrierId(json.data.carrier?.id ?? NO_CARRIER);
       setNotes(json.data.notes ?? '');
+      setRate(centsToInput(json.data.carrierRateCents));
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -149,7 +173,11 @@ export default function VNextConsolidationDetail() {
   const canWrite = hasPermission('shipments:write') && !consolidation.archived;
   const editable = canWrite && consolidation.status === 'draft';
   const customers = new Set(shipments.map((s) => s.customer.id)).size;
-  const settingsChanged = carrierId !== (consolidation.carrier?.id ?? NO_CARRIER) || notes !== (consolidation.notes ?? '');
+  const rateCents = inputToCents(rate);
+  const rateChanged = rateCents !== consolidation.carrierRateCents;
+  const settingsChanged = carrierId !== (consolidation.carrier?.id ?? NO_CARRIER) || notes !== (consolidation.notes ?? '') || rateChanged;
+  const costOf = new Map(consolidation.costs.map((c) => [c.shipmentId, c]));
+  const weighed = consolidation.costs.some((c) => c.weightKg > 0);
 
   return (
     <div className="space-y-6">
@@ -284,6 +312,23 @@ export default function VNextConsolidationDetail() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="carrier-rate">Carrier rate ({consolidation.currency})</Label>
+              <Input
+                id="carrier-rate"
+                inputMode="decimal"
+                placeholder="What the carrier charges for the run"
+                value={rate}
+                disabled={!canWrite}
+                onChange={(e) => setRate(e.target.value)}
+              />
+              {rateCents === undefined && <p className="text-xs text-destructive">Enter an amount, like 1250.00.</p>}
+              {consolidation.carrierRateCents != null && (
+                <p className="text-xs text-muted-foreground">
+                  Split across the shipments {weighed ? 'by the weight of their orders' : 'evenly, since none of their orders are weighed'}.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label>Notes</Label>
               <textarea
                 rows={4}
@@ -297,8 +342,12 @@ export default function VNextConsolidationDetail() {
             {canWrite && (
               <Button
                 className="w-full"
-                disabled={!settingsChanged || busy}
-                onClick={() => act('', { carrierId: carrierId === NO_CARRIER ? null : carrierId, notes: notes.trim() || null })}
+                disabled={!settingsChanged || busy || rateCents === undefined}
+                onClick={() => act('', {
+                  carrierId: carrierId === NO_CARRIER ? null : carrierId,
+                  notes: notes.trim() || null,
+                  ...(rateChanged ? { carrierRateCents: rateCents } : {}),
+                })}
               >
                 Save
               </Button>
@@ -367,6 +416,9 @@ export default function VNextConsolidationDetail() {
                   <TableHead>Pickup</TableHead>
                   <TableHead>Delivery</TableHead>
                   <TableHead>Run stops</TableHead>
+                  <TableHead className="text-right">Weight</TableHead>
+                  <TableHead className="text-right">Cost share</TableHead>
+                  <TableHead className="text-right">Margin</TableHead>
                   <TableHead>Status</TableHead>
                   {editable && <TableHead />}
                 </TableRow>
@@ -383,6 +435,18 @@ export default function VNextConsolidationDetail() {
                     <TableCell>{day(s.deliveryDate)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {s.stops.map((st) => (st.consolidationStopId ? sequenceOf.get(st.consolidationStopId) : null)).filter(Boolean).join(', ') || '—'}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-sm">
+                      {costOf.get(s.id)?.weightKg ? `${costOf.get(s.id)!.weightKg.toLocaleString()} kg` : '—'}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-sm">
+                      {costOf.get(s.id)?.shareCents != null ? money(costOf.get(s.id)!.shareCents!, consolidation.currency) : '—'}
+                    </TableCell>
+                    <TableCell
+                      className={`whitespace-nowrap text-right text-sm ${(costOf.get(s.id)?.marginCents ?? 0) < 0 ? 'text-destructive' : ''}`}
+                      title={costOf.get(s.id) ? `Revenue ${money(costOf.get(s.id)!.revenueCents, consolidation.currency)}, cost ${money(costOf.get(s.id)!.costCents, consolidation.currency)}` : undefined}
+                    >
+                      {costOf.get(s.id) ? money(costOf.get(s.id)!.marginCents, consolidation.currency) : '—'}
                     </TableCell>
                     <TableCell className="capitalize">{s.status.replace('_', ' ')}</TableCell>
                     {editable && (

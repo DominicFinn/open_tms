@@ -224,6 +224,9 @@ model Consolidation {
   status       String       @default("draft") // draft, ready, in_progress, complete, cancelled
   carrier      Carrier?     @relation(fields: [carrierId], references: [id])
   carrierId    String?
+  // What the carrier charges for the whole run, split across its shipments by weight (#329)
+  carrierRateCents Int?
+  currency         String  @default("USD")
   notes        String?
   archived     Boolean      @default(false)
   archivedAt   DateTime?

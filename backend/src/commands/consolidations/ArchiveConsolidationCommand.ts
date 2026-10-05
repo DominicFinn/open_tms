@@ -4,6 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { ConsolidationRuleError, releaseShipment } from './consolidationMembership.js';
+import { allocateConsolidationCost } from './allocateConsolidationCost.js';
 
 export const ARCHIVE_CONSOLIDATION = 'consolidation.archive';
 
@@ -39,6 +40,8 @@ export class ArchiveConsolidationCommandHandler extends BaseCommandHandler<{ id:
     if (released.length > 0) await tx.consolidationStop.deleteMany({ where: { consolidationId: id, consolidation: { orgId } } });
 
     await tx.consolidation.update({ where: { id, orgId }, data: { archived: true, archivedAt: new Date() } });
+    // An abandoned draft's cost shares go with it; a finished run keeps its costs.
+    if (released.length > 0) await allocateConsolidationCost(tx, orgId, id, released);
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CONSOLIDATION_ARCHIVED,

@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { recalculateShipmentSummary } from './recalculateShipmentSummary.js';
 
 export interface CreateChargePayload {
   shipmentId?: string;
@@ -87,7 +88,7 @@ export class CreateChargeCommandHandler extends BaseCommandHandler<CreateChargeP
 
     // Recalculate shipment financial summary
     if (payload.shipmentId) {
-      await this.recalculateShipmentSummary(tx, payload.shipmentId, command.orgId);
+      await recalculateShipmentSummary(tx, payload.shipmentId, command.orgId);
     }
 
     emit(this.createEvent(command, {
@@ -107,53 +108,5 @@ export class CreateChargeCommandHandler extends BaseCommandHandler<CreateChargeP
     }));
 
     return { id: charge.id };
-  }
-
-  private async recalculateShipmentSummary(tx: TransactionClient, shipmentId: string, orgId: string) {
-    const charges = await tx.charge.findMany({
-      where: { shipmentId, orgId, status: { not: 'written_off' } },
-    });
-
-    const revenueCents = charges
-      .filter(c => c.chargeCategory === 'revenue')
-      .reduce((sum, c) => sum + c.amountCents, 0);
-
-    const costCents = charges
-      .filter(c => c.chargeCategory === 'cost')
-      .reduce((sum, c) => sum + c.amountCents, 0);
-
-    const approvedRevenue = charges
-      .filter(c => c.chargeCategory === 'revenue' && ['approved', 'invoiced'].includes(c.status))
-      .reduce((sum, c) => sum + c.amountCents, 0);
-
-    const approvedCost = charges
-      .filter(c => c.chargeCategory === 'cost' && ['approved', 'invoiced'].includes(c.status))
-      .reduce((sum, c) => sum + c.amountCents, 0);
-
-    const currency = charges.length > 0 ? charges[0].currency : 'USD';
-
-    await tx.shipmentFinancialSummary.upsert({
-      where: { shipmentId, orgId },
-      create: {
-        shipmentId,
-        orgId,
-        expectedRevenueCents: revenueCents,
-        expectedCostCents: costCents,
-        expectedMarginCents: revenueCents - costCents,
-        actualRevenueCents: approvedRevenue,
-        actualCostCents: approvedCost,
-        actualMarginCents: approvedRevenue - approvedCost,
-        currency,
-      },
-      update: {
-        expectedRevenueCents: revenueCents,
-        expectedCostCents: costCents,
-        expectedMarginCents: revenueCents - costCents,
-        actualRevenueCents: approvedRevenue,
-        actualCostCents: approvedCost,
-        actualMarginCents: approvedRevenue - approvedCost,
-        currency,
-      },
-    });
   }
 }
