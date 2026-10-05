@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { allocateConsolidationCost, allocationEvents } from './allocateConsolidationCost.js';
 import { attachShipments, loadDraftConsolidation, pushCarrierToShipments, rebuildConsolidationStops, shipmentUpdatedEvents } from './consolidationMembership.js';
 
 export interface AddShipmentsToConsolidationPayload {
@@ -31,6 +32,7 @@ export class AddShipmentsToConsolidationCommandHandler extends BaseCommandHandle
     await attachShipments(tx, orgId, id, shipmentIds);
     const carried = await pushCarrierToShipments(tx, orgId, consolidation.carrierId, shipmentIds);
     const { stopCount, changedShipmentIds } = await rebuildConsolidationStops(tx, orgId, id);
+    const allocation = await allocateConsolidationCost(tx, orgId, id);
 
     for (const shipmentId of new Set(shipmentIds)) {
       emit(this.createEvent(command, {
@@ -43,6 +45,7 @@ export class AddShipmentsToConsolidationCommandHandler extends BaseCommandHandle
     for (const e of shipmentUpdatedEvents([...carried, ...changedShipmentIds], ['consolidation'], id)) {
       emit(this.createEvent(command, e));
     }
+    if (consolidation.carrierRateCents != null) for (const e of allocationEvents(id, allocation)) emit(this.createEvent(command, e));
     return { stopCount };
   }
 }

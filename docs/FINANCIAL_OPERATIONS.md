@@ -49,6 +49,7 @@ The `LtlRatingService` provides class-based LTL rating with:
 - LTL accessorial codes: liftgate, residential, inside delivery, notification, limited access
 - Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
 - Multi-order LTL consolidation billing (`ConsolidationBillingService`, pro-rate by weight)
+- Consolidated runs (#329): the carrier's rate for a `Consolidation` is split across its shipments by weight as pending `cost` charges (`source: 'consolidation'`), see `commands/consolidations/allocateConsolidationCost.ts` and the Consolidations section of `DOMAIN_BEHAVIOURS.md`
 
 ## EDI Financial Transaction Types
 

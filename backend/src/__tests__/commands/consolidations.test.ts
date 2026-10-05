@@ -102,6 +102,10 @@ function fakeDb(shipments = fixtures()) {
       }),
       update: jest.fn(async ({ where, data }: any) => Object.assign(allStops().find((s) => s.id === where.id)!, data)),
     },
+    // Cost allocation (#329): no rate on these runs, so it only clears and re-summarises.
+    charge: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null), deleteMany: jest.fn(), update: jest.fn(), create: jest.fn() },
+    orderShipment: { findMany: jest.fn().mockResolvedValue([]) },
+    shipmentFinancialSummary: { upsert: jest.fn().mockResolvedValue({}) },
     domainEventLog: { create: jest.fn() },
   };
   const prisma: any = { $transaction: jest.fn((fn: Function) => fn(tx)), domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) } };
@@ -350,5 +354,31 @@ describe('Marking a consolidation ready (#329)', () => {
     expect(result).toMatchObject({ success: true, data: { status: 'ready' } });
     expect(tx.consolidation.update).toHaveBeenCalledWith({ where: { id: 'con-1', orgId: 'test-org' }, data: { status: 'ready' } });
     expect(result.events[0]).toMatchObject({ type: EVENT_TYPES.CONSOLIDATION_STATUS_CHANGED, payload: { from: 'draft', to: 'ready', automatic: false } });
+  });
+});
+
+describe('Carrier rate (#329)', () => {
+  it('splits a rate set on the run across its shipments and emits the allocation', async () => {
+    const db = fakeDb();
+    await create(db, ['ship-a', 'ship-b']);
+    db.tx.charge.create.mockImplementation(async ({ data }: any) => ({ id: `charge-${data.shipmentId}`, ...data }));
+
+    const result = await new UpdateConsolidationCommandHandler(db.prisma, bus())
+      .execute(createTestCommand(UPDATE_CONSOLIDATION, { id: 'con-1', carrierRateCents: 1001 }));
+
+    expect(result.success).toBe(true);
+    // No order lines are weighed in this fixture, so the split is even, to the cent.
+    expect(db.tx.charge.create.mock.calls.map((c: any[]) => [c[0].data.shipmentId, c[0].data.amountCents])).toEqual([['ship-a', 501], ['ship-b', 500]]);
+    expect(result.events.map((e) => e.type)).toEqual(expect.arrayContaining([EVENT_TYPES.CONSOLIDATION_COST_ALLOCATED, EVENT_TYPES.CHARGE_CREATED]));
+    expect(result.events.find((e) => e.type === EVENT_TYPES.CONSOLIDATION_COST_ALLOCATED)).toMatchObject({ payload: { basis: 'even' } });
+  });
+
+  it('leaves costs alone when only the notes change', async () => {
+    const db = fakeDb();
+    await create(db, ['ship-a']);
+    const result = await new UpdateConsolidationCommandHandler(db.prisma, bus())
+      .execute(createTestCommand(UPDATE_CONSOLIDATION, { id: 'con-1', notes: 'dock 2' }));
+    expect(result.events.map((e) => e.type)).toEqual([EVENT_TYPES.CONSOLIDATION_UPDATED]);
+    expect(db.tx.charge.findMany).not.toHaveBeenCalled();
   });
 });

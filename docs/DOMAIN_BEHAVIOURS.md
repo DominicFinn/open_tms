@@ -732,8 +732,23 @@ anything moves and `complete` when every shipment is complete. Draft, complete a
 only change by hand. The detail page's map shows the stops in order and the freshest position
 among its shipments.
 
-Not yet: cost allocation, and creating per-customer shipments from "Ship together" (later slices
-of #329). Checkpoints are per shipment, not per run.
+### Costs
+
+The run has a `carrierRateCents` (and `currency`): what the carrier bills for the whole run.
+`allocateConsolidationCost` splits it across the run's shipments **by weight** (each shipment's
+order lines, weight × quantity, pounds converted), evenly when nothing is weighed, in whole cents
+that add up to the rate (largest remainder). Each share is a pending `cost` / `linehaul` charge on
+the shipment with `source: 'consolidation'` and `sourceId` = the consolidation, and every touched
+shipment's `ShipmentFinancialSummary` is recalculated, so each customer's shipment shows its own
+margin. It re-runs when the rate or currency is set, a shipment joins or leaves, or a draft is
+archived (which removes the shares). Shares are updated in place; a shipment that leaves loses its
+share. Once any share is approved or invoiced the split is fixed and re-splitting is refused. A
+shipment with charges in another currency is refused. Emits `charge.created` for each new share and
+`consolidation.cost_allocated` with the basis (`weight`, `even`, `none`) and the shares.
+
+Not yet: creating per-customer shipments from "Ship together" (the last slice of #329). Checkpoints
+are per shipment, not per run. A changed order weight is picked up the next time the run's cost
+is re-split (saving the rate again), not automatically.
 
 ---
 

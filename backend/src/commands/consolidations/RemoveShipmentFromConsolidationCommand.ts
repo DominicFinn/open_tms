@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { allocateConsolidationCost, allocationEvents } from './allocateConsolidationCost.js';
 import { loadDraftConsolidation, rebuildConsolidationStops, releaseShipment, shipmentUpdatedEvents } from './consolidationMembership.js';
 
 export interface RemoveShipmentFromConsolidationPayload {
@@ -27,9 +28,10 @@ export class RemoveShipmentFromConsolidationCommandHandler extends BaseCommandHa
     const { orgId } = command;
     const { id, shipmentId } = command.payload;
 
-    await loadDraftConsolidation(tx, orgId, id);
+    const consolidation = await loadDraftConsolidation(tx, orgId, id);
     await releaseShipment(tx, orgId, id, shipmentId);
     const { stopCount, changedShipmentIds } = await rebuildConsolidationStops(tx, orgId, id);
+    const allocation = await allocateConsolidationCost(tx, orgId, id, [shipmentId]);
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CONSOLIDATION_SHIPMENT_REMOVED,
@@ -40,6 +42,7 @@ export class RemoveShipmentFromConsolidationCommandHandler extends BaseCommandHa
     for (const e of shipmentUpdatedEvents(changedShipmentIds, ['consolidation'], id)) {
       emit(this.createEvent(command, e));
     }
+    if (consolidation.carrierRateCents != null) for (const e of allocationEvents(id, allocation)) emit(this.createEvent(command, e));
     return { stopCount };
   }
 }
