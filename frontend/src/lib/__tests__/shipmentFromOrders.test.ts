@@ -1,4 +1,4 @@
-import { applyOrders, canBe, canJoin, canSwap, dropStops, fromRows, toRows, orderConflicts, shipTogetherMode, shipTogetherProblem, waypointsForApi, RouteForm, OrderForShipment } from '../shipmentFromOrders';
+import { applyOrders, canJoin, canSwap, dropStops, fromRows, setStopType, toRows, RouteStopRow, orderConflicts, shipTogetherMode, shipTogetherProblem, waypointsForApi, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
   customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', pickupWaypoints: [], waypoints: [],
@@ -121,36 +121,51 @@ describe('other stops (#345)', () => {
 });
 
 describe('the ordered stop list (#345)', () => {
-  const others = { fuel: { purpose: 'fuel', label: '' } };
+  const row = (locationId: string, type: RouteStopRow['type'], label = ''): RouteStopRow => ({ locationId, type, label });
+  const types = (rows: RouteStopRow[]) => rows.map((r) => `${r.type}:${r.locationId}`);
 
-  it('reads the pickup and drop lists as one list, other stops in their place', () => {
-    expect(toRows({ pickupWaypoints: ['p1', 'fuel'], waypoints: ['d1'], otherStops: others }).map((r) => `${r.kind}:${r.locationId}`))
-      .toEqual(['pickup:p1', 'other:fuel', 'drop:d1']);
+  it('reads the pickup and drop lists as one list, other stops by their purpose', () => {
+    const others = { fuel: { purpose: 'fuel', label: '' }, yard: { purpose: 'other', label: 'Yard 4' } };
+    expect(toRows({ pickupWaypoints: ['p1', 'fuel'], waypoints: ['yard', 'd1'], otherStops: others }))
+      .toEqual([row('p1', 'pickup'), row('fuel', 'fuel'), row('yard', 'other', 'Yard 4'), row('d1', 'drop')]);
   });
 
-  it('splits the list back after the last pickup, keeping other stops where they are', () => {
-    const rows = [{ locationId: 'p1', kind: 'pickup' as const }, { locationId: 'fuel', kind: 'other' as const }, { locationId: 'p2', kind: 'pickup' as const }, { locationId: 'rest', kind: 'other' as const }, { locationId: 'd1', kind: 'drop' as const }];
-    expect(fromRows(rows, { ...others, rest: { purpose: 'rest', label: '' }, gone: { purpose: 'hub', label: '' } })).toEqual({
+  it('splits the list back after the last pickup, other stops keeping their place', () => {
+    const rows = [row('p1', 'pickup'), row('fuel', 'fuel'), row('p2', 'pickup'), row('yard', 'other', 'Yard 4'), row('d1', 'drop')];
+    expect(fromRows(rows)).toEqual({
       pickupWaypoints: ['p1', 'fuel', 'p2'],
-      waypoints: ['rest', 'd1'],
-      otherStops: { fuel: others.fuel, rest: { purpose: 'rest', label: '' } },
+      waypoints: ['yard', 'd1'],
+      otherStops: { fuel: { purpose: 'fuel', label: '' }, yard: { purpose: 'other', label: 'Yard 4' } },
     });
   });
 
   it('round-trips without moving anything', () => {
-    const value = { pickupWaypoints: ['p1'], waypoints: ['fuel', 'd1'], otherStops: others };
-    expect(fromRows(toRows(value), others)).toEqual(value);
+    const value = { pickupWaypoints: ['p1'], waypoints: ['fuel', 'd1'], otherStops: { fuel: { purpose: 'fuel', label: '' } } };
+    expect(fromRows(toRows(value))).toEqual(value);
   });
 
-  it('never lets a pickup land after a drop', () => {
-    const rows = toRows({ pickupWaypoints: ['p1'], waypoints: ['fuel', 'd1', 'd2'], otherStops: others });
-    expect(canBe(rows, 2, 'pickup')).toBe(true);
-    expect(canBe(rows, 3, 'pickup')).toBe(false);
-    expect(canBe(rows, 0, 'drop')).toBe(true);
-    expect(canBe(toRows({ pickupWaypoints: ['p1', 'p2'], waypoints: [], otherStops: {} }), 0, 'drop')).toBe(false);
-    expect(canSwap(rows[0], rows[1])).toBe(true);
-    expect(canSwap(rows[1], rows[2])).toBe(true);
-    expect(canSwap({ locationId: 'p', kind: 'pickup' }, { locationId: 'd', kind: 'drop' })).toBe(false);
-    expect(canSwap(rows[3], undefined)).toBe(false);
+  it('keeps a stop with no location yet, whatever its type', () => {
+    const rows = setStopType([row('', 'drop')], 0, 'customs');
+    expect(rows).toEqual([row('', 'customs')]);
+    expect(fromRows(rows).waypoints).toEqual(['']);
+  });
+
+  it('moves a stop made a pickup up before the drops, and one made a drop down after the pickups', () => {
+    const rows = [row('p1', 'pickup'), row('d1', 'drop'), row('fuel', 'fuel'), row('d2', 'drop')];
+    expect(types(setStopType(rows, 3, 'pickup'))).toEqual(['pickup:p1', 'pickup:d2', 'drop:d1', 'fuel:fuel']);
+    expect(types(setStopType([row('p1', 'pickup'), row('p2', 'pickup'), row('d1', 'drop')], 0, 'drop'))).toEqual(['pickup:p2', 'drop:p1', 'drop:d1']);
+    expect(types(setStopType(rows, 1, 'rest'))).toEqual(['pickup:p1', 'rest:d1', 'fuel:fuel', 'drop:d2']);
+  });
+
+  it('only asks other stops for a name, and drops it when the type changes', () => {
+    expect(setStopType([row('x', 'other', 'Yard 4')], 0, 'fuel')).toEqual([row('x', 'fuel')]);
+    expect(fromRows([row('x', 'fuel', 'stale')]).otherStops).toEqual({ x: { purpose: 'fuel', label: '' } });
+  });
+
+  it('never lets a pickup and a drop trade places', () => {
+    expect(canSwap(row('p', 'pickup'), row('f', 'fuel'))).toBe(true);
+    expect(canSwap(row('d', 'drop'), row('d2', 'drop'))).toBe(true);
+    expect(canSwap(row('p', 'pickup'), row('d', 'drop'))).toBe(false);
+    expect(canSwap(row('p', 'pickup'), undefined)).toBe(false);
   });
 });

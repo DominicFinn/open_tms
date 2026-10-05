@@ -169,9 +169,9 @@ email and in-app notifications now see deliveries, which they didn't when these 
 **Other stops (#345).** A stop that is neither a pickup nor a drop (fuel, rest, customs, a hub, an
 inspection, a labelled cross-dock pass-through) has `stopType: 'other'`, a `purpose`
 (`OTHER_STOP_PURPOSES` in `@open-tms/shared`: fuel, rest, customs, cross_dock, hub, inspection,
-other) and an optional `label` (its own name, shown instead of the purpose). `POST`/`PUT
+other) and an optional `label` (its own name, shown instead of the purpose; the create page only asks for one when the purpose is `other`). `POST`/`PUT
 /api/v1/shipments` take one in either waypoint list as `{ locationId, stopType: 'other', purpose,
-label }`, so it can sit before, between or after pickups and drops. On the create and edit page a custom route's stops are one ordered list, each a Pickup, Drop or Other stop; the list never lets a pickup sit after a drop, and other stops move freely (`toRows`/`fromRows`/`canBe`/`canSwap` in `lib/shipmentFromOrders.ts`). Tracking treats it like a pickup
+label }`, so it can sit before, between or after pickups and drops. On the create and edit page a custom route's stops are one ordered list with a single "Add stop": each stop has a location and a type (Pickup, Drop, or one of the purposes), and only Other asks for a name. Making a stop a pickup moves it up before the first drop, and making it a drop moves it down after the last pickup, so pickups always come first; other stops move freely (`toRows`/`fromRows`/`setStopType`/`canSwap` in `lib/shipmentFromOrders.ts`). Tracking treats it like a pickup
 for timing (arrived on entry, completed on departure, so its dwell is recorded, and inferred as
 left once a later stop is reached) but **it never moves an order**: `RecordStopOrdersDeliveryCommand`
 changes no orders at an other stop, and orders are never linked to one. `syncShipmentStops` never
