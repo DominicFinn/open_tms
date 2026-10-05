@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Ban,
   ChevronDown,
   ChevronRight,
@@ -24,7 +26,8 @@ import {
 import { API_URL } from '../api';
 import { describeProFormat, checkProFormat } from '../lib/proNumberFormat';
 import {
-  OrderForShipment, OtherStopDetail, RouteForm, applyOrders, canJoin, orderConflicts, orderDrops, orderPickups, waypointsForApi,
+  OrderForShipment, OtherStopDetail, RouteForm, RouteStopKind, RouteStopRow, RouteStops,
+  applyOrders, canBe, canJoin, canSwap, fromRows, orderConflicts, orderDrops, orderPickups, toRows, waypointsForApi,
 } from '../lib/shipmentFromOrders';
 import { OTHER_STOP_PURPOSES, OTHER_STOP_PURPOSE_LABELS, laneStopOtherPurpose } from '@open-tms/shared';
 import { Button } from '@/components/ui/button';
@@ -147,117 +150,129 @@ async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: strin
   }
 }
 
-const OTHER_KIND = 'other';
+const KIND_LABELS: Record<RouteStopKind, string> = { pickup: 'Pickup', drop: 'Drop', other: 'Other stop' };
 
-function StopList({ label, hint, emptyText, addLabel, kindLabel, stops, onChange, locations, otherStops, onOtherStopsChange }: {
-  label: string;
-  hint: string;
-  emptyText: string;
-  addLabel: string;
-  /** What a stop in this list is unless marked as an other stop: "Pickup" or "Drop". */
-  kindLabel: string;
-  stops: string[];
-  onChange: (next: string[]) => void;
+function RouteStopList({ value, onChange, locations }: {
+  value: RouteStops;
+  onChange: (next: RouteStops) => void;
   locations: any[];
-  otherStops: Record<string, OtherStopDetail>;
-  onOtherStopsChange: (next: Record<string, OtherStopDetail>) => void;
 }) {
-  const setOther = (locationId: string, detail: OtherStopDetail | null) => {
-    const next = { ...otherStops };
-    if (detail) next[locationId] = detail;
-    else delete next[locationId];
-    onOtherStopsChange(next);
-  };
-  const moveLocation = (idx: number, locationId: string) => {
-    const previous = stops[idx];
-    onChange(stops.map((st, i) => (i === idx ? locationId : st)));
+  const rows = toRows(value);
+  const others = value.otherStops;
+  const commit = (next: RouteStopRow[], nextOthers: Record<string, OtherStopDetail> = others) => onChange(fromRows(next, nextOthers));
+
+  const setLocation = (index: number, locationId: string) => {
+    const previous = rows[index].locationId;
+    const nextOthers = { ...others };
     // The other-stop details follow the stop to its new location.
-    if (previous && otherStops[previous]) {
-      const next = { ...otherStops, [locationId]: otherStops[previous] };
-      delete next[previous];
-      onOtherStopsChange(next);
+    if (rows[index].kind === 'other' && previous && others[previous]) {
+      nextOthers[locationId] = others[previous];
+      delete nextOthers[previous];
     }
+    commit(rows.map((r, i) => (i === index ? { ...r, locationId } : r)), nextOthers);
+  };
+  const setKind = (index: number, kind: RouteStopKind) => {
+    const row = rows[index];
+    const nextOthers = { ...others };
+    if (kind === 'other') nextOthers[row.locationId] = others[row.locationId] ?? { purpose: 'fuel', label: '' };
+    else delete nextOthers[row.locationId];
+    commit(rows.map((r, i) => (i === index ? { ...r, kind } : r)), nextOthers);
+  };
+  const setDetail = (locationId: string, detail: OtherStopDetail) => onChange({ ...value, otherStops: { ...others, [locationId]: detail } });
+  const move = (index: number, delta: -1 | 1) => {
+    const j = index + delta;
+    if (!canSwap(rows[Math.min(index, j)], rows[Math.max(index, j)])) return;
+    const next = [...rows];
+    [next[index], next[j]] = [next[j], next[index]];
+    commit(next);
+  };
+  const remove = (index: number) => {
+    const nextOthers = { ...others };
+    if (rows[index].kind === 'other') delete nextOthers[rows[index].locationId];
+    commit(rows.filter((_, i) => i !== index), nextOthers);
+  };
+  const addPickup = () => {
+    const lastPickup = rows.map((r) => r.kind).lastIndexOf('pickup');
+    const next = [...rows];
+    next.splice(lastPickup + 1, 0, { locationId: '', kind: 'pickup' });
+    commit(next);
   };
 
   return (
-    <div className="space-y-2">
-      <div>
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </div>
-      {stops.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
-      ) : (
-        stops.map((locationId, idx) => {
-          const other = locationId ? otherStops[locationId] : undefined;
-          return (
-            <div key={idx} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
-                <Select value={locationId} onValueChange={v => moveLocation(idx, v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select stop location..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((l: any) => (
-                      <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={other ? OTHER_KIND : kindLabel}
-                  disabled={!locationId}
-                  onValueChange={v => setOther(locationId, v === OTHER_KIND ? { purpose: 'fuel', label: '' } : null)}
-                >
-                  <SelectTrigger className="w-[150px] shrink-0" aria-label="Stop type">
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        In visiting order, between the origin and the destination. Pickups come before drops. Other stops (fuel, rest, customs and the like, where nothing is loaded or unloaded) can go anywhere.
+      </p>
+      {rows.length === 0 && <p className="text-sm text-muted-foreground">No stops between the origin and the destination.</p>}
+      {rows.map((row, idx) => {
+        const other = row.kind === 'other' ? others[row.locationId] : undefined;
+        return (
+          <div key={idx} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
+              <Select value={row.locationId} onValueChange={(v) => setLocation(idx, v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stop location..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((l: any) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={row.kind} onValueChange={(v) => setKind(idx, v as RouteStopKind)}>
+                <SelectTrigger className="w-[150px] shrink-0" aria-label={`Stop ${idx + 1} type`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(['pickup', 'drop', 'other'] as const).map((k) => (
+                    <SelectItem key={k} value={k} disabled={k === 'other' ? !row.locationId : !canBe(rows, idx, k)}>{KIND_LABELS[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="ghost" size="icon" disabled={!canSwap(rows[idx - 1], row)} onClick={() => move(idx, -1)} aria-label={`Move stop ${idx + 1} earlier`}>
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" disabled={!canSwap(row, rows[idx + 1])} onClick={() => move(idx, 1)} aria-label={`Move stop ${idx + 1} later`}>
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" onClick={() => remove(idx)} aria-label={`Remove stop ${idx + 1}`}>
+                <Ban className="h-4 w-4" />
+              </Button>
+            </div>
+            {other && (
+              <div className="ml-7 flex items-center gap-2">
+                <Select value={other.purpose} onValueChange={(v) => setDetail(row.locationId, { ...other, purpose: v })}>
+                  <SelectTrigger className="w-[160px] shrink-0" aria-label="What the stop is for">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={kindLabel}>{kindLabel}</SelectItem>
-                    <SelectItem value={OTHER_KIND}>Other stop</SelectItem>
+                    {OTHER_STOP_PURPOSES.map((p) => (
+                      <SelectItem key={p} value={p}>{OTHER_STOP_PURPOSE_LABELS[p]}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    onChange(stops.filter((_, i) => i !== idx));
-                    if (other) setOther(locationId, null);
-                  }}
-                  aria-label={`Remove ${label.toLowerCase()} stop`}
-                >
-                  <Ban className="h-4 w-4" />
-                </Button>
+                <Input
+                  placeholder={other.purpose === 'other' ? 'Name this stop' : 'Name (optional)'}
+                  maxLength={100}
+                  value={other.label}
+                  onChange={(e) => setDetail(row.locationId, { ...other, label: e.target.value })}
+                />
               </div>
-              {other && (
-                <div className="ml-7 flex items-center gap-2">
-                  <Select value={other.purpose} onValueChange={v => setOther(locationId, { ...other, purpose: v })}>
-                    <SelectTrigger className="w-[160px] shrink-0" aria-label="What the stop is for">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OTHER_STOP_PURPOSES.map(p => (
-                        <SelectItem key={p} value={p}>{OTHER_STOP_PURPOSE_LABELS[p]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder={other.purpose === 'other' ? 'Name this stop' : 'Name (optional)'}
-                    maxLength={100}
-                    value={other.label}
-                    onChange={e => setOther(locationId, { ...other, label: e.target.value })}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
-      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...stops, ''])}>
-        <Plus className="h-4 w-4" />
-        {addLabel}
-      </Button>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={addPickup}>
+          <Plus className="h-4 w-4" />
+          Add pickup
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => commit([...rows, { locationId: '', kind: 'drop' }])}>
+          <Plus className="h-4 w-4" />
+          Add drop
+        </Button>
+      </div>
     </div>
   );
 }
@@ -1392,33 +1407,18 @@ export default function VNextCreateShipment() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" />
-            Waypoints <span className="text-xs font-normal text-muted-foreground">(optional stops between origin and destination, in order)</span>
+            Stops <span className="text-xs font-normal text-muted-foreground">(optional, between origin and destination)</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <StopList
-            label="Pickups"
-            hint="Further collection points after the origin. Every pickup comes before the drops. Mark a stop as an other stop for fuel, rest, customs and the like: nothing is loaded or unloaded there."
-            emptyText="No further pickups."
-            addLabel="Add pickup"
-            kindLabel="Pickup"
-            stops={pickupWaypoints}
-            onChange={setPickupWaypoints}
+          <RouteStopList
+            value={{ pickupWaypoints, waypoints, otherStops }}
+            onChange={(next) => {
+              setPickupWaypoints(next.pickupWaypoints);
+              setWaypoints(next.waypoints);
+              setOtherStops(next.otherStops);
+            }}
             locations={locations}
-            otherStops={otherStops}
-            onOtherStopsChange={setOtherStops}
-          />
-          <StopList
-            label="Drops"
-            hint="Deliveries before the destination."
-            emptyText="No drops before the destination."
-            addLabel="Add drop"
-            kindLabel="Drop"
-            stops={waypoints}
-            onChange={setWaypoints}
-            locations={locations}
-            otherStops={otherStops}
-            onOtherStopsChange={setOtherStops}
           />
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import { applyOrders, canJoin, dropStops, orderConflicts, shipTogetherMode, shipTogetherProblem, waypointsForApi, RouteForm, OrderForShipment } from '../shipmentFromOrders';
+import { applyOrders, canBe, canJoin, canSwap, dropStops, fromRows, toRows, orderConflicts, shipTogetherMode, shipTogetherProblem, waypointsForApi, RouteForm, OrderForShipment } from '../shipmentFromOrders';
 
 const emptyForm: RouteForm = {
   customerId: '', mode: '', useCustomRoute: true, originId: '', destinationId: '', pickupWaypoints: [], waypoints: [],
@@ -117,5 +117,40 @@ describe('other stops (#345)', () => {
   it('sends other stops to the API with their purpose and name', () => {
     expect(waypointsForApi(['a', '', 'f'], { f: { purpose: 'customs', label: ' Laredo ' } }))
       .toEqual(['a', { locationId: 'f', stopType: 'other', purpose: 'customs', label: 'Laredo' }]);
+  });
+});
+
+describe('the ordered stop list (#345)', () => {
+  const others = { fuel: { purpose: 'fuel', label: '' } };
+
+  it('reads the pickup and drop lists as one list, other stops in their place', () => {
+    expect(toRows({ pickupWaypoints: ['p1', 'fuel'], waypoints: ['d1'], otherStops: others }).map((r) => `${r.kind}:${r.locationId}`))
+      .toEqual(['pickup:p1', 'other:fuel', 'drop:d1']);
+  });
+
+  it('splits the list back after the last pickup, keeping other stops where they are', () => {
+    const rows = [{ locationId: 'p1', kind: 'pickup' as const }, { locationId: 'fuel', kind: 'other' as const }, { locationId: 'p2', kind: 'pickup' as const }, { locationId: 'rest', kind: 'other' as const }, { locationId: 'd1', kind: 'drop' as const }];
+    expect(fromRows(rows, { ...others, rest: { purpose: 'rest', label: '' }, gone: { purpose: 'hub', label: '' } })).toEqual({
+      pickupWaypoints: ['p1', 'fuel', 'p2'],
+      waypoints: ['rest', 'd1'],
+      otherStops: { fuel: others.fuel, rest: { purpose: 'rest', label: '' } },
+    });
+  });
+
+  it('round-trips without moving anything', () => {
+    const value = { pickupWaypoints: ['p1'], waypoints: ['fuel', 'd1'], otherStops: others };
+    expect(fromRows(toRows(value), others)).toEqual(value);
+  });
+
+  it('never lets a pickup land after a drop', () => {
+    const rows = toRows({ pickupWaypoints: ['p1'], waypoints: ['fuel', 'd1', 'd2'], otherStops: others });
+    expect(canBe(rows, 2, 'pickup')).toBe(true);
+    expect(canBe(rows, 3, 'pickup')).toBe(false);
+    expect(canBe(rows, 0, 'drop')).toBe(true);
+    expect(canBe(toRows({ pickupWaypoints: ['p1', 'p2'], waypoints: [], otherStops: {} }), 0, 'drop')).toBe(false);
+    expect(canSwap(rows[0], rows[1])).toBe(true);
+    expect(canSwap(rows[1], rows[2])).toBe(true);
+    expect(canSwap({ locationId: 'p', kind: 'pickup' }, { locationId: 'd', kind: 'drop' })).toBe(false);
+    expect(canSwap(rows[3], undefined)).toBe(false);
   });
 });

@@ -181,3 +181,56 @@ export function waypointsForApi(ids: string[], otherStops: Record<string, OtherS
     return other ? { locationId: id, stopType: 'other' as const, purpose: other.purpose, label: other.label.trim() || null } : id;
   });
 }
+
+// ─── The ordered stop list on the create page (#345) ─────────────────────
+
+export type RouteStopKind = 'pickup' | 'drop' | 'other';
+
+export interface RouteStopRow {
+  locationId: string;
+  kind: RouteStopKind;
+}
+
+export interface RouteStops {
+  pickupWaypoints: string[];
+  waypoints: string[];
+  otherStops: Record<string, OtherStopDetail>;
+}
+
+/** The stops between origin and destination as one list, in visiting order (#345). */
+export function toRows({ pickupWaypoints, waypoints, otherStops }: RouteStops): RouteStopRow[] {
+  return [
+    ...pickupWaypoints.map((locationId) => ({ locationId, kind: (otherStops[locationId] ? 'other' : 'pickup') as RouteStopKind })),
+    ...waypoints.map((locationId) => ({ locationId, kind: (otherStops[locationId] ? 'other' : 'drop') as RouteStopKind })),
+  ];
+}
+
+/**
+ * Back to the pickup and drop lists the rest of the page works with. Every stop up to the last
+ * pickup is in the pickup list and the rest in the drop list, so other stops keep their place.
+ * The list never has a pickup after a drop (see canBe / canSwap), so the split is exact.
+ */
+export function fromRows(rows: RouteStopRow[], otherStops: Record<string, OtherStopDetail>): RouteStops {
+  const lastPickup = rows.map((r) => r.kind).lastIndexOf('pickup');
+  const keptOthers = Object.fromEntries(rows.filter((r) => r.kind === 'other' && otherStops[r.locationId])
+    .map((r) => [r.locationId, otherStops[r.locationId]]));
+  return {
+    pickupWaypoints: rows.slice(0, lastPickup + 1).map((r) => r.locationId),
+    waypoints: rows.slice(lastPickup + 1).map((r) => r.locationId),
+    otherStops: keptOthers,
+  };
+}
+
+/** Whether the stop at `index` can take `kind` without a pickup ending up after a drop. */
+export function canBe(rows: RouteStopRow[], index: number, kind: RouteStopKind): boolean {
+  if (kind === 'pickup') return !rows.slice(0, index).some((r) => r.kind === 'drop');
+  if (kind === 'drop') return !rows.slice(index + 1).some((r) => r.kind === 'pickup');
+  return true;
+}
+
+/** Whether neighbouring stops can trade places: anything but a pickup and a drop. */
+export function canSwap(a?: RouteStopRow, b?: RouteStopRow): boolean {
+  if (!a || !b) return false;
+  return !(new Set([a.kind, b.kind]).has('pickup') && new Set([a.kind, b.kind]).has('drop'));
+}
+
