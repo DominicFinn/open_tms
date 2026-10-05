@@ -163,7 +163,10 @@ model ShipmentStop {
   sequenceNumber Int
 
   // Type of stop
-  stopType String @default("delivery") // pickup, delivery, both
+  stopType String  @default("delivery") // pickup, delivery, both, other
+  // For `other` stops (#345): fuel, rest, customs, cross_dock, hub, inspection, other; and an optional name
+  purpose  String?
+  label    String?
 
   // Timing
   estimatedArrival   DateTime?
@@ -247,7 +250,10 @@ model ConsolidationStop {
   location        Location       @relation(fields: [locationId], references: [id])
   locationId      String
   sequenceNumber  Int
-  stopType        String // pickup, delivery
+  stopType        String // pickup, delivery, other
+  // For `other` stops (#345), copied from the shipment stops it serves
+  purpose         String?
+  label           String?
   status          String         @default("pending") // pending, arrived, completed, skipped
   shipmentStops   ShipmentStop[]
   createdAt       DateTime       @default(now())

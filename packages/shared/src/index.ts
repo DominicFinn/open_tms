@@ -2,6 +2,7 @@ export * from './shipmentTypeValidator.js';
 export * from './shipmentEventTypes.js';
 export * from './shipmentShareSections.js';
 export * from './geofenceValidation.js';
+export * from './stopPurposes.js';
 
 export type ID = string;
 

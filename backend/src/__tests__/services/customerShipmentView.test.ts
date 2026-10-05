@@ -49,3 +49,10 @@ describe('scopeShipmentToCustomer on a consolidation (#329)', () => {
     expect(JSON.stringify(view)).not.toContain('run-stop');
   });
 });
+
+describe('scopeShipmentToCustomer with other stops (#345)', () => {
+  it('leaves fuel, rest and customs stops out of the customer view', () => {
+    const view = scopeShipmentToCustomer({ ...shared, stops: [shared.stops[0], { ...stop('other', 'truck-stop', []), purpose: 'fuel' }, shared.stops[1]] }, 'nordic');
+    expect(view.stops.map((s) => s.locationId)).toEqual(['green-bay', 'rochester']);
+  });
+});

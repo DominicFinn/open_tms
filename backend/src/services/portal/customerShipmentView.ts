@@ -29,7 +29,9 @@ export function scopeShipmentToCustomer<T extends PortalShipmentSource>(shipment
   const { orderShipments, stops, ...rest } = shipment;
   const ownOrderIds = new Set(orderShipments.filter((os) => os.order.customerId === customerId).map((os) => os.order.id));
 
+  // Other stops (fuel, rest, customs…) are operational detail, not part of the customer's view (#345).
   const visibleStops = stops
+    .filter((s) => s.stopType !== 'other')
     .filter((s) => s.stopType === 'pickup' || s.orders.length === 0 || s.orders.some((o) => o.customerId === customerId))
     // The run's stop id would point a customer at the consolidation, which they never see (#329).
     .map(({ orders: _orders, consolidationStopId: _run, ...stop }) => stop);

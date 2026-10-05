@@ -14,11 +14,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ConsolidationShipmentPicker from './ConsolidationShipmentPicker';
 import ConsolidationRunMap from './ConsolidationRunMap';
 import { consolidationStatusVariant } from './consolidationStatus';
+import { stopTypeLabel } from '@open-tms/shared';
 
 interface ConsolidationStop {
   id: string;
   sequenceNumber: number;
   stopType: string;
+  purpose: string | null;
+  label: string | null;
   status: string;
   location: { id: string; name: string; city: string | null; state: string | null; lat: number | null; lng: number | null };
   shipmentStops: Array<{ shipmentId: string }>;
@@ -62,6 +65,13 @@ interface Consolidation {
 }
 
 const NO_CARRIER = 'none';
+
+/** Whether two neighbouring run stops can trade places: anything but a pickup and a drop. */
+function canSwap(a?: { stopType: string }, b?: { stopType: string }): boolean {
+  if (!a || !b) return false;
+  const types = new Set([a.stopType, b.stopType]);
+  return !(types.has('pickup') && types.has('delivery'));
+}
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '—');
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
@@ -139,14 +149,13 @@ export default function VNextConsolidationDetail() {
     if (problem) setActionError(problem);
   }
 
-  /** Moves a stop one place within its own section, so pickups always stay before drops. */
+  /** Moves a stop one place, never a pickup past a drop. Other stops (#345) go anywhere. */
   function move(stopId: string, delta: -1 | 1) {
     if (!consolidation) return;
     const order = consolidation.stops.map((s) => s.id);
     const i = order.indexOf(stopId);
     const j = i + delta;
-    const typeAt = (k: number) => consolidation.stops[k]?.stopType;
-    if (j < 0 || j >= order.length || typeAt(i) !== typeAt(j)) return;
+    if (!canSwap(consolidation.stops[i], consolidation.stops[j])) return;
     [order[i], order[j]] = [order[j], order[i]];
     act('/stops/order', { stopIds: order });
   }
@@ -257,13 +266,13 @@ export default function VNextConsolidationDetail() {
                       <div className="flex flex-wrap items-center gap-2">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">{stop.location.name}</span>
-                        <Badge variant={stop.stopType === 'pickup' ? 'info' : 'secondary'} className="capitalize">{stop.stopType}</Badge>
+                        <Badge variant={stop.stopType === 'pickup' ? 'info' : stop.stopType === 'other' ? 'warning' : 'secondary'}>{stopTypeLabel(stop)}</Badge>
                         <span className="text-xs capitalize text-muted-foreground">{stop.status}</span>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {[stop.location.city, stop.location.state].filter(Boolean).join(', ')}
                         {stop.shipmentStops.length > 0 && (
-                          <> · {stop.stopType === 'pickup' ? 'collects' : 'drops'} {stop.shipmentStops.map((s) => referenceOf.get(s.shipmentId) ?? s.shipmentId).join(', ')}</>
+                          <> · {stop.stopType === 'pickup' ? 'collects' : stop.stopType === 'other' ? 'on the way for' : 'drops'} {stop.shipmentStops.map((s) => referenceOf.get(s.shipmentId) ?? s.shipmentId).join(', ')}</>
                         )}
                       </div>
                     </div>
@@ -274,7 +283,7 @@ export default function VNextConsolidationDetail() {
                           size="sm"
                           className="h-7 px-2"
                           aria-label={`Move ${stop.location.name} earlier`}
-                          disabled={busy || consolidation.stops[i - 1]?.stopType !== stop.stopType}
+                          disabled={busy || !canSwap(consolidation.stops[i - 1], stop)}
                           onClick={() => move(stop.id, -1)}
                         >
                           <ArrowUp className="h-4 w-4" />
@@ -284,7 +293,7 @@ export default function VNextConsolidationDetail() {
                           size="sm"
                           className="h-7 px-2"
                           aria-label={`Move ${stop.location.name} later`}
-                          disabled={busy || consolidation.stops[i + 1]?.stopType !== stop.stopType}
+                          disabled={busy || !canSwap(stop, consolidation.stops[i + 1])}
                           onClick={() => move(stop.id, 1)}
                         >
                           <ArrowDown className="h-4 w-4" />

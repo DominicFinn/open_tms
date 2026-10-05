@@ -5,6 +5,9 @@
 // locked, so `orderConflicts` checks the form against the orders before saving. Its rules are the
 // same ones the backend enforces when the orders are attached (#325).
 
+// Type-only: the runtime package isn't loadable from the frontend's Jest setup, and this file only needs the type.
+import type { OtherStopPurpose } from '@open-tms/shared';
+
 export interface OrderForShipment {
   id: string;
   orderNumber: string;
@@ -18,6 +21,11 @@ export interface OrderForShipment {
   requestedDeliveryDate?: string | null;
 }
 
+export interface OtherStopDetail {
+  purpose: string;
+  label: string;
+}
+
 export interface RouteForm {
   customerId: string;
   mode: string;
@@ -28,6 +36,11 @@ export interface RouteForm {
   pickupWaypoints: string[];
   /** Intermediate drops, in order. With a lane: the lane's stops plus any extra drops. */
   waypoints: string[];
+  /**
+   * Waypoints that are neither pickups nor drops (fuel, rest, customs…, #345), by location id.
+   * Orders are never collected or dropped at these.
+   */
+  otherStops?: Record<string, OtherStopDetail>;
   /** The selected lane's endpoints, when not on a custom route. */
   laneOriginId?: string | null;
   laneDestinationId?: string | null;
@@ -50,13 +63,15 @@ export function orderPickups(orders: OrderForShipment[]): string[] {
 /** The stops the form's route collects at, origin first. */
 export function pickupStops(form: RouteForm): string[] {
   const origin = form.useCustomRoute ? form.originId : form.laneOriginId ?? '';
-  return [origin, ...(form.useCustomRoute ? form.pickupWaypoints : [])].filter(Boolean);
+  const others = form.otherStops ?? {};
+  return [origin, ...(form.useCustomRoute ? form.pickupWaypoints.filter((id) => !others[id]) : [])].filter(Boolean);
 }
 
 /** The stops the form's route drops at, destination last. */
 export function dropStops(form: RouteForm): string[] {
   const destination = form.useCustomRoute ? form.destinationId : form.laneDestinationId ?? '';
-  return [...form.waypoints, destination].filter(Boolean);
+  const others = form.otherStops ?? {};
+  return [...form.waypoints.filter((id) => !others[id]), destination].filter(Boolean);
 }
 
 /** Every stop the form's route visits: the pickups, then the drops. */
@@ -157,4 +172,91 @@ export function shipTogetherProblem(orders: ShippableOrder[]): string | null {
 export function shipTogetherMode(orders: ShippableOrder[]): { kind: 'shipment' } | { kind: 'consolidation'; customers: number } {
   const customers = new Set(orders.map((o) => o.customerId)).size;
   return customers > 1 ? { kind: 'consolidation', customers } : { kind: 'shipment' };
+}
+
+/**
+ * A waypoint list as the API takes it: a plain location id for a pickup or drop, or an object for
+ * an other stop with its purpose and name (#345).
+ */
+export function waypointsForApi(ids: string[], otherStops: Record<string, OtherStopDetail> = {}) {
+  return ids.filter(Boolean).map((id) => {
+    const other = otherStops[id];
+    return other ? { locationId: id, stopType: 'other' as const, purpose: other.purpose, label: other.label.trim() || null } : id;
+  });
+}
+
+// ─── The ordered stop list on the create page (#345) ─────────────────────
+
+/** A stop's type on the page: a pickup, a drop, or what an other stop is for. */
+export type RouteStopType = 'pickup' | 'drop' | OtherStopPurpose;
+
+export interface RouteStopRow {
+  locationId: string;
+  type: RouteStopType;
+  /** Only used when the type is `other`: the stop's own name. */
+  label: string;
+}
+
+export interface RouteStops {
+  pickupWaypoints: string[];
+  waypoints: string[];
+  otherStops: Record<string, OtherStopDetail>;
+}
+
+export const isOtherType = (type: RouteStopType) => type !== 'pickup' && type !== 'drop';
+
+/** The pickup and drop lists as one list in visiting order, other stops in their place. */
+export function toRows({ pickupWaypoints, waypoints, otherStops }: RouteStops): RouteStopRow[] {
+  const row = (locationId: string, positional: 'pickup' | 'drop'): RouteStopRow => {
+    // Purposes are checked where they enter the page (a lane's tags, a saved shipment's stops).
+    const other = otherStops[locationId];
+    return other
+      ? { locationId, type: other.purpose as OtherStopPurpose, label: other.purpose === 'other' ? other.label : '' }
+      : { locationId, type: positional, label: '' };
+  };
+  return [...pickupWaypoints.map((id) => row(id, 'pickup')), ...waypoints.map((id) => row(id, 'drop'))];
+}
+
+/**
+ * Back to the pickup and drop lists the rest of the page works with. Every stop up to the last
+ * pickup is in the pickup list and the rest in the drop list, so other stops keep their place.
+ * The list never has a pickup after a drop (see setStopType / canSwap), so the split is exact.
+ */
+export function fromRows(rows: RouteStopRow[]): RouteStops {
+  const lastPickup = rows.map((r) => r.type).lastIndexOf('pickup');
+  const otherStops: Record<string, OtherStopDetail> = {};
+  for (const r of rows) {
+    if (r.locationId && isOtherType(r.type)) otherStops[r.locationId] = { purpose: r.type, label: r.type === 'other' ? r.label : '' };
+  }
+  return {
+    pickupWaypoints: rows.slice(0, lastPickup + 1).map((r) => r.locationId),
+    waypoints: rows.slice(lastPickup + 1).map((r) => r.locationId),
+    otherStops,
+  };
+}
+
+/**
+ * The list after giving the stop at `index` a new type. A pickup below a drop moves up to just
+ * before the first drop, and a drop above a pickup moves down to just after the last pickup, so
+ * every pickup always comes before every drop. Other stops stay where they are.
+ */
+export function setStopType(rows: RouteStopRow[], index: number, type: RouteStopType): RouteStopRow[] {
+  const changed: RouteStopRow = { ...rows[index], type, label: type === 'other' ? rows[index].label : '' };
+  const rest = rows.filter((_, i) => i !== index);
+  let at = index;
+  if (type === 'pickup') {
+    const firstDrop = rest.findIndex((r) => r.type === 'drop');
+    if (firstDrop !== -1 && firstDrop < index) at = firstDrop;
+  } else if (type === 'drop') {
+    const lastPickup = rest.map((r) => r.type).lastIndexOf('pickup');
+    if (lastPickup >= index) at = lastPickup + 1;
+  }
+  return [...rest.slice(0, at), changed, ...rest.slice(at)];
+}
+
+/** Whether neighbouring stops can trade places: anything but a pickup and a drop. */
+export function canSwap(a?: RouteStopRow, b?: RouteStopRow): boolean {
+  if (!a || !b) return false;
+  const types = new Set([a.type, b.type]);
+  return !(types.has('pickup') && types.has('drop'));
 }

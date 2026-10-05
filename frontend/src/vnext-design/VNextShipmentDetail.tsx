@@ -118,6 +118,7 @@ import {
   SHIPMENT_FIELD_LABELS,
   SHIPMENT_EVENT_TYPES,
   shipmentEventLabel,
+  stopTypeLabel,
 } from '@open-tms/shared';
 
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
@@ -605,6 +606,8 @@ interface CargoManifest {
     sequenceNumber: number;
     locationName: string;
     stopType: string;
+    purpose?: string | null;
+    label?: string | null;
     status: string;
     expectedUnits: ManifestUnit[];
     scannedUnits: ManifestUnit[];
@@ -868,7 +871,7 @@ function CargoTab({ shipmentId }: { shipmentId: string }) {
                   Stop {stop.sequenceNumber} - {stop.locationName}
                 </CardTitle>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {stop.stopType} - {stop.status}
+                  {stopTypeLabel(stop)} - {stop.status}
                   {stop.expectedUnits.length > 0 && ` - ${stop.expectedUnits.length} unit${stop.expectedUnits.length !== 1 ? 's' : ''} expected`}
                 </div>
               </div>

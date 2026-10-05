@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Ban,
   ChevronDown,
   ChevronRight,
@@ -24,8 +26,10 @@ import {
 import { API_URL } from '../api';
 import { describeProFormat, checkProFormat } from '../lib/proNumberFormat';
 import {
-  OrderForShipment, RouteForm, applyOrders, canJoin, orderConflicts, orderDrops, orderPickups,
+  OrderForShipment, OtherStopDetail, RouteForm, RouteStopRow, RouteStopType, RouteStops,
+  applyOrders, canJoin, canSwap, fromRows, orderConflicts, orderDrops, orderPickups, setStopType, toRows, waypointsForApi,
 } from '../lib/shipmentFromOrders';
+import { OTHER_STOP_PURPOSES, OTHER_STOP_PURPOSE_LABELS, isOtherStopPurpose, laneStopOtherPurpose } from '@open-tms/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -107,6 +111,16 @@ const BLANK_ROUTE: RouteForm = {
   pickupDate: '', deliveryDate: '', tempControlled: false, hazmat: false,
 };
 
+/** The lane's stops tagged fuel, rest, customs and the like, which become other stops on the shipment (#345). */
+function laneOtherStops(detail: any): Record<string, OtherStopDetail> {
+  const out: Record<string, OtherStopDetail> = {};
+  for (const st of detail?.stops || []) {
+    const purpose = laneStopOtherPurpose(st.purpose);
+    if (purpose) out[st.locationId] = { purpose, label: '' };
+  }
+  return out;
+}
+
 /** A lane's intermediate stops, then any of the orders' drops the lane doesn't already visit. */
 function laneWaypoints(detail: any, orders: OrderForShipment[]): string[] {
   const laneStops: string[] = (detail?.stops || []).map((st: any) => st.locationId);
@@ -136,28 +150,38 @@ async function findMatchingLane(orders: OrderForShipment[]): Promise<{ id: strin
   }
 }
 
-function StopList({ label, hint, emptyText, addLabel, stops, onChange, locations }: {
-  label: string;
-  hint: string;
-  emptyText: string;
-  addLabel: string;
-  stops: string[];
-  onChange: (next: string[]) => void;
+const STOP_TYPE_LABELS: Record<RouteStopType, string> = { pickup: 'Pickup', drop: 'Drop', ...OTHER_STOP_PURPOSE_LABELS };
+const STOP_TYPES: RouteStopType[] = ['pickup', 'drop', ...OTHER_STOP_PURPOSES];
+
+/**
+ * The stops between origin and destination, in visiting order (#345). Each has a location and a
+ * type: pickup, drop, or what an other stop is for. Only "Other" asks for a name.
+ */
+function RouteStopList({ rows, onChange, locations }: {
+  rows: RouteStopRow[];
+  onChange: (next: RouteStopRow[]) => void;
   locations: any[];
 }) {
+  const update = (index: number, patch: Partial<RouteStopRow>) => onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  const move = (index: number, delta: -1 | 1) => {
+    const j = index + delta;
+    if (!canSwap(rows[Math.min(index, j)], rows[Math.max(index, j)])) return;
+    const next = [...rows];
+    [next[index], next[j]] = [next[j], next[index]];
+    onChange(next);
+  };
+
   return (
-    <div className="space-y-2">
-      <div>
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </div>
-      {stops.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
-      ) : (
-        stops.map((locationId, idx) => (
-          <div key={idx} className="flex items-center gap-2">
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        In visiting order, between the origin and the destination. Pickups come before drops; fuel, rest, customs and the other stop types (where nothing is loaded or unloaded) can go anywhere.
+      </p>
+      {rows.length === 0 && <p className="text-sm text-muted-foreground">No stops between the origin and the destination.</p>}
+      {rows.map((row, idx) => (
+        <div key={idx} className="space-y-2">
+          <div className="flex items-center gap-2">
             <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
-            <Select value={locationId} onValueChange={v => onChange(stops.map((st, i) => (i === idx ? v : st)))}>
+            <Select value={row.locationId} onValueChange={(v) => update(idx, { locationId: v })}>
               <SelectTrigger>
                 <SelectValue placeholder="Select stop location..." />
               </SelectTrigger>
@@ -167,15 +191,42 @@ function StopList({ label, hint, emptyText, addLabel, stops, onChange, locations
                 ))}
               </SelectContent>
             </Select>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onChange(stops.filter((_, i) => i !== idx))} aria-label={`Remove ${label.toLowerCase()} stop`}>
+            <Select value={row.type} onValueChange={(v) => onChange(setStopType(rows, idx, v as RouteStopType))}>
+              <SelectTrigger className="w-[150px] shrink-0" aria-label={`Stop ${idx + 1} type`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STOP_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{STOP_TYPE_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="ghost" size="icon" disabled={!canSwap(rows[idx - 1], row)} onClick={() => move(idx, -1)} aria-label={`Move stop ${idx + 1} earlier`}>
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" disabled={!canSwap(row, rows[idx + 1])} onClick={() => move(idx, 1)} aria-label={`Move stop ${idx + 1} later`}>
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Remove stop ${idx + 1}`}>
               <Ban className="h-4 w-4" />
             </Button>
           </div>
-        ))
-      )}
-      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...stops, ''])}>
+          {row.type === 'other' && (
+            <div className="ml-7">
+              <Input
+                placeholder="Name this stop"
+                maxLength={100}
+                value={row.label}
+                onChange={(e) => update(idx, { label: e.target.value })}
+                aria-label={`Stop ${idx + 1} name`}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rows, { locationId: '', type: 'drop', label: '' }])}>
         <Plus className="h-4 w-4" />
-        {addLabel}
+        Add stop
       </Button>
     </div>
   );
@@ -262,9 +313,12 @@ export default function VNextCreateShipment() {
   const [laneSearch, setLaneSearch] = useState('');
   const [laneOpen, setLaneOpen] = useState(false);
   const [carriers, setCarriers] = useState<any[]>([]);
-  const [waypoints, setWaypoints] = useState<string[]>([]);
-  // Further pickups after the origin, on a custom route (#329).
-  const [pickupWaypoints, setPickupWaypoints] = useState<string[]>([]);
+  // The stops between origin and destination, in visiting order: pickups (#329), drops, and fuel,
+  // rest, customs and similar stops (#345). The pickup and drop lists the order rules and the API
+  // work with are read off it.
+  const [routeStops, setRouteStops] = useState<RouteStopRow[]>([]);
+  const { pickupWaypoints, waypoints, otherStops } = useMemo(() => fromRows(routeStops), [routeStops]);
+  const setStopLists = (lists: RouteStops) => setRouteStops(toRows(lists));
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -278,13 +332,14 @@ export default function VNextCreateShipment() {
     destinationId: destLocation,
     pickupWaypoints,
     waypoints,
+    otherStops,
     laneOriginId: laneDetail?.originId ?? null,
     laneDestinationId: laneDetail?.destinationId ?? null,
     pickupDate,
     deliveryDate,
     tempControlled,
     hazmat,
-  }), [customer, mode, useCustomRoute, originLocation, destLocation, pickupWaypoints, waypoints, laneDetail, pickupDate, deliveryDate, tempControlled, hazmat]);
+  }), [customer, mode, useCustomRoute, originLocation, destLocation, pickupWaypoints, waypoints, otherStops, laneDetail, pickupDate, deliveryDate, tempControlled, hazmat]);
 
   const setRouteForm = (f: RouteForm) => {
     setCustomer(f.customerId);
@@ -292,8 +347,7 @@ export default function VNextCreateShipment() {
     setUseCustomRoute(f.useCustomRoute);
     setOriginLocation(f.originId);
     setDestLocation(f.destinationId);
-    setPickupWaypoints(f.pickupWaypoints);
-    setWaypoints(f.waypoints);
+    setStopLists({ pickupWaypoints: f.pickupWaypoints, waypoints: f.waypoints, otherStops: f.otherStops ?? {} });
     setPickupDate(f.pickupDate);
     setDeliveryDate(f.deliveryDate);
     setTempControlled(f.tempControlled);
@@ -366,7 +420,7 @@ export default function VNextCreateShipment() {
     const detail = await loadLaneDetail(newLaneId);
     const assigned = detail?.laneCarriers?.find((lc: any) => lc.assigned);
     setCarrierId(assigned ? assigned.carrierId : '');
-    setWaypoints(laneWaypoints(detail, attachedOrders));
+    setStopLists({ pickupWaypoints: [], waypoints: laneWaypoints(detail, attachedOrders), otherStops: laneOtherStops(detail) });
   };
 
   const handleToggleCustomRoute = (checked: boolean) => {
@@ -381,8 +435,7 @@ export default function VNextCreateShipment() {
     } else {
       setOriginLocation('');
       setDestLocation('');
-      setWaypoints([]);
-      setPickupWaypoints([]);
+      setRouteStops([]);
     }
   };
 
@@ -611,6 +664,7 @@ export default function VNextCreateShipment() {
           ...BLANK_ROUTE, useCustomRoute: false,
           laneOriginId: detail.originId, laneDestinationId: detail.destinationId,
           waypoints: laneWaypoints(detail, []),
+          otherStops: laneOtherStops(detail),
         }, orders));
       } else {
         setRouteForm(applyOrders({ ...BLANK_ROUTE, useCustomRoute: true }, orders));
@@ -670,8 +724,12 @@ export default function VNextCreateShipment() {
         // Intermediate stops (between the origin and destination stops).
         if (Array.isArray(s.stops) && s.stops.length > 2) {
           const middle = [...s.stops].sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber).slice(1, -1);
-          setPickupWaypoints(middle.filter((st: any) => st.stopType === 'pickup').map((st: any) => st.locationId));
-          setWaypoints(middle.filter((st: any) => st.stopType !== 'pickup').map((st: any) => st.locationId));
+          setRouteStops(middle.map((st: any): RouteStopRow => {
+            if (st.stopType === 'pickup') return { locationId: st.locationId, type: 'pickup', label: '' };
+            if (st.stopType !== 'other') return { locationId: st.locationId, type: 'drop', label: '' };
+            const purpose = isOtherStopPurpose(st.purpose) ? st.purpose : 'other';
+            return { locationId: st.locationId, type: purpose, label: purpose === 'other' ? st.label || '' : '' };
+          }));
         }
         if (Array.isArray(s.deviceAssignments)) {
           const initial = s.deviceAssignments.map((a: any) => ({
@@ -755,8 +813,8 @@ export default function VNextCreateShipment() {
         properShippingName: hazmat && properShippingName ? properShippingName : null,
         requiredEquipmentType: equipmentType || null,
       };
-      body.waypoints = waypoints.filter(Boolean);
-      body.pickupWaypoints = useCustomRoute ? pickupWaypoints.filter(Boolean) : [];
+      body.waypoints = waypointsForApi(waypoints, otherStops);
+      body.pickupWaypoints = useCustomRoute ? waypointsForApi(pickupWaypoints, otherStops) : [];
       if (!isEdit) body.status = 'draft';
       const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
       const res = await fetch(url, {
@@ -1146,6 +1204,9 @@ export default function VNextCreateShipment() {
                       <li key={`${locId}-${idx}`} className="flex items-center gap-2">
                         <span className="w-5 text-xs">{idx + 1}</span>
                         {locationName(locId)}
+                        {otherStops[locId] && (
+                          <Badge variant="muted">{otherStops[locId].label.trim() || OTHER_STOP_PURPOSE_LABELS[otherStops[locId].purpose as keyof typeof OTHER_STOP_PURPOSE_LABELS] || 'Stop'}</Badge>
+                        )}
                       </li>
                     ))}
                   </ol>
@@ -1296,28 +1357,11 @@ export default function VNextCreateShipment() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" />
-            Waypoints <span className="text-xs font-normal text-muted-foreground">(optional stops between origin and destination, in order)</span>
+            Stops <span className="text-xs font-normal text-muted-foreground">(optional, between origin and destination)</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <StopList
-            label="Pickups"
-            hint="Further collection points after the origin. Every pickup comes before the drops."
-            emptyText="No further pickups."
-            addLabel="Add pickup"
-            stops={pickupWaypoints}
-            onChange={setPickupWaypoints}
-            locations={locations}
-          />
-          <StopList
-            label="Drops"
-            hint="Deliveries before the destination."
-            emptyText="No drops before the destination."
-            addLabel="Add drop"
-            stops={waypoints}
-            onChange={setWaypoints}
-            locations={locations}
-          />
+          <RouteStopList rows={routeStops} onChange={setRouteStops} locations={locations} />
         </CardContent>
       </Card>
       )}

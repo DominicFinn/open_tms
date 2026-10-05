@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { API_URL } from '../api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { stopTypeLabel } from '@open-tms/shared';
 
 /**
  * Online Bill of Lading view.
@@ -267,7 +268,7 @@ export default function VNextBolView() {
                 {stops.map((s: any, i: number) => (
                   <tr key={i} className="border-b border-border">
                     <td className="px-2 py-1">{s.sequenceNumber}</td>
-                    <td className="px-2 py-1">{s.stopType}</td>
+                    <td className="px-2 py-1">{stopTypeLabel(s)}</td>
                     <td className="px-2 py-1">{s.location?.name}</td>
                     <td className="px-2 py-1">{s.location?.city}, {s.location?.state}</td>
                     <td className="px-2 py-1">{s.estimatedArrival || '-'}</td>

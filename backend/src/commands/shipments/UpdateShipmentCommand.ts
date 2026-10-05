@@ -4,7 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { reconcileShipmentDevices } from './reconcileShipmentDevices.js';
-import { syncShipmentStops } from './syncShipmentStops.js';
+import { syncShipmentStops, WaypointInput } from './syncShipmentStops.js';
 
 export interface UpdateShipmentPayload {
   id: string;
@@ -40,9 +40,9 @@ export interface UpdateShipmentPayload {
     packingGroup?: string | null;
     properShippingName?: string | null;
     requiredEquipmentType?: string | null;
-    waypoints?: string[];
+    waypoints?: WaypointInput[];
     /** Further pickups after the origin, in order (#329). */
-    pickupWaypoints?: string[];
+    pickupWaypoints?: WaypointInput[];
   };
 }
 

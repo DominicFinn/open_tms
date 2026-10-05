@@ -7,6 +7,7 @@ import { customerFetch } from './CustomerDashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { stopTypeLabel } from '@open-tms/shared';
 
 type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
 
@@ -153,7 +154,7 @@ export default function CustomerShipmentDetail() {
                 <div className="flex-1">
                   <div className="text-sm font-semibold">{stop.location?.name || 'Unknown'}</div>
                   <div className="text-xs text-muted-foreground">
-                    {stop.location?.city}, {stop.location?.state} - {stop.stopType}
+                    {stop.location?.city}, {stop.location?.state} - {stopTypeLabel(stop)}
                   </div>
                 </div>
                 <Badge variant={stopVariant(stop.status)}>{stop.status}</Badge>

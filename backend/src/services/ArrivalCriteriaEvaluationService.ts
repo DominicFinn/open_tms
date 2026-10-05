@@ -172,25 +172,31 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     const bleBeacons = extractBleBeacons(ctx.rawPayload);
     const matches: ArrivalCriteriaMatch[] = [];
     let arrivedThisPing = false;
+    // Stops this same ping saw the vehicle leave, so a later arrival doesn't infer it again.
+    const departedThisPing = new Set<string>();
 
     for (const stop of actionableStops(shipment.stops)) {
       const criteria = stop.location.arrivalCriteria;
       if (criteria.length === 0) continue;
       const entry = { locationLat: stop.location.lat ?? undefined, locationLng: stop.location.lng ?? undefined };
       // Pickups (the origin and any further pickup, #329) arrive on entry and complete on departure.
+      // So do other stops (fuel, rest, customs…, #345), so both times are recorded; they move no orders.
       const isPickup = stop.stopType === 'pickup' || stop.id === originStop?.id;
+      const departsOnExit = isPickup || stop.stopType === 'other';
       const match = this.firstMatch(criteria, ctx, entry, wifiNetworks, bleBeacons);
 
       if (match) {
         matches.push({ criteriaId: match.criteria.id, criteriaType: match.criteria.criteriaType, locationId: stop.locationId, stopId: stop.id, matchDetail: match.detail });
         if (stop.status === 'pending') {
           const method = match.criteria.criteriaType === 'geofence' ? 'geofence' : 'geofence_iot';
-          const unfinishedPickups = isPickup ? [] : shipment.stops.filter((st) =>
-            (st.stopType === 'pickup' || st.id === originStop?.id) && st.sequenceNumber < stop.sequenceNumber && st.status !== 'completed');
-          arrivedThisPing = await this.arriveAtStop(shipment.orgId, ctx, stop, isPickup, unfinishedPickups, eventTime, method) || arrivedThisPing;
+          const unfinishedEarlier = isPickup ? [] : shipment.stops.filter((st) => st.sequenceNumber < stop.sequenceNumber && !departedThisPing.has(st.id) && (
+            ((st.stopType === 'pickup' || st.id === originStop?.id) && st.status !== 'completed')
+            // An other stop the vehicle was seen at, but never seen leaving.
+            || (st.stopType === 'other' && st.status === 'arrived')));
+          arrivedThisPing = await this.arriveAtStop(shipment.orgId, ctx, stop, departsOnExit, unfinishedEarlier, eventTime, method) || arrivedThisPing;
         }
-      } else if (isPickup && stop.status === 'arrived') {
-        await this.departPickupIfOutside(shipment.orgId, ctx, stop, criteria, eventTime);
+      } else if (departsOnExit && stop.status === 'arrived') {
+        if (await this.departPickupIfOutside(shipment.orgId, ctx, stop, criteria, eventTime)) departedThisPing.add(stop.id);
       }
     }
 
@@ -251,24 +257,24 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
   }
 
   /**
-   * Arrival at a pending stop. A pickup only arrives; a drop completes on entry (#324). Reaching a
-   * drop proves the vehicle left the pickups before it, so a departure no ping ever showed is
-   * recorded first, as inferred, for each of them (#329).
+   * Arrival at a pending stop. A pickup or other stop only arrives; a drop completes on entry (#324,
+   * #345). Reaching a later stop proves the vehicle left the pickups and visited other stops before
+   * it, so a departure no ping ever showed is recorded first, as inferred, for each of them (#329).
    */
   private async arriveAtStop(
-    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, isPickup: boolean,
-    unfinishedPickups: Array<{ id: string; locationId: string }>, eventTime: string, method: string,
+    orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, departsOnExit: boolean,
+    unfinishedEarlier: Array<{ id: string; locationId: string }>, eventTime: string, method: string,
   ): Promise<boolean> {
-    for (const pickup of unfinishedPickups) {
+    for (const pickup of unfinishedEarlier) {
       const departed = await this.recordDeparture(orgId, ctx, pickup.id, pickup.locationId, eventTime, true);
       if (departed) {
         await this.deliveryService.updateOrdersForStop(orgId, pickup.id, 'completed', method, new Date(eventTime));
       }
     }
 
-    const arrived = await this.recordArrival(orgId, ctx, stop.id, stop.locationId, eventTime, !isPickup);
+    const arrived = await this.recordArrival(orgId, ctx, stop.id, stop.locationId, eventTime, !departsOnExit);
     if (arrived) {
-      await this.deliveryService.updateOrdersForStop(orgId, stop.id, isPickup ? 'arrived' : 'completed', method, new Date(eventTime));
+      await this.deliveryService.updateOrdersForStop(orgId, stop.id, departsOnExit ? 'arrived' : 'completed', method, new Date(eventTime));
     }
     return arrived;
   }
@@ -276,13 +282,14 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
   /** Departure needs a geofence (WiFi/BLE presence has no "outside") and a GPS position. */
   private async departPickupIfOutside(
     orgId: string, ctx: DeviceEventContext, stop: { id: string; locationId: string }, criteria: any[], eventTime: string,
-  ): Promise<void> {
-    if (ctx.lat == null || ctx.lng == null) return;
-    if (!criteria.some((c: any) => c.criteriaType === 'geofence')) return;
+  ): Promise<boolean> {
+    if (ctx.lat == null || ctx.lng == null) return false;
+    if (!criteria.some((c: any) => c.criteriaType === 'geofence')) return false;
     const departed = await this.recordDeparture(orgId, ctx, stop.id, stop.locationId, eventTime, false);
     if (departed) {
       await this.deliveryService.updateOrdersForStop(orgId, stop.id, 'completed', 'geofence', new Date(eventTime));
     }
+    return departed;
   }
 
   private matchDestinationWithoutStop(

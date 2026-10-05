@@ -134,6 +134,23 @@ describe('RecordStopOrdersDeliveryCommandHandler (#325)', () => {
   });
 });
 
+describe('RecordStopOrdersDeliveryCommandHandler on an other stop (#345)', () => {
+  it.each(['arrived', 'completed'])('records the stop as %s and changes no orders', async (status) => {
+    const { tx, prisma } = mockTx();
+    tx.shipmentStop.findFirst.mockResolvedValue(stopRow('stop-mid', 'other'));
+    const handler = new RecordStopOrdersDeliveryCommandHandler(prisma, mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(RECORD_STOP_ORDERS_DELIVERY, {
+      stopId: 'stop-mid', status, method: 'geofence', occurredAt: OCCURRED,
+    }));
+
+    expect(result.data).toEqual({ ordersUpdated: 0, shipmentId: 'ship-1' });
+    expect(tx.shipmentStop.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status }) }));
+    expect(tx.order.findMany).not.toHaveBeenCalled();
+    expect(result.events).toEqual([]);
+  });
+});
+
 describe('ChangeOrderDeliveryStatusCommandHandler (#325)', () => {
   const order = { id: 'o1', orderNumber: 'ORD-1', orgId: 'test-org', deliveryStatus: 'in_transit' };
 

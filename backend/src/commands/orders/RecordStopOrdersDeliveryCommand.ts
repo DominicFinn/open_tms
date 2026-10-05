@@ -76,7 +76,9 @@ export class RecordStopOrdersDeliveryCommandHandler extends BaseCommandHandler<R
 
     const firstPickup = findOriginStop(stop.shipment.stops, stop.shipment.originId);
     const isPickup = stop.stopType === 'pickup' || stop.id === firstPickup?.id;
-    const change = ordersToChange(isPickup, status);
+    // BUSINESS RULE: an other stop (fuel, rest, customs…) loads and unloads nothing, so reaching or
+    // leaving it never changes an order (#345). Its own status and times are still recorded above.
+    const change = stop.stopType === 'other' ? null : ordersToChange(isPickup, status);
     if (!change) return { ordersUpdated: 0, shipmentId: stop.shipmentId };
 
     const orders = await tx.order.findMany({

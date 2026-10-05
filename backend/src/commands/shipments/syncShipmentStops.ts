@@ -1,6 +1,30 @@
 import type { TransactionClient } from '../BaseCommandHandler.js';
 
 /**
+ * A stop on the route: a location id (a pickup in the pickup list, a drop in the drop list), or a
+ * stop that is neither, with its purpose and optional name (#345).
+ */
+export type WaypointInput = string | { locationId: string; stopType: 'other'; purpose: string; label?: string | null };
+
+interface StopRow {
+  shipmentId: string;
+  locationId: string;
+  sequenceNumber: number;
+  stopType: string;
+  status: string;
+  purpose: string | null;
+  label: string | null;
+}
+
+function toRow(shipmentId: string, wp: WaypointInput, sequenceNumber: number, listType: 'pickup' | 'delivery'): StopRow | null {
+  if (typeof wp === 'string') {
+    return wp ? { shipmentId, locationId: wp, sequenceNumber, stopType: listType, status: 'pending', purpose: null, label: null } : null;
+  }
+  if (!wp.locationId) return null;
+  return { shipmentId, locationId: wp.locationId, sequenceNumber, stopType: 'other', status: 'pending', purpose: wp.purpose, label: wp.label?.trim() || null };
+}
+
+/**
  * Bring a shipment's ordered stop list in line with its route: origin (pickup),
  * intermediate waypoints, then destination (delivery). Existing stops are kept and
  * renumbered rather than rebuilt (see reconcileStops). Only ever called for
@@ -17,35 +41,24 @@ export async function syncShipmentStops(
     orgId: string;
     shipmentId: string;
     originId?: string | null;
-    /** Further pickups after the origin, in order (#329). */
-    pickupWaypoints?: string[];
-    /** Drops before the destination, in order. */
-    waypoints?: string[];
+    /** Further pickups after the origin, in order (#329); may include other stops (#345). */
+    pickupWaypoints?: WaypointInput[];
+    /** Drops before the destination, in order; may include other stops (#345). */
+    waypoints?: WaypointInput[];
     destinationId?: string | null;
   },
 ): Promise<void> {
   const { orgId, shipmentId, originId, pickupWaypoints, waypoints, destinationId } = opts;
 
-  const rows: Array<{
-    shipmentId: string;
-    locationId: string;
-    sequenceNumber: number;
-    stopType: string;
-    status: string;
-  }> = [];
-  let seq = 1;
-  if (originId) {
-    rows.push({ shipmentId, locationId: originId, sequenceNumber: seq++, stopType: 'pickup', status: 'pending' });
-  }
-  for (const pickup of pickupWaypoints ?? []) {
-    if (pickup) rows.push({ shipmentId, locationId: pickup, sequenceNumber: seq++, stopType: 'pickup', status: 'pending' });
-  }
-  for (const wp of waypoints ?? []) {
-    if (wp) rows.push({ shipmentId, locationId: wp, sequenceNumber: seq++, stopType: 'delivery', status: 'pending' });
-  }
-  if (destinationId) {
-    rows.push({ shipmentId, locationId: destinationId, sequenceNumber: seq++, stopType: 'delivery', status: 'pending' });
-  }
+  const rows: StopRow[] = [];
+  const add = (wp: WaypointInput, listType: 'pickup' | 'delivery') => {
+    const row = toRow(shipmentId, wp, rows.length + 1, listType);
+    if (row) rows.push(row);
+  };
+  if (originId) add(originId, 'pickup');
+  for (const wp of pickupWaypoints ?? []) add(wp, 'pickup');
+  for (const wp of waypoints ?? []) add(wp, 'delivery');
+  if (destinationId) add(destinationId, 'delivery');
 
   await reconcileStops(tx, orgId, shipmentId, rows);
 }
@@ -68,7 +81,7 @@ async function reconcileStops(
   tx: TransactionClient,
   orgId: string,
   shipmentId: string,
-  rows: Array<{ shipmentId: string; locationId: string; sequenceNumber: number; stopType: string; status: string }>,
+  rows: StopRow[],
 ): Promise<void> {
   const existing = await tx.shipmentStop.findMany({
     where: { shipmentId, shipment: { orgId } },
@@ -83,7 +96,13 @@ async function reconcileStops(
     return i >= 0 ? unmatched.splice(i, 1)[0] : null;
   };
   const sameKind = rows.map((row) => take((st) => st.locationId === row.locationId && st.stopType === row.stopType));
-  const matches = rows.map((row, i) => ({ row, stop: sameKind[i] ?? take((st) => st.locationId === row.locationId) }));
+  // A pickup may become a drop at the same place, but a stop never turns into or out of an `other`
+  // stop: orders linked to a pickup or drop would be left on a stop that moves no orders (#345).
+  const convertible = (a: string, b: string) => a !== 'other' && b !== 'other';
+  const matches = rows.map((row, i) => ({
+    row,
+    stop: sameKind[i] ?? take((st) => st.locationId === row.locationId && convertible(st.stopType, row.stopType)),
+  }));
 
   const stranded = unmatched.filter((st) => st._count.orders + st._count.pickupOrders > 0);
   if (stranded.length > 0) throw new StopStillHasOrdersError(stranded.map((st) => st.locationId));
@@ -97,7 +116,7 @@ async function reconcileStops(
     if (stop) {
       await tx.shipmentStop.update({
         where: { id: stop.id, shipment: { orgId } },
-        data: { sequenceNumber: row.sequenceNumber, stopType: row.stopType },
+        data: { sequenceNumber: row.sequenceNumber, stopType: row.stopType, purpose: row.purpose, label: row.label },
       });
     } else {
       await tx.shipmentStop.create({ data: row });

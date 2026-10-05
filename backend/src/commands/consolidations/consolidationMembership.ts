@@ -77,11 +77,21 @@ export async function releaseShipment(
   });
 }
 
-type StopKind = 'pickup' | 'delivery';
+type StopKind = 'pickup' | 'delivery' | 'other';
 
-/** A shipment's first stop is always where it is collected, whatever its type says. */
+/** A shipment's first stop is always where it is collected, whatever its type says. Other stops stay other (#345). */
 function kindOf(stop: { stopType: string; sequenceNumber: number }): StopKind {
+  if (stop.stopType === 'other') return 'other';
   return stop.sequenceNumber === 1 || stop.stopType === 'pickup' || stop.stopType === 'both' ? 'pickup' : 'delivery';
+}
+
+interface RunStopWanted {
+  kind: StopKind;
+  locationId: string;
+  purpose: string | null;
+  label: string | null;
+  /** Where a new stop joins the run: among the pickups, or after the drops. */
+  section: 'pickup' | 'delivery';
 }
 
 /**
@@ -101,15 +111,23 @@ export async function rebuildConsolidationStops(
   const members = await tx.consolidationShipment.findMany({
     where: { consolidationId, shipment: { orgId } },
     orderBy: { addedAt: 'asc' },
-    select: { shipment: { select: { stops: { orderBy: { sequenceNumber: 'asc' }, select: { id: true, locationId: true, stopType: true, sequenceNumber: true } } } } },
+    select: { shipment: { select: { stops: { orderBy: { sequenceNumber: 'asc' }, select: { id: true, locationId: true, stopType: true, sequenceNumber: true, purpose: true, label: true } } } } },
   });
-  const shipmentStops = members.flatMap((m) => m.shipment.stops.map((s) => ({ ...s, kind: kindOf(s) })));
+  const shipmentStops = members.flatMap((m) => {
+    const firstDrop = m.shipment.stops.find((s) => kindOf(s) === 'delivery')?.sequenceNumber ?? Number.MAX_SAFE_INTEGER;
+    return m.shipment.stops.map((s) => {
+      const kind = kindOf(s);
+      // An other stop belongs with the pickups if its shipment visits it before any drop.
+      const section: 'pickup' | 'delivery' = kind === 'pickup' || (kind === 'other' && s.sequenceNumber < firstDrop) ? 'pickup' : 'delivery';
+      return { ...s, kind, section };
+    });
+  });
   const key = (kind: string, locationId: string) => `${kind}:${locationId}`;
 
-  const needed = new Map<string, { kind: StopKind; locationId: string }>();
-  for (const kind of ['pickup', 'delivery'] as const) {
-    for (const s of shipmentStops.filter((st) => st.kind === kind)) {
-      if (!needed.has(key(kind, s.locationId))) needed.set(key(kind, s.locationId), { kind, locationId: s.locationId });
+  const needed = new Map<string, RunStopWanted>();
+  for (const s of shipmentStops) {
+    if (!needed.has(key(s.kind, s.locationId))) {
+      needed.set(key(s.kind, s.locationId), { kind: s.kind, locationId: s.locationId, purpose: s.purpose, label: s.label, section: s.section });
     }
   }
 
@@ -122,20 +140,26 @@ export async function rebuildConsolidationStops(
   const unused = existing.filter((s) => !needed.has(key(s.stopType, s.locationId))).map((s) => s.id);
   if (unused.length > 0) await tx.consolidationStop.deleteMany({ where: { id: { in: unused }, consolidationId, consolidation: { orgId } } });
 
-  const kept = existing.filter((s) => needed.has(key(s.stopType, s.locationId)));
-  const order: Array<{ kind: StopKind; locationId: string }> = [];
-  for (const kind of ['pickup', 'delivery'] as const) {
-    order.push(...kept.filter((s) => s.stopType === kind).map((s) => ({ kind, locationId: s.locationId })));
-    order.push(...[...needed.values()].filter((w) => w.kind === kind && !byKey.has(key(kind, w.locationId))));
+  // Kept stops keep their order, hand-set or not. A new pickup-section stop goes just before the
+  // first drop, so every pickup stays ahead of every drop; anything else goes on the end.
+  const order: RunStopWanted[] = existing
+    .filter((s) => needed.has(key(s.stopType, s.locationId)))
+    .map((s) => needed.get(key(s.stopType, s.locationId))!);
+  for (const w of needed.values()) {
+    if (byKey.has(key(w.kind, w.locationId))) continue;
+    const firstDrop = order.findIndex((o) => o.kind === 'delivery');
+    if (w.section === 'pickup' && firstDrop !== -1) order.splice(firstDrop, 0, w);
+    else order.push(w);
   }
 
   for (const [i, w] of order.entries()) {
     const id = byKey.get(key(w.kind, w.locationId));
+    const details = w.kind === 'other' ? { purpose: w.purpose, label: w.label } : {};
     if (id) {
-      await tx.consolidationStop.update({ where: { id, consolidationId, consolidation: { orgId } }, data: { sequenceNumber: i + 1 } });
+      await tx.consolidationStop.update({ where: { id, consolidationId, consolidation: { orgId } }, data: { sequenceNumber: i + 1, ...details } });
     } else {
       const created = await tx.consolidationStop.create({
-        data: { consolidationId, locationId: w.locationId, stopType: w.kind, sequenceNumber: i + 1 },
+        data: { consolidationId, locationId: w.locationId, stopType: w.kind, sequenceNumber: i + 1, ...details },
       });
       byKey.set(key(w.kind, w.locationId), created.id);
     }
@@ -167,7 +191,7 @@ export async function alignShipmentStops(tx: TransactionClient, orgId: string, c
           id: true,
           originId: true,
           destinationId: true,
-          stops: { select: { id: true, sequenceNumber: true, locationId: true, consolidationStop: { select: { sequenceNumber: true } } } },
+          stops: { select: { id: true, sequenceNumber: true, locationId: true, stopType: true, consolidationStop: { select: { sequenceNumber: true } } } },
         },
       },
     },
@@ -181,8 +205,10 @@ export async function alignShipmentStops(tx: TransactionClient, orgId: string, c
     if (target.length === 0) continue;
 
     const reordered = target.some((s, i) => s.id !== current[i].id);
-    const originId = target[0].locationId;
-    const destinationId = target[target.length - 1].locationId;
+    // Origin and destination are where freight is loaded and unloaded, never a fuel or rest stop (#345).
+    const freightStops = target.filter((s) => s.stopType !== 'other');
+    const originId = freightStops[0]?.locationId ?? shipment.originId;
+    const destinationId = freightStops[freightStops.length - 1]?.locationId ?? shipment.destinationId;
     if (!reordered && originId === shipment.originId && destinationId === shipment.destinationId) continue;
 
     if (reordered) {

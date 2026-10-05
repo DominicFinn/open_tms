@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { getLocationTypeMeta } from './locationTypesMeta';
+import { stopTypeLabel } from '@open-tms/shared';
 
 interface LocationOps {
   location: any;
@@ -287,7 +288,7 @@ export default function VNextLocationOps() {
                     <TableCell>{s.customerName || '--'}</TableCell>
                     <TableCell>{s.carrierName || '--'}</TableCell>
                     <TableCell>{s.originName}{s.originCity ? `, ${s.originCity}` : ''}</TableCell>
-                    <TableCell className="text-xs capitalize">{s.stopType}</TableCell>
+                    <TableCell className="text-xs">{stopTypeLabel(s)}</TableCell>
                     <TableCell className="text-xs">{s.estimatedArrival ? new Date(s.estimatedArrival).toLocaleString() : '--'}</TableCell>
                   </TableRow>
                 ))}
