@@ -427,6 +427,14 @@ has a `LaneRoute`, and hasn't yet arrived at its destination, its position is lo
 shipment's full journey via `GET /api/v1/shipments/:id/journey`. Waypoints are covered by #324 below;
 there is still no GPS-jitter hysteresis on the geofence boundary.
 
+**Journey report for multi-stop shipments (#348).** `/journey` returns every stop in sequence (type,
+purpose, status, arrival and departure, `isOrigin`/`isDestination`) plus the checkpoints and the
+origin/destination summary. The destination is the *last* stop at the destination location. A
+completed pickup or other stop with no departure time is flagged `departureInferred`: the vehicle
+was never seen leaving, and reaching a later stop implied it. Drops complete on entry, so they are
+never flagged. Checkpoints still run in 10% steps over the whole planned route. A shipment with no
+lane route only gets a planned route (and so checkpoints) when the org has a Google Maps server key.
+
 **Changing a shipment's stops (#328).** `syncShipmentStops` (create, and update of a draft with
 `waypoints`) reconciles the stored stops with the route instead of rebuilding them: a stop whose
 location stays on the route keeps its row and is only renumbered, so the orders dropping there keep
