@@ -48,8 +48,9 @@ function mockPrisma(stops: StopSpec[], route: { encodedPolyline: string } | null
   } as any;
 }
 
-function setup(stops: StopSpec[], route: { encodedPolyline: string } | null = null) {
+function setup(stops: StopSpec[], route: { encodedPolyline: string } | null = null, drawn: any[] = []) {
   const prisma = mockPrisma(stops, route);
+  const geofenceRepo = { findByEntities: jest.fn().mockResolvedValue(drawn) } as any;
   const deliveryService = { updateOrdersForStop: jest.fn().mockResolvedValue(1) } as any;
   const commandBus = {
     dispatch: jest.fn().mockImplementation((c: any) => Promise.resolve({
@@ -57,12 +58,12 @@ function setup(stops: StopSpec[], route: { encodedPolyline: string } | null = nu
       data: c.type === RECORD_GEOFENCE_ARRIVAL ? { arrived: true } : { departed: true },
     })),
   } as any;
-  const service = new ArrivalCriteriaEvaluationService(prisma, deliveryService, commandBus);
+  const service = new ArrivalCriteriaEvaluationService(prisma, deliveryService, commandBus, geofenceRepo);
   const ping = (locationId: string, extra: object = {}) => service.evaluateAndUpdateOrders({
     orgId: 'org-1', shipmentId: 'ship-1', ...LOCATIONS[locationId], rawPayload: {}, ...extra,
   });
   const dispatched = () => commandBus.dispatch.mock.calls.map((c: any) => [c[0].type, c[0].payload]);
-  return { prisma, deliveryService, commandBus, ping, dispatched };
+  return { prisma, deliveryService, commandBus, geofenceRepo, ping, dispatched };
 }
 
 const ROUTE: StopSpec[] = [
@@ -232,5 +233,70 @@ describe('ArrivalCriteriaEvaluationService', () => {
       await ping('loc-dest');
       expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-dest' })]]);
     });
+  });
+});
+
+// ~0.0045 degrees of latitude is ~500m: outside the 250m criterion, inside a 600m drawn circle.
+const NEAR_ORIGIN = { lat: 40.0045, lng: -74.0 };
+
+function radial(locationId: string, radiusMeters: number) {
+  const { lat, lng } = LOCATIONS[locationId];
+  return { id: `geo-${locationId}`, entityType: 'location', entityId: locationId, shapeType: 'radial', geometry: { centerLat: lat, centerLng: lng, radiusMeters } };
+}
+
+describe('ArrivalCriteriaEvaluationService drawn geofences (#347)', () => {
+  it('matches against a redrawn, larger geofence instead of the old criterion', async () => {
+    const { ping, dispatched, geofenceRepo } = setup(ROUTE, null, [radial('loc-origin', 600)]);
+
+    const matches = await ping('loc-origin', NEAR_ORIGIN);
+
+    expect(geofenceRepo.findByEntities).toHaveBeenCalledWith('location', ['loc-origin', 'loc-mid', 'loc-dest'], 'org-1');
+    expect(matches).toEqual([expect.objectContaining({ criteriaId: 'geo-loc-origin', stopId: 'stop-origin' })]);
+    expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-origin' })]]);
+  });
+
+  it('does not match on the old criterion once a smaller geofence is drawn', async () => {
+    const { ping, dispatched } = setup(ROUTE, null, [radial('loc-origin', 50)]);
+
+    // ~110m from the centre: inside the 250m criterion, outside the 50m drawn circle.
+    await ping('loc-origin', { lat: 40.001, lng: -74.0 });
+
+    expect(dispatched()).toEqual([]);
+  });
+
+  it('arrives at a location that has a drawn geofence but no arrival criteria', async () => {
+    const { prisma, ping, dispatched } = setup(ROUTE, null, [radial('loc-origin', 250)]);
+    const shipment = await prisma.shipment.findUnique();
+    shipment.stops[0].location.arrivalCriteria = [];
+    prisma.shipment.findUnique.mockResolvedValue(shipment);
+
+    await ping('loc-origin');
+
+    expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-origin' })]]);
+  });
+
+  it('matches a ping inside a drawn polygon', async () => {
+    const polygon = {
+      id: 'geo-poly', entityType: 'location', entityId: 'loc-origin', shapeType: 'polygon',
+      geometry: { points: [{ lat: 39.99, lng: -74.01 }, { lat: 39.99, lng: -73.99 }, { lat: 40.01, lng: -73.99 }, { lat: 40.01, lng: -74.01 }] },
+    };
+    const { ping, dispatched } = setup(ROUTE, null, [polygon]);
+
+    const matches = await ping('loc-origin', NEAR_ORIGIN);
+
+    expect(matches).toEqual([expect.objectContaining({ criteriaId: 'geo-poly', matchDetail: 'Geofence: inside drawn polygon' })]);
+    expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-origin' })]]);
+  });
+
+  it('keeps WiFi criteria alongside a drawn geofence', async () => {
+    const { prisma, ping, dispatched } = setup(ROUTE, null, [radial('loc-origin', 50)]);
+    const shipment = await prisma.shipment.findUnique();
+    shipment.stops[0].location.arrivalCriteria.push({ id: 'crit-wifi', criteriaType: 'wifi', wifiSsid: 'DOCK-A', active: true, priority: 0 });
+    prisma.shipment.findUnique.mockResolvedValue(shipment);
+
+    const matches = await ping('loc-origin', { lat: 40.001, lng: -74.0, rawPayload: { wifi: [{ ssid: 'DOCK-A' }] } });
+
+    expect(matches).toEqual([expect.objectContaining({ criteriaId: 'crit-wifi' })]);
+    expect(dispatched()).toEqual([[RECORD_GEOFENCE_ARRIVAL, expect.objectContaining({ stopId: 'stop-origin' })]]);
   });
 });
