@@ -8,7 +8,7 @@ import { EVENT_TYPES } from '../../events/eventTypes';
 const stop = (locationId: string, lat: number | null = 40, lng: number | null = -74) => ({ locationId, lat, lng });
 
 function setup(shipment: any, serverKey: string | null = 'server-key') {
-  const routes = { findForPlanning: jest.fn().mockResolvedValue(shipment), findEffectiveRoute: jest.fn() };
+  const routes = { findForPlanning: jest.fn().mockResolvedValue(shipment), findEffectiveRoute: jest.fn(), findJourney: jest.fn() };
   const organizations = { getSettings: jest.fn().mockResolvedValue({ googleMapsServerKey: serverKey }) } as any;
   const directions = {
     computeDirections: jest.fn().mockResolvedValue({
