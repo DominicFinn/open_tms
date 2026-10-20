@@ -47,6 +47,20 @@ Loaded when you touch matching files:
 
 Architecture references (not rules) live in `docs/`. Each domain rule links to its guide.
 
+## Scope discipline
+
+This project is early-stage. When implementing a request, default to the minimal, rough-but-working
+version of exactly what was asked — not an exhaustively polished, edge-case-complete implementation.
+Landing a working foundation that can be presented matters more right now than perfecting every
+wiring detail in the background.
+
+- Don't silently expand a scoped request into a large, fully-wired implementation. If a plan is
+  trending that way, check in first.
+- If investigation surfaces an adjacent pre-existing bug or gap, flag it (an issue, a note to the
+  user) instead of fixing it inline, unless asked to expand scope.
+- This applies most to new/foundational feature work. A mature or production-critical area may
+  warrant more thoroughness — ask rather than assume that's the case.
+
 ## Git
 
 - **Branch per issue off an up-to-date `origin/main`** — pull first, always

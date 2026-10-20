@@ -13,6 +13,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   testTimeout: 10000,
+  maxWorkers: 2,
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       useESM: false,
