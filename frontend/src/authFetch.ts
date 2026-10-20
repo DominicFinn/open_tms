@@ -134,13 +134,29 @@ function currentPathForReturnTo(): string {
   return full || '/';
 }
 
+function isOutsideMainApp(): boolean {
+  // Portal/standalone areas manage their own auth and must never be bounced
+  // to the main TMS login just because some unrelated app-wide fetch (e.g.
+  // MapProvider's maps/api-key call) got a 401 due to having no auth_token.
+  const { pathname } = window.location;
+  return (
+    pathname.startsWith('/customer-portal') ||
+    pathname.startsWith('/carrier-portal') ||
+    pathname.startsWith('/warehouse') ||
+    pathname.startsWith('/track/') ||
+    pathname === '/forgot-password'
+  );
+}
+
 function redirectToLogin() {
+  // Avoid ping-pong if we're already on the login page, and never hijack
+  // navigation away from a portal/standalone page that isn't logged in.
+  if (window.location.pathname === '/login' || isOutsideMainApp()) {
+    return;
+  }
   const returnTo = encodeURIComponent(currentPathForReturnTo());
   const loginUrl = `/login?returnTo=${returnTo}`;
-  // Avoid ping-pong if we're already on the login page.
-  if (window.location.pathname !== '/login') {
-    window.location.assign(loginUrl);
-  }
+  window.location.assign(loginUrl);
 }
 
 function redirectToWarehouseLogin() {

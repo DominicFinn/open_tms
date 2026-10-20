@@ -187,9 +187,9 @@ success "Prisma client ready"
 
 cd ..
 
-# Check if node_modules exist
+# Check if node_modules exist (hoisted to root - see CLAUDE.md)
 info "Checking dependencies..."
-if [ ! -d "backend/node_modules" ] || [ ! -d "frontend/node_modules" ]; then
+if [ ! -d "node_modules" ]; then
     warning "Dependencies not installed. Running npm install..."
     npm install
 fi
