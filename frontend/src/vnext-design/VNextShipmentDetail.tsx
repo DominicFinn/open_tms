@@ -1853,6 +1853,16 @@ export default function VNextShipmentDetail() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
   const [activeTab, setActiveTab] = useState('details');
+  // Tabs stay mounted (via forceMount below) once first opened, instead of
+  // unmounting on every switch — each tab's own data-fetching child only
+  // fetches on mount, so unmounting meant re-fetching (and re-showing a
+  // "Loading..." flash that collapsed/expanded the page) every single time
+  // you switched back to a tab you'd already visited.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['details']));
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+    setVisitedTabs(prev => (prev.has(value) ? prev : new Set(prev).add(value)));
+  }, []);
   const [shipment, setShipment] = useState<any>(null);
   const [shipmentType, setShipmentType] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -2746,7 +2756,7 @@ export default function VNextShipmentDetail() {
         )}
       </Card>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="flex w-full justify-start overflow-x-auto">
           {tabs.map(t => (
             <TabsTrigger key={t.value} value={t.value}>
@@ -2755,7 +2765,7 @@ export default function VNextShipmentDetail() {
           ))}
         </TabsList>
 
-        <TabsContent value="details" className="mt-4">
+        <TabsContent value="details" className="mt-4 data-[state=inactive]:hidden" forceMount>
           <Card>
             <CardContent className="divide-y divide-border p-0">
               <section className="space-y-2 p-4 text-sm">
@@ -2936,9 +2946,11 @@ export default function VNextShipmentDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="events" className="mt-4">
-              {id && <EventsTab shipmentId={id} />}
-            </TabsContent>
+        {visitedTabs.has('events') && (
+          <TabsContent value="events" className="mt-4 data-[state=inactive]:hidden" forceMount>
+            {id && <EventsTab shipmentId={id} />}
+          </TabsContent>
+        )}
 
             <TabsContent value="notes" className="mt-4">
               {id && <NotesTab shipmentId={id} />}
@@ -3198,28 +3210,38 @@ export default function VNextShipmentDetail() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="financials" className="mt-4">
-              <FinancialsTab shipmentId={id!} hasBol={documents.some((d: any) => d.documentType === 'bol')} />
-            </TabsContent>
+            {visitedTabs.has('financials') && (
+              <TabsContent value="financials" className="mt-4 data-[state=inactive]:hidden" forceMount>
+                <FinancialsTab shipmentId={id!} hasBol={documents.some((d: any) => d.documentType === 'bol')} />
+              </TabsContent>
+            )}
 
-            <TabsContent value="cargo" className="mt-4">
-              <CargoTab shipmentId={id!} />
-            </TabsContent>
+            {visitedTabs.has('cargo') && (
+              <TabsContent value="cargo" className="mt-4 data-[state=inactive]:hidden" forceMount>
+                <CargoTab shipmentId={id!} />
+              </TabsContent>
+            )}
 
-            <TabsContent value="telemetry" className="mt-4">
-              <TelemetryTab shipmentId={id!} deviceAssignments={shipment.deviceAssignments || []} />
-            </TabsContent>
+            {visitedTabs.has('telemetry') && (
+              <TabsContent value="telemetry" className="mt-4 data-[state=inactive]:hidden" forceMount>
+                <TelemetryTab shipmentId={id!} deviceAssignments={shipment.deviceAssignments || []} />
+              </TabsContent>
+            )}
 
-            <TabsContent value="sla" className="mt-4">
-              <SlaTab shipmentId={id!} />
-            </TabsContent>
+            {visitedTabs.has('sla') && (
+              <TabsContent value="sla" className="mt-4 data-[state=inactive]:hidden" forceMount>
+                <SlaTab shipmentId={id!} />
+              </TabsContent>
+            )}
 
-            <TabsContent value="carrier-tracking" className="mt-4">
-              <CarrierTrackingTab shipmentId={id!} />
-            </TabsContent>
+            {visitedTabs.has('carrier-tracking') && (
+              <TabsContent value="carrier-tracking" className="mt-4 data-[state=inactive]:hidden" forceMount>
+                <CarrierTrackingTab shipmentId={id!} />
+              </TabsContent>
+            )}
 
-            {hasPermission('shipments:share') && (
-              <TabsContent value="shared-links" className="mt-4">
+            {hasPermission('shipments:share') && visitedTabs.has('shared-links') && (
+              <TabsContent value="shared-links" className="mt-4 data-[state=inactive]:hidden" forceMount>
                 <ShipmentShareLinksTab
                   shipmentId={id!}
                   refreshKey={shareLinksVersion}

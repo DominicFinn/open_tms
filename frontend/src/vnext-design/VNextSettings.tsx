@@ -932,6 +932,17 @@ function LoginAuditPreview() {
 }
 
 export default function VNextSettings() {
+  const [activeTab, setActiveTab] = useState('general');
+  // General/Brokerage/Warehouse each fetch their own data on mount. Radix
+  // unmounts inactive TabsContent by default, so switching away and back
+  // re-fetched (and re-flashed a "Loading..." state) every time. Keeping
+  // visited tabs mounted (forceMount + CSS hide) fixes that.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['general']));
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setVisitedTabs(prev => (prev.has(value) ? prev : new Set(prev).add(value)));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -943,7 +954,7 @@ export default function VNextSettings() {
         </div>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="general"><Building2 className="mr-1 h-4 w-4" />General</TabsTrigger>
           <TabsTrigger value="brokerage"><Briefcase className="mr-1 h-4 w-4" />Brokerage</TabsTrigger>
@@ -952,9 +963,13 @@ export default function VNextSettings() {
           <TabsTrigger value="integrations"><Plug className="mr-1 h-4 w-4" />Integrations</TabsTrigger>
           <TabsTrigger value="theme"><Palette className="mr-1 h-4 w-4" />Theme</TabsTrigger>
         </TabsList>
-        <TabsContent value="general" className="mt-6"><GeneralTab /></TabsContent>
-        <TabsContent value="brokerage" className="mt-6"><BrokerageTab /></TabsContent>
-        <TabsContent value="warehouse" className="mt-6"><WarehouseTab /></TabsContent>
+        <TabsContent value="general" className="mt-6 data-[state=inactive]:hidden" forceMount><GeneralTab /></TabsContent>
+        {visitedTabs.has('brokerage') && (
+          <TabsContent value="brokerage" className="mt-6 data-[state=inactive]:hidden" forceMount><BrokerageTab /></TabsContent>
+        )}
+        {visitedTabs.has('warehouse') && (
+          <TabsContent value="warehouse" className="mt-6 data-[state=inactive]:hidden" forceMount><WarehouseTab /></TabsContent>
+        )}
         <TabsContent value="notifications" className="mt-6"><NotificationsTab /></TabsContent>
         <TabsContent value="integrations" className="mt-6"><IntegrationsTab /></TabsContent>
         <TabsContent value="theme" className="mt-6"><ThemeTab /></TabsContent>
