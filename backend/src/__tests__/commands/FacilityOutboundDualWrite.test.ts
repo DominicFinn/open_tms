@@ -47,10 +47,9 @@ function buildPrisma(opts: {
       ),
       findUnique: jest.fn().mockResolvedValue({ label: 'STAGE-01' }),
     },
-    handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-    trackableUnit: {
+    handlingUnit: {
       findFirst: jest.fn().mockResolvedValue('trackableUnit' in opts ? opts.trackableUnit : { id: 'tu-1' }),
-      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     order: { findFirst: jest.fn().mockResolvedValue({ id: 'ord-1' }) },
     shipment: { findFirst: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
@@ -121,7 +120,7 @@ describe('Facility dual-write on outbound creates (#227)', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
     expect(tx.stagingAssignment.create).not.toHaveBeenCalled();
-    expect(tx.trackableUnit.update).not.toHaveBeenCalled();
+    expect(tx.handlingUnit.updateMany).not.toHaveBeenCalled();
     expect(tx.warehouseBin.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'bin-stage', orgId: 'test-org' } })
     );
@@ -137,8 +136,8 @@ describe('Facility dual-write on outbound creates (#227)', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
     expect(tx.stagingAssignment.create).not.toHaveBeenCalled();
-    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'tu-1', order: { orgId: 'test-org' } } })
+    expect(tx.handlingUnit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'tu-1', orgId: 'test-org' } })
     );
   });
 

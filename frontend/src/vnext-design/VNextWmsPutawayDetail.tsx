@@ -34,7 +34,8 @@ interface PutawayTaskDetail {
   status: string;
   putawayType: string;
   assignedToUserId: string | null;
-  trackableUnit: {
+  /** Null for a replenishment, which moves stock rather than a unit. */
+  handlingUnit: {
     id: string;
     identifier: string;
     unitType: string;
@@ -42,7 +43,7 @@ interface PutawayTaskDetail {
     lotNumber: string | null;
     expiryDate: string | null;
     qualityStatus: string;
-    lineItems: Array<{
+    lines: Array<{
       sku: string;
       description: string | null;
       quantity: number;
@@ -50,7 +51,7 @@ interface PutawayTaskDetail {
       temperature: string | null;
       hazmat: boolean;
     }>;
-  };
+  } | null;
   sourceBin: { id: string; label: string; binType: string } | null;
   targetBin: {
     id: string;
@@ -151,9 +152,12 @@ export default function VNextWmsPutawayDetail() {
   if (!task) return null;
 
   const isActive = task.status !== 'completed' && task.status !== 'cancelled';
-  const unit = task.trackableUnit;
-  const hasTemp = unit.lineItems.some(li => li.temperature && li.temperature !== 'ambient');
-  const hasHazmat = unit.lineItems.some(li => li.hazmat);
+  const unit = task.handlingUnit ?? {
+    id: '', identifier: 'Replenishment', unitType: '-', barcode: null,
+    lotNumber: null, expiryDate: null, qualityStatus: 'available', lines: [],
+  };
+  const hasTemp = unit.lines.some(li => li.temperature && li.temperature !== 'ambient');
+  const hasHazmat = unit.lines.some(li => li.hazmat);
 
   return (
     <div className="space-y-6">
@@ -299,7 +303,7 @@ export default function VNextWmsPutawayDetail() {
               <CardTitle>Unit Contents</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {unit.lineItems.length === 0 ? (
+              {unit.lines.length === 0 ? (
                 <p className="px-6 py-4 text-sm text-muted-foreground">No line items</p>
               ) : (
                 <Table>
@@ -314,7 +318,7 @@ export default function VNextWmsPutawayDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {unit.lineItems.map((li, i) => (
+                    {unit.lines.map((li, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-mono text-sm font-semibold">{li.sku}</TableCell>
                         <TableCell>{li.description || '-'}</TableCell>

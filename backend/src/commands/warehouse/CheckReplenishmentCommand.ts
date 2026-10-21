@@ -97,7 +97,6 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
         data: {
           facilityId: facility.id,
           locationId: facility.sourceLocationId,
-          trackableUnitId: bulkInventory.id, // Using inventory record ID as reference
           sourceBinId: bulkInventory.binId,
           targetBinId: rule.pickFaceBinId,
           status: 'pending',

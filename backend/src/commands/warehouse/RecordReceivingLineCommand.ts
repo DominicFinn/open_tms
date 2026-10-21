@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { requireHandlingUnit } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface RecordReceivingLinePayload {
@@ -44,13 +45,8 @@ export class RecordReceivingLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Task is ${task.status}, cannot record lines`);
     }
 
-    if (p.trackableUnitId) {
-      const unit = await tx.trackableUnit.findFirst({
-        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-        select: { id: true },
-      });
-      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
-    }
+    // The unit is checked on the warehouse side (#357). It has the same id as the TMS unit.
+    if (p.trackableUnitId) await requireHandlingUnit(tx, command.orgId, p.trackableUnitId);
 
     // Auto-start the task if still pending
     if (task.status === 'pending') {

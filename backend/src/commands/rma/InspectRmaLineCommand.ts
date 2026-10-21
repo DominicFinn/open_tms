@@ -87,14 +87,19 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
         : p.disposition === 'scrap' ? 'damaged'
         : 'quarantine';
 
-      await tx.trackableUnit.update({
-        where: { id: line.trackableUnitId, order: { orgId: command.orgId } },
-        data: {
-          currentBinId: p.routeToBinId,
-          currentZoneId: bin?.zoneId ?? null,
+      // The warehouse applies the move to its HandlingUnit (#357).
+      emit(this.createEvent(command, {
+        type: EVENT_TYPES.RMA_UNIT_MOVED,
+        entityType: 'rma_line',
+        entityId: line.id,
+        payload: {
+          rmaId: rma.id,
+          unitId: line.trackableUnitId,
+          binId: p.routeToBinId,
+          zoneId: bin?.zoneId ?? null,
           qualityStatus,
         },
-      });
+      }));
     }
 
     emit(this.createEvent(command, {

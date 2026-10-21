@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { mirrorHandlingUnitState } from './handlingUnitState.js';
+import { setHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompleteLoadingPayload {
@@ -55,12 +55,8 @@ export class CompleteLoadingCommandHandler extends BaseCommandHandler<
     });
 
     // Clear the units from their staging bins (they're now on the vehicle)
-    const unitIds = assignments.map(a => a.trackableUnitId);
-    await tx.trackableUnit.updateMany({
-      where: { id: { in: unitIds } },
-      data: { currentBinId: null, currentZoneId: null },
-    });
-    await mirrorHandlingUnitState(tx, command.orgId, unitIds, { currentBinId: null, currentZoneId: null });
+    const unitIds = assignments.map(a => a.handlingUnitId ?? a.trackableUnitId);
+    await setHandlingUnitState(tx, command.orgId, unitIds, { currentBinId: null, currentZoneId: null });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.LOADING_COMPLETED,

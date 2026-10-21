@@ -252,7 +252,7 @@ describe('RecordReceivingLineCommandHandler', () => {
         update: jest.fn(),
       },
       receivingLine: { create: jest.fn(), update: jest.fn() },
-      trackableUnit: { findFirst: jest.fn().mockResolvedValue(null) },
+      handlingUnit: { findFirst: jest.fn().mockResolvedValue(null) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -270,8 +270,8 @@ describe('RecordReceivingLineCommandHandler', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
-    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith({
-      where: { id: 'unit-other-org', order: { orgId: 'test-org' } },
+    expect(tx.handlingUnit.findFirst).toHaveBeenCalledWith({
+      where: { id: 'unit-other-org', orgId: 'test-org' },
       select: { id: true },
     });
     expect(tx.receivingLine.create).not.toHaveBeenCalled();

@@ -281,12 +281,11 @@ describe('ReceiveRmaLineCommand', () => {
     expect(tx.rmaLine.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'line-1', rma: { orgId: 'test-org' } } })
     );
-    expect(tx.trackableUnit.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'unit-1', order: { orgId: 'test-org' } },
-        data: expect.objectContaining({ qualityStatus: 'quarantine' }),
-      })
-    );
+    // Returns no longer write the unit's bin and quality: the warehouse owns them, and hears by event (#357)
+    expect(tx.trackableUnit.update).not.toHaveBeenCalled();
+    expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toEqual({
+      rmaId: expect.any(String), unitId: 'unit-1', binId: 'bin-q', zoneId: 'zone-q', qualityStatus: 'quarantine',
+    });
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_GOODS_RECEIVED)).toBe(true);
   });
 
@@ -391,9 +390,10 @@ describe('InspectRmaLineCommand', () => {
     expect(result.success).toBe(true);
     expect(result.data?.disposition).toBe('restock');
     expect(result.data?.allLinesDispositioned).toBe(true);
-    expect(tx.trackableUnit.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ qualityStatus: 'available' }) })
-    );
+    expect(tx.trackableUnit.update).not.toHaveBeenCalled();
+    expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toMatchObject({
+      binId: 'bin-bulk', zoneId: 'zone-a', qualityStatus: 'available',
+    });
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_LINE_INSPECTED)).toBe(true);
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_DISPOSITION_SET)).toBe(true);
   });

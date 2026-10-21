@@ -44,7 +44,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
     // Load staging assignments with order info
     const assignments = await tx.stagingAssignment.findMany({
       where: { id: { in: p.stagingAssignmentIds } },
-      include: { trackableUnit: { select: { id: true, identifier: true } } },
+      include: { handlingUnit: { select: { id: true, identifier: true } } },
     });
 
     if (assignments.length !== p.stagingAssignmentIds.length) {
@@ -91,7 +91,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
         loadPlanId: loadPlan.id,
         stagingAssignmentId: a.id,
         trackableUnitId: a.trackableUnitId,
-        handlingUnitId: a.trackableUnitId,
+        handlingUnitId: a.handlingUnitId ?? a.trackableUnitId,
         orderId: a.orderId,
         loadSequence: orderSequence.get(a.orderId) ?? 0,
         status: 'pending',

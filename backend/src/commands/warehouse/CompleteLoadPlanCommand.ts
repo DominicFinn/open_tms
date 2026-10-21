@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { mirrorHandlingUnitState } from './handlingUnitState.js';
+import { setHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompleteLoadPlanPayload {
@@ -57,14 +57,8 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
     }
 
     // Clear unit locations (they're on the vehicle now)
-    const unitIds = loadedLines.map(l => l.trackableUnitId).filter(Boolean) as string[];
-    if (unitIds.length > 0) {
-      await tx.trackableUnit.updateMany({
-        where: { id: { in: unitIds } },
-        data: { currentBinId: null, currentZoneId: null },
-      });
-      await mirrorHandlingUnitState(tx, command.orgId, unitIds, { currentBinId: null, currentZoneId: null });
-    }
+    const unitIds = loadedLines.map(l => l.handlingUnitId ?? l.trackableUnitId).filter(Boolean) as string[];
+    await setHandlingUnitState(tx, command.orgId, unitIds, { currentBinId: null, currentZoneId: null });
 
     // Complete the load plan
     await tx.loadPlan.update({

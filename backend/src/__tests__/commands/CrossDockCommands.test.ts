@@ -28,7 +28,6 @@ describe('Cross-dock workflow', () => {
       orderLineItem: { findUnique: jest.fn().mockResolvedValue({ orderId: 'order-1' }) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1' }) },
       handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: { update: jest.fn().mockResolvedValue({}) },
       // These shouldn't be called for cross-dock
       putawayRule: { findMany: jest.fn().mockResolvedValue([]) },
       putawayTask: { create: jest.fn() },
@@ -59,9 +58,10 @@ describe('Cross-dock workflow', () => {
       })
     );
 
-    // Unit moved to staging bin
-    expect(tx.trackableUnit.update).toHaveBeenCalledWith(
+    // Unit moved to staging bin, on the warehouse's handling unit (#357)
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ orgId: 'test-org' }),
         data: expect.objectContaining({ currentBinId: 'bin-staging', currentZoneId: 'zone-ship' }),
       })
     );
@@ -101,7 +101,6 @@ describe('Cross-dock workflow', () => {
       putawayTask: { create: jest.fn().mockResolvedValue({ id: 'pt-1' }) },
       stagingAssignment: { create: jest.fn() },
       handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: { update: jest.fn() },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {

@@ -272,9 +272,9 @@ model ReceivingLine {
   receivingTask    ReceivingTask  @relation(fields: [receivingTaskId], references: [id], onDelete: Cascade)
   orderLineItemId  String?
   trackableUnitId  String?
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit    TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
   sku              String
   uomCode          String         @default("EA")
@@ -335,11 +335,11 @@ model PutawayTask {
   facility         Facility?      @relation(fields: [facilityId], references: [id])
   receivingTaskId  String?
   receivingTask    ReceivingTask? @relation(fields: [receivingTaskId], references: [id])
-  trackableUnitId  String
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  trackableUnitId  String?
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
-  trackableUnit    TrackableUnit  @relation(fields: [trackableUnitId], references: [id])
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
+  trackableUnit    TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
   sourceBinId      String?
   sourceBin        WarehouseBin?  @relation("PutawaySource", fields: [sourceBinId], references: [id])
   targetBinId      String
@@ -485,9 +485,9 @@ model PickLine {
   binId             String
   bin               WarehouseBin    @relation(fields: [binId], references: [id])
   trackableUnitId   String?
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
   sku               String
   uomCode           String          @default("EA")
@@ -543,9 +543,9 @@ model PackLine {
   packTask         PackTask      @relation(fields: [packTaskId], references: [id], onDelete: Cascade)
   orderLineItemId  String
   trackableUnitId  String
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit    TrackableUnit @relation(fields: [trackableUnitId], references: [id])
   sku              String
   expectedQuantity Int
@@ -647,9 +647,9 @@ model StagingAssignment {
   orderId         String
   shipmentId      String?
   trackableUnitId String
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id])
   stagingBinId    String
   stagingBin      WarehouseBin  @relation(fields: [stagingBinId], references: [id])
@@ -707,9 +707,9 @@ model LoadPlanLine {
   loadPlan            LoadPlan @relation(fields: [loadPlanId], references: [id], onDelete: Cascade)
   stagingAssignmentId String? // link to staged unit
   trackableUnitId     String?
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   orderId             String
   loadSequence        Int      @default(0) // reverse stop order: last delivery loaded first (low number = load first = back of truck)
   status              String   @default("pending") // pending, loaded, skipped
@@ -915,6 +915,16 @@ model HandlingUnit {
   qualityStatus        String         @default("available")
 
   lines HandlingUnitLine[]
+
+  // Warehouse rows that reference this unit
+  receivingLines         ReceivingLine[]
+  putawayTasks           PutawayTask[]
+  pickLines              PickLine[]
+  packLines              PackLine[]
+  stagingAssignments     StagingAssignment[]
+  loadPlanLines          LoadPlanLine[]
+  inventoryTransactions  InventoryTransaction[]
+  allocations            Allocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

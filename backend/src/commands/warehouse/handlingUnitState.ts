@@ -1,12 +1,9 @@
 /**
- * Dual-write of a unit's warehouse state during the TrackableUnit split (#357).
+ * Writes a handling unit's warehouse state: where it is, and its quality (#357).
  *
- * The warehouse still writes bin and zone onto the TMS TrackableUnit while its reads are switched
- * over. Every such write is mirrored onto the HandlingUnit with the same id, so the handling unit
- * is already right when reads move to it. This goes when they do.
- *
- * updateMany, scoped by org, so a unit the projection hasn't reached yet is a no-op rather than an
- * error. The read switch re-copies state from TrackableUnit first, which closes that gap.
+ * The one place warehouse commands move a unit, always scoped by org. Since #357 step 2 the
+ * warehouse reads and writes only its HandlingUnit; the TMS TrackableUnit no longer carries bin,
+ * zone or quality for it.
  */
 
 import { TransactionClient } from '../BaseCommandHandler.js';
@@ -14,26 +11,39 @@ import { TransactionClient } from '../BaseCommandHandler.js';
 export interface HandlingUnitState {
   currentBinId?: string | null;
   currentZoneId?: string | null;
+  qualityStatus?: string;
   receivedAt?: Date | null;
 }
 
-export async function mirrorHandlingUnitState(
+/** Updates the named units. Returns how many were in the org. */
+export async function setHandlingUnitState(
   tx: TransactionClient,
   orgId: string,
   unitIds: string | readonly string[],
   state: HandlingUnitState,
-): Promise<void> {
+): Promise<number> {
   const ids = typeof unitIds === 'string' ? [unitIds] : [...unitIds];
-  if (ids.length === 0) return;
-  await tx.handlingUnit.updateMany({ where: { orgId, id: { in: ids } }, data: state });
+  if (ids.length === 0) return 0;
+  const { count } = await tx.handlingUnit.updateMany({ where: { orgId, id: { in: ids } }, data: state });
+  return count;
 }
 
-/** The same mirror for units nested inside another, which move with their parent. */
-export async function mirrorChildHandlingUnitState(
+/** The same for units nested inside another, which move with their parent. */
+export async function setChildHandlingUnitState(
   tx: TransactionClient,
   orgId: string,
   parentId: string,
   state: HandlingUnitState,
 ): Promise<void> {
   await tx.handlingUnit.updateMany({ where: { orgId, parentHandlingUnitId: parentId }, data: state });
+}
+
+/**
+ * Loads a handling unit within the org, or fails. A unit the projection hasn't created yet reads
+ * as not found: it has only just been made upstream, and a retry will find it.
+ */
+export async function requireHandlingUnit(tx: TransactionClient, orgId: string, id: string): Promise<{ id: string }> {
+  const unit = await tx.handlingUnit.findFirst({ where: { id, orgId }, select: { id: true } });
+  if (!unit) throw new Error(`Handling unit ${id} not found`);
+  return unit;
 }

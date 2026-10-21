@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { mirrorHandlingUnitState } from './handlingUnitState.js';
+import { requireHandlingUnit, setHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
@@ -42,13 +42,8 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
     if (!bin) throw new Error(`Staging bin ${p.stagingBinId} not found`);
     if (!bin.active) throw new Error(`Staging bin "${bin.label}" is inactive`);
 
-    // TrackableUnit carries no orgId of its own, so it is scoped through its order. Splitting it
-    // into a WMS HandlingUnit that does is Phase 2b.
-    const unit = await tx.trackableUnit.findFirst({
-      where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-      select: { id: true },
-    });
-    if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+    // The warehouse's own unit, scoped by org (#357). Same id as the TMS unit.
+    await requireHandlingUnit(tx, command.orgId, p.trackableUnitId);
 
     const order = await tx.order.findFirst({
       where: { id: p.orderId, orgId: command.orgId },
@@ -84,15 +79,8 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
       },
     });
 
-    // Move the trackable unit to the staging bin
-    await tx.trackableUnit.update({
-      where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-      data: {
-        currentBinId: p.stagingBinId,
-        currentZoneId: bin.zoneId,
-      },
-    });
-    await mirrorHandlingUnitState(tx, command.orgId, p.trackableUnitId, {
+    // Move the unit to the staging bin
+    await setHandlingUnitState(tx, command.orgId, p.trackableUnitId, {
       currentBinId: p.stagingBinId,
       currentZoneId: bin.zoneId,
     });

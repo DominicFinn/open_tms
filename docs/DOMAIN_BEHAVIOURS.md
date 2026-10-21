@@ -3036,11 +3036,27 @@ barcode, order) and contents (`HandlingUnitLine`, one per packed order line) and
 warehouse state, so a replayed event cannot move a pallet. A unit deleted upstream is marked with
 `sourceRemovedAt` rather than deleted, because the warehouse may still hold it.
 
-While reads are switched over, warehouse commands write both ids: every `trackableUnitId` on a
-receiving line, putaway task, pick or pack line, staging assignment, load plan line, inventory
-transaction or allocation also sets `handlingUnitId`, and every bin or zone change on a unit
-(putaway including nested units, cross-dock, staging, loading) is mirrored onto the handling unit,
-scoped by org. Backfill: `--only=handlingUnits`.
+**The warehouse reads and writes only its handling units** (#357 step 2). Receiving, putaway,
+cross-dock, staging, packing, loading and load plans check and move the `HandlingUnit`, scoped by
+org, and putaway reads the unit's contents and quality from it. Nothing in WMS touches
+`TrackableUnit` any more. Warehouse rows still carry both `trackableUnitId` and `handlingUnitId`
+(the same value) until step 3 drops the first. The putaway and staging APIs return `handlingUnit`
+(with `lines`) in place of `trackableUnit` (with `lineItems`).
+
+Commands:
+- `handling_unit.move` - moves a unit to a bin in the caller's org and optionally sets its quality
+  (`available`, `hold`, `quarantine`, `damaged`). Emits `handling_unit.moved` with a reason and
+  reference.
+
+Returns are TMS, but a returned unit's bin and quality are warehouse state, so `rma.receive_line`
+and `rma.inspect_line` emit `rma.unit_moved` instead of writing them, and
+`HandlingUnitReturnsHandler` dispatches `handling_unit.move`. A unit the projection hasn't created
+yet fails the move and the queue retries it.
+
+A replenishment putaway names no unit (it used to put an inventory record id in
+`trackableUnitId`, which the foreign key refused). Completing one isn't supported yet: #380.
+
+Backfill: `--only=handlingUnits`.
 
 ---
 

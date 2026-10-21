@@ -156,8 +156,7 @@ describe('CompletePackLineCommandHandler', () => {
         count: jest.fn(),
       },
       packTask: { update: jest.fn().mockResolvedValue({}) },
-      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: { findFirst: jest.fn().mockResolvedValue(null) },
+      handlingUnit: { findFirst: jest.fn().mockResolvedValue(null), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -173,8 +172,8 @@ describe('CompletePackLineCommandHandler', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
-    expect(tx.trackableUnit.findFirst).toHaveBeenCalledWith({
-      where: { id: 'unit-other-org', order: { orgId: 'test-org' } },
+    expect(tx.handlingUnit.findFirst).toHaveBeenCalledWith({
+      where: { id: 'unit-other-org', orgId: 'test-org' },
       select: { id: true },
     });
     expect(tx.packLine.update).not.toHaveBeenCalled();
@@ -190,10 +189,9 @@ describe('CreateStagingAssignmentCommandHandler', () => {
       ...facilityMocks(),
       warehouseBin: { findFirst: jest.fn().mockResolvedValue(mockBin) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
-      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: {
+      handlingUnit: {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
-        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       order: { findFirst: jest.fn().mockResolvedValue({ id: 'order-1' }) },
       shipment: { findFirst: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
@@ -215,10 +213,7 @@ describe('CreateStagingAssignmentCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.stagingBinLabel).toBe('STAGE-01');
-    expect(tx.trackableUnit.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ currentBinId: 'bin-staging' }) })
-    );
-    // Dual-write (#357): the assignment names the handling unit too, and the move is mirrored onto it
+    // The assignment names both ids while both exist, and the move is on the handling unit (#357)
     expect(tx.stagingAssignment.create.mock.calls[0][0].data).toMatchObject({ trackableUnitId: 'unit-1', handlingUnitId: 'unit-1' });
     expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
       where: { orgId: 'test-org', id: { in: ['unit-1'] } },
@@ -256,10 +251,9 @@ describe('CreateStagingAssignmentCommandHandler', () => {
       ...facilityMocks(),
       warehouseBin: { findFirst: jest.fn().mockResolvedValue({ id: 'bin-staging', label: 'STAGE-01', active: true, zoneId: 'z' }) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
-      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: {
+      handlingUnit: {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
-        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       order: { findFirst: jest.fn().mockResolvedValue(order) },
       shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
@@ -307,8 +301,7 @@ describe('CompleteLoadingCommandHandler', () => {
         findMany: jest.fn().mockResolvedValue(assignments),
         updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
-      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -327,13 +320,7 @@ describe('CompleteLoadingCommandHandler', () => {
     expect(result.success).toBe(true);
     expect(result.data?.loadedCount).toBe(2);
 
-    // Units cleared from bins (on vehicle now)
-    expect(tx.trackableUnit.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { currentBinId: null, currentZoneId: null },
-      })
-    );
-    // Mirrored onto the handling units, within the org (#357)
+    // Units cleared from bins (on vehicle now), on the handling units within the org (#357)
     expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
       where: { orgId: 'test-org', id: { in: ['unit-1', 'unit-2'] } },
       data: { currentBinId: null, currentZoneId: null },

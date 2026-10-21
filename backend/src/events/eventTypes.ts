@@ -351,6 +351,8 @@ export const EVENT_TYPES = {
   PUTAWAY_TASK_ASSIGNED: 'putaway_task.assigned',
   PUTAWAY_TASK_STARTED: 'putaway_task.started',
   PUTAWAY_TASK_COMPLETED: 'putaway_task.completed',
+  /** A handling unit was moved, or its quality changed, outside a putaway (#357). */
+  HANDLING_UNIT_MOVED: 'handling_unit.moved',
   PUTAWAY_TASK_DEVIATION: 'putaway_task.deviation',
 
   // WMS: Inventory
@@ -412,6 +414,8 @@ export const EVENT_TYPES = {
   RMA_REJECTED: 'rma.rejected',
   RMA_GOODS_RECEIVED: 'rma.goods_received',
   RMA_LINE_INSPECTED: 'rma.line_inspected',
+  /** A returned unit was moved to a bin and given a quality status. WMS applies it to the handling unit (#357). */
+  RMA_UNIT_MOVED: 'rma.unit_moved',
   RMA_DISPOSITION_SET: 'rma.disposition_set',
   RMA_COMPLETED: 'rma.completed',
   RMA_REFUND_ADJUSTED: 'rma.refund_adjusted',
@@ -647,6 +651,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.PUTAWAY_TASK_ASSIGNED]: 1,
   [EVENT_TYPES.PUTAWAY_TASK_STARTED]: 1,
   [EVENT_TYPES.PUTAWAY_TASK_COMPLETED]: 1,
+  [EVENT_TYPES.HANDLING_UNIT_MOVED]: 1,
   [EVENT_TYPES.PUTAWAY_TASK_DEVIATION]: 1,
   [EVENT_TYPES.INVENTORY_RECEIVED]: 1,
   [EVENT_TYPES.INVENTORY_ADJUSTED]: 1,
@@ -692,6 +697,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.RMA_REJECTED]: 1,
   [EVENT_TYPES.RMA_GOODS_RECEIVED]: 1,
   [EVENT_TYPES.RMA_LINE_INSPECTED]: 1,
+  [EVENT_TYPES.RMA_UNIT_MOVED]: 1,
   [EVENT_TYPES.RMA_DISPOSITION_SET]: 1,
   [EVENT_TYPES.RMA_COMPLETED]: 1,
   [EVENT_TYPES.RMA_REFUND_ADJUSTED]: 1,

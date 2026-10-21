@@ -90,7 +90,7 @@ export default function WarehouseTasks() {
         .filter((t: any) => t.status !== 'completed' && t.status !== 'cancelled')
         .map((t: any) => ({
           id: t.id, type: 'putaway' as TaskType, status: t.status,
-          summary: `Putaway: ${t.trackableUnit?.identifier ?? 'Unit'}`,
+          summary: `Putaway: ${t.handlingUnit?.identifier ?? 'Unit'}`,
           detail: `${t.sourceBin?.label ?? 'Dock'} -> ${t.targetBin?.label ?? '?'}`,
           priority: 0,
         })));
