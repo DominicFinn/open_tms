@@ -62,6 +62,7 @@ export class CreatePackTaskCommandHandler extends BaseCommandHandler<
         packTaskId: task.id,
         orderLineItemId: l.orderLineItemId,
         trackableUnitId: l.trackableUnitId,
+        handlingUnitId: l.trackableUnitId,
         sku: l.sku,
         expectedQuantity: l.expectedQuantity,
         packedQuantity: 0,

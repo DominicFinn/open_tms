@@ -99,6 +99,7 @@ model WarehouseZone {
   @@index([facilityId])
   @@index([orgId])
   @@index([zoneType])
+  handlingUnits HandlingUnit[] @relation("HandlingUnitZone")
 }
 
 model WarehouseAisle {
@@ -173,6 +174,7 @@ model WarehouseBin {
   @@index([orgId])
   @@index([binType])
   @@index([walkSequence])
+  handlingUnits HandlingUnit[] @relation("HandlingUnitBin")
 }
 
 model IndoorZoneAnchor {
@@ -270,6 +272,9 @@ model ReceivingLine {
   receivingTask    ReceivingTask  @relation(fields: [receivingTaskId], references: [id], onDelete: Cascade)
   orderLineItemId  String?
   trackableUnitId  String?
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   trackableUnit    TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
   sku              String
   uomCode          String         @default("EA")
@@ -331,6 +336,9 @@ model PutawayTask {
   receivingTaskId  String?
   receivingTask    ReceivingTask? @relation(fields: [receivingTaskId], references: [id])
   trackableUnitId  String
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   trackableUnit    TrackableUnit  @relation(fields: [trackableUnitId], references: [id])
   sourceBinId      String?
   sourceBin        WarehouseBin?  @relation("PutawaySource", fields: [sourceBinId], references: [id])
@@ -477,6 +485,9 @@ model PickLine {
   binId             String
   bin               WarehouseBin    @relation(fields: [binId], references: [id])
   trackableUnitId   String?
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
   sku               String
   uomCode           String          @default("EA")
@@ -532,6 +543,9 @@ model PackLine {
   packTask         PackTask      @relation(fields: [packTaskId], references: [id], onDelete: Cascade)
   orderLineItemId  String
   trackableUnitId  String
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   trackableUnit    TrackableUnit @relation(fields: [trackableUnitId], references: [id])
   sku              String
   expectedQuantity Int
@@ -633,6 +647,9 @@ model StagingAssignment {
   orderId         String
   shipmentId      String?
   trackableUnitId String
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id])
   stagingBinId    String
   stagingBin      WarehouseBin  @relation(fields: [stagingBinId], references: [id])
@@ -690,6 +707,9 @@ model LoadPlanLine {
   loadPlan            LoadPlan @relation(fields: [loadPlanId], references: [id], onDelete: Cascade)
   stagingAssignmentId String? // link to staged unit
   trackableUnitId     String?
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
+  /// until the split finishes and the TrackableUnit reference goes.
+  handlingUnitId String?
   orderId             String
   loadSequence        Int      @default(0) // reverse stop order: last delivery loaded first (low number = load first = back of truck)
   status              String   @default("pending") // pending, loaded, skipped
@@ -852,4 +872,72 @@ model WmsFulfilmentOrderLine {
 
   @@unique([fulfilmentOrderId, sourceLineId])
   @@index([orgId, sku])
+}
+
+/// A unit the warehouse handles: a pallet, tote or box, with its contents (#357, split step 2b).
+///
+/// TMS units arrive through HandlingUnitProjection, which copies their identity and contents from
+/// the TrackableUnit and keeps the same id. Everything below the snapshot fields is warehouse state
+/// that only WMS commands write; the projection never touches it. A standalone FinnWMS creates
+/// units with sourceType "wms" and no TMS behind them.
+model HandlingUnit {
+  id    String @id @default(uuid())
+  orgId String
+
+  /// tms_trackable_unit | wms
+  sourceType    String
+  sourceId      String
+  /// Soft reference to the order the source unit belongs to.
+  sourceOrderId String?
+  /// Set when the source unit no longer exists upstream. Kept rather than deleted, since the
+  /// warehouse may still hold it.
+  sourceRemovedAt DateTime?
+
+  identifier     String
+  unitType       String
+  customTypeName String?
+  barcode        String?
+
+  // Warehouse state
+  currentBinId         String?
+  currentBin           WarehouseBin?  @relation("HandlingUnitBin", fields: [currentBinId], references: [id])
+  currentZoneId        String?
+  currentZone          WarehouseZone? @relation("HandlingUnitZone", fields: [currentZoneId], references: [id])
+  parentHandlingUnitId String?
+  parentHandlingUnit   HandlingUnit?  @relation("HandlingUnitNesting", fields: [parentHandlingUnitId], references: [id])
+  childHandlingUnits   HandlingUnit[] @relation("HandlingUnitNesting")
+  lotNumber            String?
+  expiryDate           DateTime?
+  receivedAt           DateTime?
+  /// Soft reference to the core Customer that owns the goods (3PL).
+  ownerCustomerId      String?
+  /// available | hold | quarantine | damaged
+  qualityStatus        String         @default("available")
+
+  lines HandlingUnitLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, sourceType, sourceId])
+  @@index([currentBinId])
+}
+
+/// What a handling unit contains, copied from its source.
+model HandlingUnitLine {
+  id             String       @id @default(uuid())
+  handlingUnitId String
+  handlingUnit   HandlingUnit @relation(fields: [handlingUnitId], references: [id], onDelete: Cascade)
+  orgId          String
+
+  /// Soft reference to the source line (an OrderLineItem for a TMS unit).
+  sourceLineId String?
+  sku          String
+  description  String?
+  quantity     Int
+  weight       Float?
+  hazmat       Boolean @default(false)
+  temperature  String?
+
+  @@index([handlingUnitId])
 }

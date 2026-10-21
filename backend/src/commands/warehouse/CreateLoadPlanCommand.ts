@@ -91,6 +91,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
         loadPlanId: loadPlan.id,
         stagingAssignmentId: a.id,
         trackableUnitId: a.trackableUnitId,
+        handlingUnitId: a.trackableUnitId,
         orderId: a.orderId,
         loadSequence: orderSequence.get(a.orderId) ?? 0,
         status: 'pending',

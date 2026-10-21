@@ -27,6 +27,7 @@ describe('Cross-dock workflow', () => {
       warehouseBin: { findFirst: jest.fn().mockResolvedValue(stagingBin) },
       orderLineItem: { findUnique: jest.fn().mockResolvedValue({ orderId: 'order-1' }) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1' }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: { update: jest.fn().mockResolvedValue({}) },
       // These shouldn't be called for cross-dock
       putawayRule: { findMany: jest.fn().mockResolvedValue([]) },
@@ -99,6 +100,7 @@ describe('Cross-dock workflow', () => {
       putawayRule: { findMany: jest.fn().mockResolvedValue([]) },
       putawayTask: { create: jest.fn().mockResolvedValue({ id: 'pt-1' }) },
       stagingAssignment: { create: jest.fn() },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: { update: jest.fn() },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;

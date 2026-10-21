@@ -68,6 +68,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
         packedQuantity: p.packedQuantity,
         status: p.packedQuantity > 0 ? 'packed' : 'verified',
         trackableUnitId: p.trackableUnitId ?? line.trackableUnitId,
+        handlingUnitId: p.trackableUnitId ?? line.trackableUnitId,
       },
     });
 

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { mirrorHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompleteLoadPlanPayload {
@@ -62,6 +63,7 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
         where: { id: { in: unitIds } },
         data: { currentBinId: null, currentZoneId: null },
       });
+      await mirrorHandlingUnitState(tx, command.orgId, unitIds, { currentBinId: null, currentZoneId: null });
     }
 
     // Complete the load plan

@@ -87,6 +87,7 @@ describe('CompletePutawayCommandHandler', () => {
       findFirst: jest.fn().mockResolvedValue(overrides.scannedBin ?? mockTargetBin),
       update: jest.fn().mockResolvedValue({}),
     },
+    handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     trackableUnit: {
       findUnique: jest.fn().mockResolvedValue(overrides.unit ?? mockUnit),
       update: jest.fn().mockResolvedValue({}),
@@ -133,6 +134,18 @@ describe('CompletePutawayCommandHandler', () => {
       expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', binId: 'bin-target' }) })
     );
     expect(tx.inventoryTransaction.create).toHaveBeenCalled();
+
+    // Dual-write (#357): the unit and anything nested in it move on the handling unit side too,
+    // and the stock ledger names the handling unit
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
+      where: { orgId: 'test-org', id: { in: ['unit-1'] } },
+      data: { currentBinId: 'bin-target', currentZoneId: mockZone.id },
+    });
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
+      where: { orgId: 'test-org', parentHandlingUnitId: 'unit-1' },
+      data: { currentBinId: 'bin-target', currentZoneId: mockZone.id },
+    });
+    expect(tx.inventoryTransaction.create.mock.calls[0][0].data).toMatchObject({ trackableUnitId: 'unit-1', handlingUnitId: 'unit-1' });
 
     // Bin capacity updated (pallet)
     expect(tx.warehouseBin.update).toHaveBeenCalledWith(

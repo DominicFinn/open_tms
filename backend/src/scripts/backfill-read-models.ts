@@ -24,6 +24,8 @@ import { selectSteps, type BackfillStep } from './backfillSteps.js';
 import { deriveFacilitiesFromLocations } from './deriveFacilities.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
+import { HandlingUnitProjection } from '../events/projections/HandlingUnitProjection.js';
+import { TrackableUnitHandlingSource } from '../services/fulfilment/TrackableUnitHandlingSource.js';
 import { refreshConsolidationReadModel } from '../events/projections/ConsolidationProjection.js';
 
 async function backfillOrders(prisma: PrismaClient): Promise<number> {
@@ -445,6 +447,26 @@ async function backfillWmsFulfilmentOrders(prisma: PrismaClient): Promise<number
 }
 
 /**
+ * The warehouse's copy of each TMS unit (#357). Rewrites identity and contents only; warehouse
+ * state on an existing handling unit is left alone.
+ */
+async function backfillHandlingUnits(prisma: PrismaClient): Promise<number> {
+  const source = new TrackableUnitHandlingSource(prisma);
+  const projection = new HandlingUnitProjection(prisma, source);
+
+  const live = new Set<string>();
+  let count = 0;
+  for (const { orgId, sourceId } of await source.listSourceIds()) {
+    await projection.project(orgId, sourceId);
+    live.add(sourceId);
+    count++;
+  }
+
+  await projection.markMissingRemoved(live);
+  return count;
+}
+
+/**
  * Builds the step list against a caller-supplied `PrismaClient` rather than a module-level one,
  * so an entry point that already holds a connection (the CLI's own client below, or a route's
  * `server.prisma`) can run these without opening a second connection.
@@ -460,6 +482,7 @@ export function buildBackfillSteps(prisma: PrismaClient): readonly BackfillStep[
     { name: 'issues', label: 'issues', run: () => backfillIssues(prisma) },
     { name: 'agentDecisions', label: 'agent decisions', run: () => backfillAgentDecisions(prisma) },
     { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: () => backfillWmsFulfilmentOrders(prisma) },
+    { name: 'handlingUnits', label: 'warehouse handling units', run: () => backfillHandlingUnits(prisma) },
     { name: 'facilities', label: 'facilities derived from locations', run: () => deriveFacilitiesFromLocations(prisma) },
   ];
 }
