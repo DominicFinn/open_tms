@@ -122,8 +122,11 @@ model InventoryObservation {
 
 model Allocation {
   id                String          @id @default(uuid())
-  orderLineItemId   String
-  orderLineItem     OrderLineItem   @relation(fields: [orderLineItemId], references: [id])
+  /// What the stock is allocated to, as a soft reference (#358, split step 2c). demandType is the
+  /// fulfilment order's sourceType (tms_order, edi_940, api, manifest) and demandId is the source
+  /// line id, so stock never holds a foreign key into whatever created the demand.
+  demandType        String
+  demandId          String
   inventoryRecordId String
   inventoryRecord   InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
   trackableUnitId   String?
@@ -140,7 +143,7 @@ model Allocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([orderLineItemId])
+  @@index([demandType, demandId])
   @@index([inventoryRecordId])
   @@index([orgId])
   @@index([state])

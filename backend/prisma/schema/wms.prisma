@@ -839,8 +839,7 @@ model WmsFulfilmentOrderLine {
 
   orgId String
 
-  /// Soft reference to the source line. Allocation still keys off this id until Phase 2c
-  /// makes the demand reference polymorphic.
+  /// Soft reference to the source line. Allocation.demandId and PickLine carry it.
   sourceLineId String
 
   sku           String

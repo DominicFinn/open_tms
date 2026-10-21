@@ -234,7 +234,7 @@ without a `Location` table resolves. That was the point of the phase.
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade
   delete on stock-referenced rows is the real hazard. TrackableUnit keeps its name and stays TMS.
-- **2c. Allocation soft demand ref (M, 2-3):** `(demandType, demandId)` replaces the
+- **2c. Allocation soft demand ref (M, 2-3):** ✅ (#358, Oct 2026, in one PR: only `wave.release` writes allocations and nothing read the FK) `(demandType, demandId)` replaces the
   `orderLineItemId` FK. Dual-write, switch, drop the FK, keep an index.
 - **2d. Carton cleanup (M, 2-3, parallelizable):** `CartonCatalogue` (WMS box master) and
   `PackagingType` (TMS rating/palletisation) stay separate models. Rename the two cartonization

@@ -73,7 +73,7 @@ describe('ReleaseWaveCommandHandler', () => {
     };
     const mockDemandLine = {
       sourceLineId: 'line-1', sku: 'SKU-001', quantity: 5,
-      fulfilmentOrder: { sourceId: 'order-1' },
+      fulfilmentOrder: { sourceId: 'order-1', sourceType: 'tms_order' },
     };
     const mockInv = {
       id: 'inv-1', sku: 'SKU-001', quantityAvailable: 10, uomCode: 'EA', lotNumber: null,
@@ -121,6 +121,19 @@ describe('ReleaseWaveCommandHandler', () => {
       })
     );
 
+    // The allocation names its demand softly: no foreign key into the order tables (#358)
+    expect(tx.allocation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        demandType: 'tms_order',
+        demandId: 'line-1',
+        inventoryRecordId: 'inv-1',
+        quantity: 5,
+        state: 'hard',
+        orgId: 'test-org',
+      }),
+    });
+    expect(tx.allocation.create.mock.calls[0][0].data).not.toHaveProperty('orderLineItemId');
+
     // Pick task and lines created
     expect(tx.pickTask.create).toHaveBeenCalled();
     expect(tx.pickLine.createMany).toHaveBeenCalled();
@@ -128,6 +141,51 @@ describe('ReleaseWaveCommandHandler', () => {
     const eventTypes = result.events.map(e => e.type);
     expect(eventTypes).toContain(EVENT_TYPES.PICK_TASK_CREATED);
     expect(eventTypes).toContain(EVENT_TYPES.WAVE_RELEASED);
+  });
+
+  it('records demand from a non-TMS source under its own type', async () => {
+    const tx = {
+      ...facilityMocks(),
+      wave: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'wave-1', waveNumber: 'W-001', locationId: 'loc-1', status: 'planning',
+          pickStrategy: 'discrete', orgId: 'test-org',
+          waveOrders: [{ orderId: 'edi-order-1', priority: 0 }],
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      wmsFulfilmentOrderLine: {
+        findMany: jest.fn().mockResolvedValue([{
+          sourceLineId: 'edi-line-7', sku: 'SKU-001', quantity: 2,
+          fulfilmentOrder: { sourceId: 'edi-order-1', sourceType: 'edi_940' },
+        }]),
+      },
+      inventoryRecord: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'inv-1', sku: 'SKU-001', quantityAvailable: 10, uomCode: 'EA', lotNumber: null,
+          bin: { id: 'bin-1', walkSequence: 5 },
+        }]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      allocation: { create: jest.fn().mockResolvedValue({}) },
+      pickTask: { create: jest.fn().mockResolvedValue({ id: 'pick-1' }) },
+      pickLine: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+
+    const result = await new ReleaseWaveCommandHandler(prisma, bus).execute(
+      createTestCommand(RELEASE_WAVE, { waveId: 'wave-1' })
+    );
+
+    expect(result.success).toBe(true);
+    expect(tx.allocation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ demandType: 'edi_940', demandId: 'edi-line-7' }),
+    });
   });
 
   it('reports allocation failures for insufficient stock', async () => {
@@ -138,7 +196,7 @@ describe('ReleaseWaveCommandHandler', () => {
     };
     const mockDemandLine = {
       sourceLineId: 'line-1', sku: 'SKU-001', quantity: 50,
-      fulfilmentOrder: { sourceId: 'order-1' },
+      fulfilmentOrder: { sourceId: 'order-1', sourceType: 'tms_order' },
     };
     // Only 10 available, need 50
     const mockInv = {

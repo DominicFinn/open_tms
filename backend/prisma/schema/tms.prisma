@@ -791,9 +791,6 @@ model OrderLineItem {
   tempMinC Float?
   tempMaxC Float?
 
-  // WMS relations
-  allocations Allocation[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -3008,9 +3008,9 @@ covers every organisation.
 ### Domain: Waves & Picking
 
 Groups orders into pick waves and generates walk-sequence-optimized pick tasks. All three wave
-commands read `WmsFulfilmentOrder` rather than `Order` or `OrderLineItem`. `Allocation` and
-`PickLine` still key off the TMS line id, carried through as `sourceLineId`, until Phase 2c makes
-the demand reference polymorphic.
+commands read `WmsFulfilmentOrder` rather than `Order` or `OrderLineItem`. An `Allocation` records
+its demand as `(demandType, demandId)`: the fulfilment order's `sourceType` and the source line id
+(#358). `PickLine` carries the same line id. Neither holds a foreign key to the order tables.
 
 ### Commands
 - `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
