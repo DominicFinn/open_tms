@@ -18,6 +18,8 @@ export interface ICustomersRepository {
   create(data: CreateCustomerDTO): Promise<Customer>;
   update(id: string, orgId: string, data: UpdateCustomerDTO): Promise<Customer>;
   archive(id: string, orgId: string): Promise<Customer>;
+  /** Names for a set of customers, archived ones included: an archived customer can still own stock. */
+  namesByIds(orgId: string, ids: readonly string[]): Promise<Array<{ id: string; name: string }>>;
 }
 
 export class CustomersRepository implements ICustomersRepository {
@@ -34,6 +36,14 @@ export class CustomersRepository implements ICustomersRepository {
   async findById(id: string, orgId: string): Promise<Customer | null> {
     const where: any = { id, archived: false, orgId };
     return this.prisma.customer.findFirst({ where });
+  }
+
+  async namesByIds(orgId: string, ids: readonly string[]): Promise<Array<{ id: string; name: string }>> {
+    if (ids.length === 0) return [];
+    return this.prisma.customer.findMany({
+      where: { orgId, id: { in: [...ids] } },
+      select: { id: true, name: true },
+    });
   }
 
   async create(data: CreateCustomerDTO): Promise<Customer> {

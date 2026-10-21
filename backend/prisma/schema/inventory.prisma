@@ -27,8 +27,12 @@ model ProductUom {
 
 model InventoryRecord {
   id                String       @id @default(uuid())
+  /// Soft reference to the core Location the stock was keyed on before facilities (#297). No FK:
+  /// these tables leave Prisma for the .NET service (ADR 0005). Goes once reads use facilityId.
   locationId        String
-  location          Location     @relation(fields: [locationId], references: [id])
+  /// The facility of the record's bin, copied onto the row so stock can be read by facility
+  /// without a join (#297). Soft, like every reference out of inventory.
+  facilityId        String?
   binId             String
   bin               WarehouseBin @relation(fields: [binId], references: [id])
   sku               String
@@ -37,8 +41,8 @@ model InventoryRecord {
   quantityAllocated Int          @default(0)
   quantityAvailable Int          @default(0) // onHand - allocated
   quantityOnHold    Int          @default(0)
+  /// Soft reference to the core Customer who owns the stock (3PL). No FK, for the same reason.
   ownerCustomerId   String?
-  ownerCustomer     Customer?    @relation("InventoryOwner", fields: [ownerCustomerId], references: [id])
   lotNumber         String?
   expiryDate        DateTime?
   lastCountedAt     DateTime?
@@ -98,8 +102,9 @@ model InventoryTransaction {
 // later without requiring one up front.
 model InventoryObservation {
   id                String           @id @default(uuid())
+  /// Soft references, as on InventoryRecord (#297).
   locationId        String
-  location          Location         @relation(fields: [locationId], references: [id])
+  facilityId        String?
   binId             String
   bin               WarehouseBin     @relation(fields: [binId], references: [id])
   sku               String

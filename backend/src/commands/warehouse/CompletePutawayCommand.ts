@@ -189,6 +189,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       inventoryRecord = await tx.inventoryRecord.create({
         data: {
           locationId: requireLocationForInventory(task.locationId, `Putaway task ${task.id}`),
+          facilityId: actualBin.facilityId,
           binId: actualBinId,
           sku,
           uomCode: 'EA',

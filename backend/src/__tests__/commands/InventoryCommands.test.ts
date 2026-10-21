@@ -14,7 +14,7 @@ const mockRecord = {
 };
 
 const mockTargetBin = {
-  id: 'bin-2', label: 'BULK-B-01-01', active: true, locationId: 'loc-1', orgId: 'test-org',
+  id: 'bin-2', label: 'BULK-B-01-01', active: true, locationId: 'loc-1', facilityId: 'fac-2', orgId: 'test-org',
   zone: { temperatureZone: null },
   temperatureZone: null,
 };
@@ -197,8 +197,10 @@ describe('TransferInventoryCommandHandler', () => {
       })
     );
 
-    // Target created (no existing record)
-    expect(tx.inventoryRecord.create).toHaveBeenCalled();
+    // Target created (no existing record), in the target bin's facility (#297)
+    expect(tx.inventoryRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-2', binId: 'bin-2' }) })
+    );
 
     // Two transactions (source debit + target credit)
     expect(tx.inventoryTransaction.create).toHaveBeenCalledTimes(2);

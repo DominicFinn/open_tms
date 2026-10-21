@@ -11,7 +11,7 @@
 
 import Fastify from 'fastify';
 
-const mockDeps: { prisma: any; bus: any; zoneRepo: any } = { prisma: null, bus: null, zoneRepo: null };
+const mockDeps: { prisma: any; bus: any; zoneRepo: any; customers: any } = { prisma: null, bus: null, zoneRepo: null, customers: null };
 
 jest.mock('../../di/index.js', () => ({
   container: {
@@ -20,6 +20,7 @@ jest.mock('../../di/index.js', () => ({
       if (name === 'PrismaClient') return mockDeps.prisma;
       if (name === 'ICommandBus') return mockDeps.bus;
       if (name === 'IWarehouseZoneRepository') return mockDeps.zoneRepo;
+      if (name === 'ICustomersRepository') return mockDeps.customers;
       throw new Error(`unexpected token ${name}`);
     }),
   },
@@ -100,6 +101,7 @@ function buildZoneRepo() {
 async function buildApp() {
   mockDeps.prisma = buildPrisma();
   mockDeps.zoneRepo = buildZoneRepo();
+  mockDeps.customers = { namesByIds: jest.fn().mockResolvedValue([]) };
   mockDeps.bus = { dispatch: jest.fn().mockResolvedValue({ success: true, data: { id: 'x' }, events: [] }) };
 
   const app = Fastify();
@@ -186,6 +188,21 @@ describe('WMS and inventory routes: cross-tenant ids read as 404 (#303)', () => 
         if (model[write]) expect(model[write]).not.toHaveBeenCalled();
       }
     }
+  });
+
+  it('names the owning customer through core, within the caller org (#297)', async () => {
+    const owner = '00000000-0000-4000-8000-0000000000c1';
+    mockDeps.prisma.inventoryRecord.findMany.mockResolvedValueOnce([
+      { id: A.inventory, orgId: ORG_A, sku: 'SKU-1', ownerCustomerId: owner },
+      { id: 'inv-unowned', orgId: ORG_A, sku: 'SKU-2', ownerCustomerId: null },
+    ]);
+    mockDeps.customers.namesByIds.mockResolvedValueOnce([{ id: owner, name: 'Acme Ltd' }]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/inventory?locationId=00000000-0000-4000-8000-00000000000c' });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockDeps.customers.namesByIds).toHaveBeenCalledWith(ORG_A, [owner]);
+    expect(res.json().data.map((r: any) => r.ownerCustomer)).toEqual([{ id: owner, name: 'Acme Ltd' }, null]);
   });
 
   it('inventory lists, summary and ledger filter by the caller org', async () => {

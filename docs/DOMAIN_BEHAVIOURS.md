@@ -2361,6 +2361,15 @@ module has no facility, so putaway completion, returns and wave release still ne
 `CompletePutaway` also resolves a scanned bin by `(locationId, label)`. Giving inventory a facility
 is Phase 4, and the columns go with it.
 
+**Inventory has a facility, and its references into core are soft** (#297). `InventoryRecord` and
+`InventoryObservation` carry `facilityId`, the facility of the row's bin, written on every create
+(putaway, transfer, RMA restock, observation) and backfilled from the bin, or failing that from the
+facility derived from the row's own Location within its own org. Reads still go by `locationId`
+until they switch. The foreign keys from inventory to `Location` and `Customer` are gone, because
+these tables leave Prisma for the .NET service (ADR 0005). The inventory API still returns
+`ownerCustomer: { id, name }`, now looked up through core within the caller's org, so a record
+pointing at another org's customer shows no name.
+
 ---
 
 ### Domain: Warehouse Zones & Bins
@@ -2920,6 +2929,7 @@ Tracks stock levels across warehouse bins with an immutable transaction ledger.
 
 ### Side Effects
 - Empty InventoryRecords (zero on-hand, zero allocated, zero hold) are deleted on transfer
+- A record created at the target of a transfer takes the target bin's facility (#297)
 
 ---
 
