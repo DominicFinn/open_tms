@@ -66,7 +66,13 @@ manifest tables, so the handover now moves 36 tables.
 |---|---|
 | #360 | Outbox in the `wms` schema, a relay onto the Node event bus, a .NET consumer for the Node events WMS needs, and contracts as JSON Schema |
 
-**Recommendation:** use Postgres for both directions (outbox tables, polled), with no broker, while
+**Decided in [ADR 0006](../adr/0006-event-bridge-over-postgres.md):** Postgres for both directions
+(outbox tables, polled by `(tx_id, position)` below the snapshot's oldest running transaction), no
+broker while both stacks share a database server. The .NET to Node half is built: `wms.outbox`, the
+`Outbox` writer, and the relay in the Node worker. Node to .NET follows when there is a .NET
+consumer to feed, and contracts with the first .NET events.
+
+**Earlier recommendation:** use Postgres for both directions (outbox tables, polled), with no broker, while
 both stacks share a database server. ADR 0004 left the broker open, and the split roadmap's
 "what not to do" list warns against adding one speculatively. A broker earns its place when the
 databases separate.
