@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FinnWms.Host/FinnWms.Host.csproj" />
+    <Project Path="src/FinnWms.Platform/FinnWms.Platform.csproj" />
+    <Project Path="src/FinnWms.Wms/FinnWms.Wms.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FinnWms.Tests/FinnWms.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -32,6 +32,7 @@ describe('useFacilities', () => {
 
   it('fetches facilities, not locations', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
       json: async () => ({ data: [LEEDS], error: null }),
     });
 
@@ -45,6 +46,7 @@ describe('useFacilities', () => {
 
   it('selects the first facility so a page has something to show', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
       json: async () => ({ data: [LEEDS, HULL], error: null }),
     });
 
@@ -55,6 +57,7 @@ describe('useFacilities', () => {
 
   it('exposes the selected facility so a create can still send its source location', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
       json: async () => ({ data: [LEEDS], error: null }),
     });
 
@@ -64,6 +67,7 @@ describe('useFacilities', () => {
 
   it('settles with no selection when the org has no facilities', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
       json: async () => ({ data: [], error: null }),
     });
 
@@ -79,5 +83,18 @@ describe('useFacilities', () => {
     render(<Consumer />);
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'));
     expect(screen.getByTestId('error')).toHaveTextContent('Could not load facilities');
+  });
+
+  it('reports an error response, such as the WMS service being down, rather than an empty org', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: async () => ({ data: null, error: 'WMS service unavailable' }),
+    });
+
+    render(<Consumer />);
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+    expect(screen.getByTestId('error')).toHaveTextContent('Could not load facilities');
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
   });
 });

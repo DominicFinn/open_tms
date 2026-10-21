@@ -21,7 +21,8 @@
     "format": "prettier --write .",
     "test": "npm -w backend run test -- --forceExit && npm -w frontend run test -- --forceExit",
     "clean": "rm -rf node_modules package-lock.json frontend/node_modules backend/node_modules packages/*/node_modules",
-    "reinstall": "npm run clean && npm install"
+    "reinstall": "npm run clean && npm install",
+    "test:wms": "cd services/wms && dotnet test"
   },
   "devDependencies": {
     "@types/google.maps": "^3.58.1",

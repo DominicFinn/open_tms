@@ -20,6 +20,7 @@
   "dependencies": {
     "@fastify/cors": "^8.4.2",
     "@fastify/rate-limit": "^9.1.0",
+    "@fastify/reply-from": "^9.8.0",
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^1.0.0",
     "@open-tms/shared": "^0.1.0",

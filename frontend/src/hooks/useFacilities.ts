@@ -9,11 +9,16 @@
 
 import { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import type { components } from '../generated/wmsApi';
 
-export interface Facility {
-  id: string;
-  name: string;
-  code: string | null;
+/**
+ * Served by the FinnWMS .NET service (ADR 0004), so the response type is generated from its
+ * OpenAPI document. Regenerate with `npm run generate:wms-api -w frontend` when
+ * services/wms/openapi/finnwms.json changes.
+ */
+type FacilityList = components['schemas']['PagedEnvelopeOfFacilityDto'];
+
+export interface Facility extends Pick<components['schemas']['FacilityDto'], 'id' | 'name' | 'code'> {
   /**
    * The core Location this facility was derived from, or null in a WMS-only install.
    *
@@ -21,7 +26,7 @@ export interface Facility {
    * row, so a page that both lists and creates sends this on the create. It goes when batch 6
    * makes `locationId` nullable and moves the commands onto `facilityId`.
    */
-  sourceLocationId: string | null;
+  sourceLocationId: components['schemas']['FacilityDto']['sourceLocationId'];
 }
 
 /** Matches MAX_PER_PAGE on the endpoint. An org with more warehouses than this needs a search box. */
@@ -48,10 +53,13 @@ export function useFacilities(): UseFacilitiesResult {
     let cancelled = false;
 
     fetch(`${API_URL}/api/v1/facilities?perPage=${PER_PAGE}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Facilities request failed with ${r.status}`);
+        return r.json() as Promise<FacilityList>;
+      })
       .then(res => {
         if (cancelled) return;
-        const rows: Facility[] = res.data || [];
+        const rows: Facility[] = res.data;
         setFacilities(rows);
         if (rows.length > 0) setFacilityId(rows[0].id);
       })
