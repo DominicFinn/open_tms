@@ -85,6 +85,7 @@ export const PATH_RULES: readonly PathRule[] = [
 
   // --- event and command infrastructure (the buses, not the handlers) ---
   { pattern: /^events\/(DomainEvent|IEventBus|IEventHandler|PgBossEventBus|createEvent|eventTypes|registerHandlers|index)\.ts$/, module: 'core' },
+  { pattern: /^events\/bridge\//, module: 'core', note: 'the event bridge to the .NET service is event bus plumbing (ADR 0006)' },
   { pattern: /^commands\/(BaseCommandHandler|CommandBus|types|index)\.ts$/, module: 'core' },
 
   // --- auth is core: every product authenticates the same way ---

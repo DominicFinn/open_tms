@@ -890,6 +890,16 @@ model ProjectionCheckpoint {
   updatedAt      DateTime @updatedAt
 }
 
+/// Where the event bridge relay has read up to in an outbox on the other stack (ADR 0006).
+/// One row per outbox. txId is the xid8 of the last relayed row, held as text.
+model EventBridgeCursor {
+  name         String   @id
+  txId         String
+  position     BigInt
+  relayedCount Int      @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
 model IssueReadModel {
   id               String       @id
   organization     Organization @relation(fields: [orgId], references: [id])

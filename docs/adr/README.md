@@ -13,6 +13,7 @@ supersedes the old one and link the two.
 | [0003](0003-two-map-modes.md) | Two map modes: Google when a key is configured, OSM when not | Accepted | 2026-09-02 |
 | [0004](0004-port-to-csharp-starting-with-finnwms.md) | Port to C#, starting with FinnWMS | Accepted, handover section superseded by 0005 | 2026-10-21 |
 | [0005](0005-wms-table-handover-in-one-move.md) | Hand the WMS tables over from Prisma in one move | Accepted | 2026-10-21 |
+| [0006](0006-event-bridge-over-postgres.md) | The event bridge between Node and .NET runs through Postgres | Accepted | 2026-10-22 |
 
 ## Convention
 

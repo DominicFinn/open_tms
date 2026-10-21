@@ -48,6 +48,22 @@ dotnet build && npm run generate:wms-api -w frontend
 `/metrics` (Prometheus) and `/health` are unauthenticated and carry no tenant data. Keep them off
 the public network at the proxy.
 
+## Events to Node
+
+Commands write their events with `Outbox.EnqueueAsync` in the same transaction as their change.
+Rows land in `wms.outbox`, and the Node worker's relay delivers them to Node's event bus
+(ADR 0006). The event type and its schema version must match Node's `eventTypes.ts`.
+
+The relay reads every org's rows, so the Node worker's login role needs the reader role:
+
+```sql
+GRANT wms_outbox_reader TO <node worker login role>;
+```
+
+In development both stacks log in as the same owner, so nothing is needed. The relay is on by
+default in the worker; `WMS_OUTBOX_RELAY=off` turns it off and `WMS_OUTBOX_RELAY_INTERVAL_MS`
+(default 1000) sets how often it polls.
+
 ## Tenancy
 
 Every query runs inside a `TenantSession`, which sets `app.org_id` and switches to the `wms_app`

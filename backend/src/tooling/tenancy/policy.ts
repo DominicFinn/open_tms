@@ -11,6 +11,7 @@ export const GLOBAL_MODELS: Readonly<Record<string, string>> = {
   Role: 'System role definitions, unique by name and shared by every tenant. Assignment is per user.',
   AuthProvider: 'Deployment-wide SSO provider configuration, unique by provider.',
   ProjectionCheckpoint: 'Projection bookkeeping for the event pipeline, not tenant data.',
+  EventBridgeCursor: 'Event bridge bookkeeping: how far the relay has read an outbox (ADR 0006), not tenant data.',
   BinaryStore:
     'Opaque blob store keyed by a storage key. Nothing reads it except through a scoped owner row, ' +
     'and the security rule keeps business data out of the key.',

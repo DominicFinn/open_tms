@@ -22,6 +22,8 @@
 import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from './events/PgBossEventBus.js';
 import { registerEventHandlers } from './events/registerHandlers.js';
+import { WmsOutboxRelay } from './events/bridge/WmsOutboxRelay.js';
+import { WmsOutboxReader } from './events/bridge/WmsOutboxReader.js';
 import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { IEmailService } from './services/IEmailService.js';
@@ -102,6 +104,7 @@ async function startWorker() {
   await queue.start();
   console.log('[Worker] Queue adapter started');
   const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
+  let wmsOutboxRelay: WmsOutboxRelay | null = null;
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   // Event handlers (audit, notifications, email, webhooks, triage)
@@ -201,6 +204,13 @@ async function startWorker() {
     await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, commandBus, skillRegistry, documentService);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
+
+    // Events from the FinnWMS .NET service (ADR 0006). Idle until its outbox exists.
+    if (process.env.WMS_OUTBOX_RELAY !== 'off') {
+      wmsOutboxRelay = new WmsOutboxRelay(prisma, new WmsOutboxReader(prisma), eventBus);
+      wmsOutboxRelay.start(Number(process.env.WMS_OUTBOX_RELAY_INTERVAL_MS || 1000));
+      console.log('[Worker] WMS outbox relay started');
+    }
   }
 
   // Integration workers (inbound webhook). The legacy outbound carrier and
@@ -222,6 +232,7 @@ async function startWorker() {
   const shutdown = async (signal: string) => {
     console.log(`[Worker] Received ${signal}, shutting down gracefully...`);
     try {
+      wmsOutboxRelay?.stop();
       await queue.stop();
       await prisma.$disconnect();
     } catch (err) {
