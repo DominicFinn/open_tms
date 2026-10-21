@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { OperationsSignalsSource } from '../../services/operations/OperationsSignalsSource.js';
 import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
@@ -225,6 +226,9 @@ import { IReturnLabelProviderRegistry } from '../../services/returnLabel/IReturn
 import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js';
 
 export function registerTmsDependencies(prisma: PrismaClient): void {
+  // Outside signals for the warehouse dashboard (#359)
+  container.singleton(TOKENS.IOperationsSignals).toFactory(() => new OperationsSignalsSource(container.resolve(TOKENS.PrismaClient)));
+
   // The TMS side of the fulfilment demand port. WMS resolves this token and never sees Order.
   container.singleton(TOKENS.IFulfilmentDemandSource).toFactory(() => {
     return new OrderFulfilmentDemandSource(container.resolve(TOKENS.PrismaClient));

@@ -17,7 +17,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
 
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
-  const service = new ShipmentCutoffMonitorService(prisma, eventBus);
+  const service = new ShipmentCutoffMonitorService(prisma, eventBus, container.resolve(TOKENS.IFulfilmentProgress));
 
   // ── CarrierCutoff CRUD ──────────────────────────────────────────────
 

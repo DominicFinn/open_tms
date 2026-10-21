@@ -2,6 +2,7 @@ import { PrismaClient, Shipment, CarrierCutoff } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { createEvent } from '../../events/createEvent.js';
+import type { IFulfilmentProgress } from '../../ports/warehouseQueries.js';
 
 export type CutoffSeverity = 'minor' | 'warning' | 'critical';
 
@@ -122,6 +123,8 @@ export class ShipmentCutoffMonitorService {
   constructor(
     private prisma: PrismaClient,
     private eventBus: PgBossEventBus,
+    /** Open warehouse work, asked of WMS rather than read from its tables (#359). */
+    private fulfilment: IFulfilmentProgress,
     config: Partial<CutoffMonitorConfig> = {},
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -183,19 +186,12 @@ export class ShipmentCutoffMonitorService {
 
     // Already past cutoff: flag critical immediately
     const orderIds = shipment.orderShipments.map(o => o.orderId);
-    const [pickCount, packCount, loadPlanCount] = orderIds.length > 0
-      ? await Promise.all([
-          this.prisma.pickTask.count({
-            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
-          }),
-          this.prisma.packTask.count({
-            where: { orgId, orderId: { in: orderIds }, status: { notIn: ['completed', 'cancelled'] } },
-          }),
-          this.prisma.loadPlan.count({
-            where: { orgId, shipmentId: shipment.id, status: { notIn: ['completed', 'cancelled'] } },
-          }),
-        ])
-      : [0, 0, 0];
+    const progress = orderIds.length > 0
+      ? await this.fulfilment.forShipment(orgId, shipment.id, orderIds)
+      : { pendingPickTasks: 0, pendingPackTasks: 0, openLoadPlans: 0 };
+    const pickCount = progress.pendingPickTasks;
+    const packCount = progress.pendingPackTasks;
+    const loadPlanCount = progress.openLoadPlans;
 
     base.pendingPickTasks = pickCount;
     base.pendingPackTasks = packCount;

@@ -60,7 +60,9 @@ import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNo
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
 import { HandlingUnitReturnsHandler } from './handlers/HandlingUnitReturnsHandler.js';
-import { PackAuditIssueLinkHandler } from './handlers/PackAuditIssueLinkHandler.js';
+import { PackAuditLinkHandler } from './handlers/PackAuditLinkHandler.js';
+import { LoadPlanBolLinkHandler } from './handlers/LoadPlanBolLinkHandler.js';
+import { OpenIssueLookup } from '../services/issues/OpenIssueLookup.js';
 import { BolGenerationHandler } from './handlers/BolGenerationHandler.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
 import { ShipmentRoutePlanningHandler } from './handlers/ShipmentRoutePlanningHandler.js';
@@ -68,6 +70,7 @@ import { ShipmentRoutePlanner } from '../services/routing/ShipmentRoutePlanner.j
 import { ShipmentRouteRepository } from '../repositories/ShipmentRouteRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { GoogleMapsDirectionsService } from '../services/routing/GoogleMapsDirectionsService.js';
+import { WarehouseQueries } from '../services/warehouse/WarehouseQueries.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -140,6 +143,7 @@ export async function registerEventHandlers(
   // just produces no BOL, which is exactly what a standalone FinnWMS wants.
   if (documentService) {
     handlers.push(new BolGenerationHandler(prisma, documentService, eventBus));
+
   }
 
   if (storageProvider) {
@@ -209,7 +213,9 @@ export async function registerEventHandlers(
   // WMS: the issue engine raises pack-audit issues from the registry entry
   // (pack_audit_variance); this handler only maintains the PackAudit.issueId
   // back-link the admin list uses for jump-to-issue
-  handlers.push(new PackAuditIssueLinkHandler(prisma));
+  handlers.push(new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma)));
+  // WMS records the BOL transport generated for a load plan (#359)
+  handlers.push(new LoadPlanBolLinkHandler(prisma));
 
   // Deterministic Issue Engine: maps shipment-exception trigger/recovery events
   // onto issues via the Issue Type registry (create/escalate/auto-resolve). This
@@ -230,7 +236,7 @@ export async function registerEventHandlers(
   // Add triage agent handler — automation rules run first in its pipeline,
   // LLM is only called when no deterministic rule matched
   if (llmProvider && commandBus) {
-    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus, automationRuleHandler));
+    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus, automationRuleHandler, new WarehouseQueries(prisma)));
     console.log('[EventBus] Triage agent enabled (LLM provider configured)');
   }
 

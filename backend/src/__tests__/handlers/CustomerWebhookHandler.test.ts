@@ -69,17 +69,11 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     mockFetch.mockRestore();
   });
 
-  it('resolves customerId from pack task → order for pack.audit_recorded', async () => {
+  it('resolves customerId from the order the pack audit event carries, without reading the pack task (#359)', async () => {
     const prisma = makePrisma({
-      packTask: {
-        findUnique: jest.fn().mockResolvedValue({ orderId: 'order-42' }),
-      },
-      order: {
-        findUnique: jest.fn().mockResolvedValue({ customerId: 'cust-42' }),
-      },
-      customerWebhook: {
-        findMany: jest.fn().mockResolvedValue([]),
-      },
+      packTask: { findUnique: jest.fn() },
+      order: { findUnique: jest.fn().mockResolvedValue({ customerId: 'cust-42' }) },
+      customerWebhook: { findMany: jest.fn().mockResolvedValue([]) },
     });
 
     const handler = new CustomerWebhookHandler(prisma);
@@ -87,12 +81,10 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
       type: 'pack.audit_recorded',
       entityType: 'pack_audit',
       entityId: 'audit-1',
-      payload: { packTaskId: 'pt-1', verdict: 'pass' }, // no customerId
+      payload: { packTaskId: 'pt-1', orderId: 'order-42', verdict: 'pass' }, // no customerId
     }));
 
-    expect(prisma.packTask.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'pt-1', orgId: 'org1' }, select: { orderId: true } }),
-    );
+    expect(prisma.packTask.findUnique).not.toHaveBeenCalled();
     expect(prisma.order.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'order-42', orgId: 'org1' }, select: { customerId: true } }),
     );

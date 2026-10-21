@@ -50,36 +50,6 @@
     "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
   },
   {
-    "file": "events/handlers/BolGenerationHandler.ts",
-    "model": "LoadPlan",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "events/handlers/CustomerWebhookHandler.ts",
-    "model": "PackTask",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "events/handlers/PackAuditIssueLinkHandler.ts",
-    "model": "PackAudit",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "events/handlers/TriageAgentHandler.ts",
-    "model": "PackAudit",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "events/handlers/TriageAgentHandler.ts",
-    "model": "PackTask",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "routes/containerIntelligence.ts",
-    "model": "CartonCatalogue",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
     "file": "scripts/comprehensive-seed.ts",
     "model": "Allocation",
     "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
@@ -193,35 +163,5 @@
     "file": "services/CartonizationService.ts",
     "model": "OrderLineItem",
     "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
-    "model": "LoadPlan",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
-    "model": "PackTask",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
-    "model": "PickTask",
-    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
-  },
-  {
-    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
-    "model": "Issue",
-    "reason": "WMS reads a Issue row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
-    "model": "Rma",
-    "reason": "WMS reads a Rma row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
-    "model": "Shipment",
-    "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
   }
 ]
