@@ -85,10 +85,11 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
       if (stagingBin) {
         for (const line of linesWithUnits) {
           // Look up the order to find destination for sorting
-          const orderLineItem = (line as any).orderLineItemId
-            ? await tx.orderLineItem.findUnique({
-                where: { id: (line as any).orderLineItemId, order: { orgId: command.orgId } },
-                select: { orderId: true },
+          // The order comes from the warehouse's own copy of the demand, not the TMS line (#359)
+          const demandLine = (line as any).orderLineItemId
+            ? await tx.wmsFulfilmentOrderLine.findFirst({
+                where: { orgId: command.orgId, sourceLineId: (line as any).orderLineItemId },
+                select: { fulfilmentOrder: { select: { sourceId: true } } },
               })
             : null;
 
@@ -96,7 +97,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
             data: {
               locationId: task.locationId,
               facilityId,
-              orderId: orderLineItem?.orderId ?? 'unknown',
+              orderId: demandLine?.fulfilmentOrder.sourceId ?? 'unknown',
               trackableUnitId: (line as any).trackableUnitId,
               handlingUnitId: (line as any).handlingUnitId ?? (line as any).trackableUnitId,
               stagingBinId: stagingBin.id,

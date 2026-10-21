@@ -163,6 +163,7 @@ export const TOKENS = {
   IBinDirectory: Symbol.for('IBinDirectory'),
   IOperationsSignals: Symbol.for('IOperationsSignals'),
   IOpenIssueLookup: Symbol.for('IOpenIssueLookup'),
+  IShipmentDirectory: Symbol.for('IShipmentDirectory'),
   ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),
 
   // Order line-item rating tokens (Phase 1)

@@ -7,6 +7,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { facilityRoutes } from '../facilities.js';
+import { manifestIngestionRoutes } from '../manifestIngestion.js';
 import { warehouseZoneRoutes } from '../warehouseZones.js';
 import { receivingRoutes } from '../receiving.js';
 import { putawayRoutes } from '../putaway.js';
@@ -25,6 +26,8 @@ import { warehouseOperationsDashboardRoutes } from '../warehouseOperationsDashbo
 /** Registered inside the JWT scope: an internal user token is required. */
 export async function registerWmsAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
   await app.register(facilityRoutes);
+  // Supplier ASN manifests into receiving: a warehouse intake (#359)
+  await app.register(manifestIngestionRoutes);
   await app.register(warehouseZoneRoutes);
   await app.register(receivingRoutes);
   await app.register(putawayRoutes);

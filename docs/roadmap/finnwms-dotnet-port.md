@@ -10,7 +10,7 @@ Measured on 2026-10-21, after the walking skeleton (#352):
 
 | | Count |
 |---|---|
-| Tables (`wms.prisma` + `inventory.prisma`) | 32 |
+| Tables (`wms.prisma` + `inventory.prisma`) | 32 at the start; 36 after #357 added `HandlingUnit` and `HandlingUnitLine` and #359 moved the two manifest tables from TMS |
 | Endpoints in scope | 91, across 18 route files |
 | Command handlers | 42 |
 | Node files that touch these tables | 65 in wms/inventory, 9 outside them |
@@ -52,6 +52,13 @@ It's the exception because the handover can't happen without it, and none of it 
 
 **Done when:** no foreign key crosses the boundary, and the ownership lint's baseline has no WMS or
 inventory entries. From here the WMS Prisma schema is frozen (ADR 0005).
+
+**Progress (2026-10-22):** #356, #358 and #359 are done. #357 steps 1 and 2 are done, and #297's
+first two parts: what's left of both is dropping columns (`TrackableUnit`'s warehouse fields and
+the warehouse tables' `trackableUnitId`; inventory's `locationId`), which waits for a soak. The
+burn-down holds the seed script's accesses (#372) and `resolveFacility`'s Location read (#297).
+Along the way the warehouse gained `HandlingUnit` and `HandlingUnitLine`, and took over the two
+manifest tables, so the handover now moves 36 tables.
 
 ### Stage 1: event bridge
 

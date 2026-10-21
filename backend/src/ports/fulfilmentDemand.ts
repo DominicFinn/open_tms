@@ -18,6 +18,12 @@ export interface FulfilmentDemandLine {
   readonly quantity: number;
   readonly unitOfMeasure: string;
   readonly weight: number | null;
+  readonly weightUnit: string;
+  /** Per-unit dimensions, for cartonisation when the SKU has no ProductUom (#359). */
+  readonly length: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly dimUnit: string;
   readonly hazmat: boolean;
   readonly temperature: string | null;
 }

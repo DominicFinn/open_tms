@@ -5,26 +5,6 @@
     "reason": "Derives a facility from a core Location while inventory is still keyed on Location. Goes with #297"
   },
   {
-    "file": "commands/warehouse/CompleteReceivingCommand.ts",
-    "model": "OrderLineItem",
-    "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "commands/warehouse/CreateLoadPlanCommand.ts",
-    "model": "ShipmentStop",
-    "reason": "WMS reads a ShipmentStop row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
-    "model": "Order",
-    "reason": "WMS reads a Order row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
-    "model": "Shipment",
-    "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
     "file": "scripts/comprehensive-seed.ts",
     "model": "Allocation",
     "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
@@ -43,6 +23,11 @@
     "file": "scripts/comprehensive-seed.ts",
     "model": "InventoryTransaction",
     "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "ManifestUpload",
+    "reason": "The seed clears WMS tables through Prisma, manifest uploads among them. Reseeding WMS moves to the .NET side at the handover (#372)"
   },
   {
     "file": "scripts/comprehensive-seed.ts",
@@ -133,10 +118,5 @@
     "file": "scripts/deriveFacilities.ts",
     "model": "Facility",
     "reason": "One-off Phase 2a backfill. Delete it at the handover (#372)"
-  },
-  {
-    "file": "services/CartonizationService.ts",
-    "model": "OrderLineItem",
-    "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
   }
 ]

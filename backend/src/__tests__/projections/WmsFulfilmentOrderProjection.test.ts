@@ -20,8 +20,8 @@ const snapshot: FulfilmentDemandSnapshot = {
   requestedDeliveryDate: null,
   sourceCreatedAt: new Date('2026-09-01T10:00:00Z'),
   lines: [
-    { sourceLineId: 'line-1', sku: 'SKU-1', description: 'Widget', quantity: 4, unitOfMeasure: 'each', weight: 2, hazmat: false, temperature: null },
-    { sourceLineId: 'line-2', sku: 'SKU-2', description: null, quantity: 6, unitOfMeasure: 'cases', weight: null, hazmat: false, temperature: null },
+    { sourceLineId: 'line-1', sku: 'SKU-1', description: 'Widget', quantity: 4, unitOfMeasure: 'each', weight: 2, weightUnit: 'kg', length: 30, width: 20, height: 10, dimUnit: 'cm', hazmat: false, temperature: null },
+    { sourceLineId: 'line-2', sku: 'SKU-2', description: null, quantity: 6, unitOfMeasure: 'cases', weight: null, weightUnit: 'kg', length: null, width: null, height: null, dimUnit: 'cm', hazmat: false, temperature: null },
   ],
 };
 
@@ -70,7 +70,7 @@ describe('WmsFulfilmentOrderProjection', () => {
     expect(prisma.wmsFulfilmentOrderLine.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: [
-          expect.objectContaining({ sourceLineId: 'line-1', sku: 'SKU-1', quantity: 4, orgId: 'test-org' }),
+          expect.objectContaining({ sourceLineId: 'line-1', sku: 'SKU-1', quantity: 4, orgId: 'test-org', length: 30, width: 20, height: 10, dimUnit: 'cm', weightUnit: 'kg' }),
           expect.objectContaining({ sourceLineId: 'line-2', sku: 'SKU-2', quantity: 6, unitOfMeasure: 'cases' }),
         ],
       })

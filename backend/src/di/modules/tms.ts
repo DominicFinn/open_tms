@@ -224,10 +224,12 @@ import { CancelPickupCommandHandler } from '../../commands/rma/CancelPickupComma
 import { ReturnLabelProviderRegistry } from '../../services/returnLabel/ReturnLabelProviderRegistry.js';
 import { IReturnLabelProviderRegistry } from '../../services/returnLabel/IReturnLabelProvider.js';
 import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js';
+import { ShipmentDirectory } from '../../services/shipments/ShipmentDirectory.js';
 
 export function registerTmsDependencies(prisma: PrismaClient): void {
   // Outside signals for the warehouse dashboard (#359)
   container.singleton(TOKENS.IOperationsSignals).toFactory(() => new OperationsSignalsSource(container.resolve(TOKENS.PrismaClient)));
+  container.singleton(TOKENS.IShipmentDirectory).toFactory(() => new ShipmentDirectory(container.resolve(TOKENS.PrismaClient)));
 
   // The TMS side of the fulfilment demand port. WMS resolves this token and never sees Order.
   container.singleton(TOKENS.IFulfilmentDemandSource).toFactory(() => {

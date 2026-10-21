@@ -2559,57 +2559,6 @@ model LaneRoute {
   @@index([orgId])
 }
 
-// ── Manifest Ingestion ───────────────────────────────────────
-
-model ManifestTemplate {
-  id             String  @id @default(uuid())
-  name           String // e.g. "Supplier X format", "FedEx ASN"
-  headerChecksum String // SHA-256 of sorted column headers for auto-detection
-  columnMapping  Json // { sku: "Product Code", quantity: "Qty", ... }
-  fileType       String  @default("csv") // csv, xlsx
-  delimiter      String? // for CSV: comma, tab, pipe
-  hasHeaderRow   Boolean @default(true)
-  usageCount     Int     @default(0) // how many times this template has been used
-
-  orgId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  uploads ManifestUpload[]
-
-  @@unique([orgId, headerChecksum])
-  @@index([orgId])
-}
-
-model ManifestUpload {
-  id              String            @id @default(uuid())
-  locationId      String // destination warehouse
-  location        Location          @relation(fields: [locationId], references: [id])
-  fileName        String
-  fileStorageKey  String? // S3/DB storage key for the raw file
-  status          String            @default("uploaded") // uploaded, mapped, processing, completed, failed
-  templateId      String?
-  template        ManifestTemplate? @relation(fields: [templateId], references: [id])
-  receivingTaskId String? // created on processing
-  totalRows       Int               @default(0)
-  processedRows   Int               @default(0)
-  errorRows       Int               @default(0)
-  errors          Json? // [{ row: 5, field: "sku", message: "..." }]
-  detectedHeaders Json? // column headers found in the file
-  supplierName    String?
-  reference       String? // BOL, PO number, etc.
-
-  orgId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([orgId])
-  @@index([locationId])
-  @@index([status])
-}
-
 // ── Returns / RMA ────────────────────────────────────────────
 
 model Rma {

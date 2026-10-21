@@ -10,12 +10,14 @@ import { COMPLETE_LOADING } from '../commands/warehouse/CompleteLoadingCommand.j
 import { IPackingRepository } from '../repositories/PackingRepository.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
+import type { IShipmentDirectory } from '../ports/shipmentDirectory.js';
 
 export async function packingRoutes(server: FastifyInstance) {
   // WMS permission guard (#134): wms:read for reads, wms:write for mutations
   await registerWmsGuard(server);
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const shipments = container.resolve<IShipmentDirectory>(TOKENS.IShipmentDirectory);
   const repo = container.resolve<IPackingRepository>(TOKENS.IPackingRepository);
 
   // ═══════════════════════════════════════════════════════════
@@ -183,6 +185,11 @@ export async function packingRoutes(server: FastifyInstance) {
       shipmentId: z.string().nullable().optional(),
       loadSequence: z.number().int().nullable().optional(),
     }).parse((req as any).body);
+
+    // A shipment is a TMS row; the warehouse asks TMS whether it exists rather than reading it (#359)
+    if (body.shipmentId && !(await shipments.shipmentExists(req.orgId!, body.shipmentId))) {
+      reply.code(404); return { data: null, error: `Shipment ${body.shipmentId} not found` };
+    }
 
     const result = await commandBus.dispatch({
       type: CREATE_STAGING_ASSIGNMENT, orgId: req.orgId!, actorId: req.user?.sub ?? null, payload: body,

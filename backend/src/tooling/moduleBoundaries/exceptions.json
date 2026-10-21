@@ -23,10 +23,5 @@
     "from": "services/LocationResolutionService.ts",
     "to": "repositories/ArrivalCriteriaRepository.ts",
     "reason": "Same Location conflation as above."
-  },
-  {
-    "from": "routes/manifestIngestion.ts",
-    "to": "commands/warehouse/CreateReceivingTaskCommand.ts",
-    "reason": "Manifest ingest creates a warehouse receiving task directly. Phase 4 demand intake makes this an event a WMS-only install can also serve."
   }
 ]

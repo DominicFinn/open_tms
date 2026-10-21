@@ -25,7 +25,7 @@ describe('Cross-dock workflow', () => {
       },
       receivingAppointment: { update: jest.fn() },
       warehouseBin: { findFirst: jest.fn().mockResolvedValue(stagingBin) },
-      orderLineItem: { findUnique: jest.fn().mockResolvedValue({ orderId: 'order-1' }) },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn().mockResolvedValue({ fulfilmentOrder: { sourceId: 'order-1' } }) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1' }) },
       handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       // These shouldn't be called for cross-dock

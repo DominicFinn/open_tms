@@ -138,7 +138,6 @@ model Location {
   // there are no back-relations to them here: a schema without those tables still resolves, which
   // is what a standalone FinnWMS needs. Inventory and manifest ingest keep theirs, because both
   // are still keyed on Location until inventory carries a facility.
-  manifestUploads       ManifestUpload[]
 
   consolidationStops ConsolidationStop[]
   @@index([orgId])
