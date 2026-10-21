@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import type {
   CartonSpec,
   FulfilmentProgress,
+  IBinDirectory,
   ICartonCatalogue,
   IFulfilmentProgress,
   IPackTaskContext,
@@ -14,7 +15,7 @@ const OPEN = { notIn: ['completed', 'cancelled'] };
  * The warehouse's answers to read-only questions from TMS and core (#359). Every query is scoped by
  * the caller's org.
  */
-export class WarehouseQueries implements IFulfilmentProgress, IPackTaskContext, ICartonCatalogue {
+export class WarehouseQueries implements IFulfilmentProgress, IPackTaskContext, ICartonCatalogue, IBinDirectory {
   constructor(private prisma: PrismaClient) {}
 
   async forShipment(orgId: string, shipmentId: string, orderIds: readonly string[]): Promise<FulfilmentProgress> {
@@ -46,6 +47,11 @@ export class WarehouseQueries implements IFulfilmentProgress, IPackTaskContext, 
       take: 5,
     });
     return { ...packTask, recentAudits };
+  }
+
+  async binExists(orgId: string, binId: string): Promise<boolean> {
+    const bin = await this.prisma.warehouseBin.findFirst({ where: { id: binId, orgId }, select: { id: true } });
+    return bin !== null;
   }
 
   async listActive(orgId: string, locationId?: string): Promise<CartonSpec[]> {

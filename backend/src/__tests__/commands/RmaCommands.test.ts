@@ -284,8 +284,9 @@ describe('ReceiveRmaLineCommand', () => {
     // Returns no longer write the unit's bin and quality: the warehouse owns them, and hears by event (#357)
     expect(tx.trackableUnit.update).not.toHaveBeenCalled();
     expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toEqual({
-      rmaId: expect.any(String), unitId: 'unit-1', binId: 'bin-q', zoneId: 'zone-q', qualityStatus: 'quarantine',
+      rmaId: expect.any(String), unitId: 'unit-1', binId: 'bin-q', qualityStatus: 'quarantine',
     });
+    expect(tx.warehouseBin.findUnique).not.toHaveBeenCalled();
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_GOODS_RECEIVED)).toBe(true);
   });
 
@@ -392,8 +393,9 @@ describe('InspectRmaLineCommand', () => {
     expect(result.data?.allLinesDispositioned).toBe(true);
     expect(tx.trackableUnit.update).not.toHaveBeenCalled();
     expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toMatchObject({
-      binId: 'bin-bulk', zoneId: 'zone-a', qualityStatus: 'available',
+      binId: 'bin-bulk', qualityStatus: 'available',
     });
+    expect(tx.warehouseBin.findUnique).not.toHaveBeenCalled();
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_LINE_INSPECTED)).toBe(true);
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_DISPOSITION_SET)).toBe(true);
   });
@@ -452,7 +454,7 @@ describe('InspectRmaLineCommand', () => {
 });
 
 describe('CompleteRmaCommand', () => {
-  it('completes RMA, generates inventory for restock lines, emits events', async () => {
+  it('completes RMA and announces each restock line for the warehouse, without touching stock (#359)', async () => {
     const restockLine = {
       id: 'line-1', sku: 'SKU-A', disposition: 'restock',
       receivedQuantity: 2, currentBinId: 'bin-restock', trackableUnitId: 'unit-1',
@@ -472,13 +474,6 @@ describe('CompleteRmaCommand', () => {
         findUnique: jest.fn().mockResolvedValue(mockRma),
         update: jest.fn().mockResolvedValue({}),
       },
-      inventoryRecord: {
-        findFirst: jest.fn().mockResolvedValue(null),  // no existing record
-        create: jest.fn().mockResolvedValue({ id: 'inv-new', quantityOnHand: 2 }),
-        update: jest.fn().mockResolvedValue({}),
-      },
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-1', facilityId: 'fac-1' }) },
-      inventoryTransaction: { create: jest.fn().mockResolvedValue({}) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -495,18 +490,12 @@ describe('CompleteRmaCommand', () => {
     expect(result.success).toBe(true);
     expect(result.data?.restockTasksCreated).toBe(1);
     expect(result.data?.actualRefundCents).toBe(5000);  // uses suggested
-    expect(tx.inventoryRecord.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1' }) })
-    );
-    expect(tx.inventoryTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          transactionType: 'receive',
-          reasonCode: 'return',
-          referenceType: 'rma',
-        }),
-      })
-    );
+    const restocks = result.events.filter(e => e.type === EVENT_TYPES.RMA_RESTOCK_REQUESTED);
+    expect(restocks).toHaveLength(1);
+    expect(restocks[0]).toMatchObject({
+      entityId: 'line-1',
+      payload: { rmaId: 'rma-1', rmaLineId: 'line-1', sku: 'SKU-A', quantity: 2, binId: 'bin-restock', unitId: 'unit-1' },
+    });
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_COMPLETED)).toBe(true);
   });
 

@@ -57,13 +57,8 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
 
     const rma = line.rma;
 
-    const bin = p.routeToBinId
-      ? await tx.warehouseBin.findUnique({
-          where: { id: p.routeToBinId, orgId: command.orgId },
-          select: { zoneId: true },
-        })
-      : null;
-    if (p.routeToBinId && !bin) throw new Error(`Bin ${p.routeToBinId} not found`);
+    // The bin is a warehouse row. The route checks it exists before dispatching, and the warehouse
+    // checks it again when it moves the unit (#359).
 
     // Update the line with disposition
     await tx.rmaLine.update({
@@ -96,7 +91,6 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
           rmaId: rma.id,
           unitId: line.trackableUnitId,
           binId: p.routeToBinId,
-          zoneId: bin?.zoneId ?? null,
           qualityStatus,
         },
       }));

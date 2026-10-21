@@ -160,6 +160,7 @@ export const TOKENS = {
   IFulfilmentProgress: Symbol.for('IFulfilmentProgress'),
   IPackTaskContext: Symbol.for('IPackTaskContext'),
   ICartonCatalogue: Symbol.for('ICartonCatalogue'),
+  IBinDirectory: Symbol.for('IBinDirectory'),
   IOperationsSignals: Symbol.for('IOperationsSignals'),
   IOpenIssueLookup: Symbol.for('IOpenIssueLookup'),
   ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),

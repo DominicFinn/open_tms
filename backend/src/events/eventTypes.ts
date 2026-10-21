@@ -358,6 +358,8 @@ export const EVENT_TYPES = {
   // WMS: Inventory
   INVENTORY_RECEIVED: 'inventory.received',
   INVENTORY_ADJUSTED: 'inventory.adjusted',
+  /** Returned goods put back into stock (#359). */
+  INVENTORY_RETURN_RECEIVED: 'inventory.return_received',
   INVENTORY_TRANSFERRED: 'inventory.transferred',
 
   // Inventory: Observations (#233) — ad hoc scan/spot-check records, distinct from CycleCount
@@ -418,6 +420,8 @@ export const EVENT_TYPES = {
   RMA_UNIT_MOVED: 'rma.unit_moved',
   RMA_DISPOSITION_SET: 'rma.disposition_set',
   RMA_COMPLETED: 'rma.completed',
+  /** A completed RMA's restock line, for the warehouse to put back into stock (#359). */
+  RMA_RESTOCK_REQUESTED: 'rma.restock_requested',
   RMA_REFUND_ADJUSTED: 'rma.refund_adjusted',
   RMA_RETURN_LABEL_GENERATED: 'rma.return_label_generated',
   RMA_PICKUP_SCHEDULED: 'rma.pickup_scheduled',
@@ -655,6 +659,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.PUTAWAY_TASK_DEVIATION]: 1,
   [EVENT_TYPES.INVENTORY_RECEIVED]: 1,
   [EVENT_TYPES.INVENTORY_ADJUSTED]: 1,
+  [EVENT_TYPES.INVENTORY_RETURN_RECEIVED]: 1,
   [EVENT_TYPES.INVENTORY_TRANSFERRED]: 1,
   [EVENT_TYPES.INVENTORY_OBSERVATION_RECORDED]: 1,
   [EVENT_TYPES.WAVE_CREATED]: 1,
@@ -700,6 +705,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.RMA_UNIT_MOVED]: 1,
   [EVENT_TYPES.RMA_DISPOSITION_SET]: 1,
   [EVENT_TYPES.RMA_COMPLETED]: 1,
+  [EVENT_TYPES.RMA_RESTOCK_REQUESTED]: 1,
   [EVENT_TYPES.RMA_REFUND_ADJUSTED]: 1,
   [EVENT_TYPES.RMA_RETURN_LABEL_GENERATED]: 1,
   [EVENT_TYPES.RMA_PICKUP_SCHEDULED]: 1,

@@ -56,13 +56,8 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
       });
       if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
     }
-    const bin = p.quarantineBinId
-      ? await tx.warehouseBin.findUnique({
-          where: { id: p.quarantineBinId, orgId: command.orgId },
-          select: { zoneId: true },
-        })
-      : null;
-    if (p.quarantineBinId && !bin) throw new Error(`Bin ${p.quarantineBinId} not found`);
+    // The bin is a warehouse row. The route checks it exists before dispatching, and the warehouse
+    // checks it again when it moves the unit (#359).
 
     // Update the line
     await tx.rmaLine.update({
@@ -85,7 +80,6 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
           rmaId: rma.id,
           unitId: p.trackableUnitId,
           binId: p.quarantineBinId,
-          zoneId: bin?.zoneId ?? null,
           qualityStatus: 'quarantine',
         },
       }));
