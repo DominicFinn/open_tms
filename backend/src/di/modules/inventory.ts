@@ -13,6 +13,7 @@ import type { CommandHandlerDeps } from '../moduleRegistration.js';
 import { AdjustInventoryCommandHandler } from '../../commands/warehouse/AdjustInventoryCommand.js';
 import { TransferInventoryCommandHandler } from '../../commands/warehouse/TransferInventoryCommand.js';
 import { RecordInventoryObservationCommandHandler } from '../../commands/inventory/RecordInventoryObservationCommand.js';
+import { ReceiveReturnedStockCommandHandler } from '../../commands/inventory/ReceiveReturnedStockCommand.js';
 import { InventoryObservationRepository } from '../../repositories/InventoryObservationRepository.js';
 
 export function registerInventoryDependencies(prisma: PrismaClient): void {
@@ -28,4 +29,6 @@ export function registerInventoryCommandHandlers(bus: CommandBus, deps: CommandH
   bus.register(new TransferInventoryCommandHandler(prisma, eventBus));
   // Observations (#233)
   bus.register(new RecordInventoryObservationCommandHandler(prisma, eventBus));
+  // Returned goods back into stock, dispatched by the warehouse on rma.restock_requested (#359)
+  bus.register(new ReceiveReturnedStockCommandHandler(prisma, eventBus));
 }

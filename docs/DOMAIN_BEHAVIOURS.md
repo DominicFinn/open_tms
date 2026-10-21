@@ -2783,7 +2783,7 @@ Full returns lifecycle from customer request through physical receipt, inspectio
 - `rma.reject` - CSR rejects an RMA with reason notes.
 - `rma_line.receive` - Record physical receipt of a returned item at the dock. Moves the unit to quarantine zone with `qualityStatus: quarantine`. Advances RMA status to `received` when all lines are fully received.
 - `rma_line.inspect` - Inspector sets final disposition per line. Routes unit to next physical destination (putaway for restock, refurb zone for refurb, etc.). Updates `qualityStatus` based on disposition (available for restock, hold for refurb, damaged for scrap, quarantine for others).
-- `rma.complete` - Finalizes RMA. Generates inventory movements for `restock` lines (new `InventoryRecord` + `InventoryTransaction` with reasonCode `return`). Finance can override the suggested refund with `actualRefundCents` and adjustment notes.
+- `rma.complete` - Finalizes RMA. Emits `rma.restock_requested` per `restock` line; the warehouse puts the stock back (see below). Finance can override the suggested refund with `actualRefundCents` and adjustment notes.
 
 ### Seven Dispositions
 `restock`, `refurb`, `scrap`, `recycle`, `donate`, `rtv`, `customer_keeps`. See specification doc for full behaviour of each.
@@ -2807,7 +2807,7 @@ requested -> authorized -> in_transit -> received -> inspecting -> dispositionin
 
 ### Side Effects
 - **Quarantine-first flow**: returned units always go to quarantine zone before any other action. No direct restock.
-- **Restock inventory movement**: on RMA completion, restock lines create `InventoryRecord` or increment existing record at the route-to-bin with `InventoryTransaction` type `receive`, reason `return`, referenceType `rma`.
+- **Restock inventory movement** (WMS since #359): `WarehouseReturnsStockHandler` takes each `rma.restock_requested` and dispatches `inventory.receive_return` with an idempotency key per RMA line, which creates or increments the `InventoryRecord` at the route-to-bin with an `InventoryTransaction` of type `receive`, reason `return`, referenceType `rma`, and emits `inventory.return_received`. A redelivered event adds nothing. Returns no longer read bins: the receive and inspect routes check a named bin exists in the org through the `IBinDirectory` port and answer 404 if not.
 - **Trackable unit quality status** changes based on disposition: available/hold/damaged/quarantine.
 - **Finance review queue**: RMAs in `dispositioning` status appear in the refund review queue for finance team approval before completion.
 

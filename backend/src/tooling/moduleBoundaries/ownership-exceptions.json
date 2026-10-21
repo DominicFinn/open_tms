@@ -5,31 +5,6 @@
     "reason": "Derives a facility from a core Location while inventory is still keyed on Location. Goes with #297"
   },
   {
-    "file": "commands/rma/CompleteRmaCommand.ts",
-    "model": "InventoryRecord",
-    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
-  },
-  {
-    "file": "commands/rma/CompleteRmaCommand.ts",
-    "model": "InventoryTransaction",
-    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
-  },
-  {
-    "file": "commands/rma/CompleteRmaCommand.ts",
-    "model": "WarehouseBin",
-    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
-  },
-  {
-    "file": "commands/rma/InspectRmaLineCommand.ts",
-    "model": "WarehouseBin",
-    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
-  },
-  {
-    "file": "commands/rma/ReceiveRmaLineCommand.ts",
-    "model": "WarehouseBin",
-    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
-  },
-  {
     "file": "commands/warehouse/CompleteReceivingCommand.ts",
     "model": "OrderLineItem",
     "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"

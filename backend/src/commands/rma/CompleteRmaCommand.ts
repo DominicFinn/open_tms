@@ -6,7 +6,8 @@ import { Command } from '../types.js';
 
 /**
  * Completes an RMA after all lines are dispositioned.
- * Generates inventory movements for restock items and triggers credit note creation.
+ * Announces each restock line for the warehouse to put back into stock, and triggers credit note
+ * creation.
  */
 export interface CompleteRmaPayload {
   rmaId: string;
@@ -50,84 +51,24 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
     // Auto-calculate actual refund if not provided
     const actualRefundCents = p.actualRefundCents ?? rma.suggestedRefundCents;
 
-    // Create inventory movements for restock lines
+    // Restocking is the warehouse's job: it owns the stock and the bin. Each restock line is
+    // announced, and the warehouse puts it back into stock, once per line (#359).
     let restockTasksCreated = 0;
     for (const line of rma.lines) {
       if (line.disposition === 'restock' && line.receivedQuantity > 0 && line.currentBinId) {
-        // Create an inventory record / transaction for the restocked items
-        const existingRecord = await tx.inventoryRecord.findFirst({
-          where: {
-            orgId: command.orgId,
-            binId: line.currentBinId,
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.RMA_RESTOCK_REQUESTED,
+          entityType: 'rma_line',
+          entityId: line.id,
+          payload: {
+            rmaId: rma.id,
+            rmaLineId: line.id,
             sku: line.sku,
-            uomCode: 'EA',
-            lotNumber: null,
-            ownerCustomerId: null,
+            quantity: line.receivedQuantity,
+            binId: line.currentBinId,
+            unitId: line.trackableUnitId ?? null,
           },
-        });
-
-        const bin = await tx.warehouseBin.findUnique({
-          where: { id: line.currentBinId, orgId: command.orgId },
-          select: { locationId: true, facilityId: true },
-        });
-
-        if (bin && existingRecord) {
-          await tx.inventoryRecord.update({
-            where: { id: existingRecord.id, orgId: command.orgId },
-            data: {
-              quantityOnHand: { increment: line.receivedQuantity },
-              quantityAvailable: { increment: line.receivedQuantity },
-            },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryRecordId: existingRecord.id,
-              transactionType: 'receive',
-              quantityChange: line.receivedQuantity,
-              previousQuantity: existingRecord.quantityOnHand,
-              newQuantity: existingRecord.quantityOnHand + line.receivedQuantity,
-              reasonCode: 'return',
-              referenceType: 'rma',
-              referenceId: rma.id,
-              performedBy: command.actorId,
-              trackableUnitId: line.trackableUnitId,
-              orgId: command.orgId,
-            },
-          });
-        } else if (bin) {
-          const newRecord = await tx.inventoryRecord.create({
-            data: {
-              locationId: bin.locationId,
-              facilityId: bin.facilityId,
-              binId: line.currentBinId,
-              sku: line.sku,
-              uomCode: 'EA',
-              quantityOnHand: line.receivedQuantity,
-              quantityAvailable: line.receivedQuantity,
-              quantityAllocated: 0,
-              quantityOnHold: 0,
-              orgId: command.orgId,
-            },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryRecordId: newRecord.id,
-              transactionType: 'receive',
-              quantityChange: line.receivedQuantity,
-              previousQuantity: 0,
-              newQuantity: line.receivedQuantity,
-              reasonCode: 'return',
-              referenceType: 'rma',
-              referenceId: rma.id,
-              performedBy: command.actorId,
-              trackableUnitId: line.trackableUnitId,
-              orgId: command.orgId,
-            },
-          });
-        }
-
+        }));
         restockTasksCreated++;
       }
     }

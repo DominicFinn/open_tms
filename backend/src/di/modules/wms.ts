@@ -122,6 +122,7 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IFulfilmentProgress).toFactory(() => new WarehouseQueries(container.resolve(TOKENS.PrismaClient)));
   container.singleton(TOKENS.IPackTaskContext).toFactory(() => container.resolve(TOKENS.IFulfilmentProgress));
   container.singleton(TOKENS.ICartonCatalogue).toFactory(() => container.resolve(TOKENS.IFulfilmentProgress));
+  container.singleton(TOKENS.IBinDirectory).toFactory(() => container.resolve(TOKENS.IFulfilmentProgress));
 }
 
 export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandlerDeps): void {

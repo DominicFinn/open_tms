@@ -51,6 +51,11 @@ export interface CartonSpec {
   readonly active: boolean;
 }
 
+/** Whether a bin exists in the org, for callers that name one before dispatching (#359). */
+export interface IBinDirectory {
+  binExists(orgId: string, binId: string): Promise<boolean>;
+}
+
 export interface ICartonCatalogue {
   /** Active cartons in the org, optionally only those at one Location. */
   listActive(orgId: string, locationId?: string): Promise<CartonSpec[]>;

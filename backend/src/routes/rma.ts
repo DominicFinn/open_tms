@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { resolveActorId as resolveActorIdShared } from '../auth/orgScope.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
+import type { IBinDirectory } from '../ports/warehouseQueries.js';
 
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
@@ -59,6 +60,8 @@ export async function rmaRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+  // Bins are warehouse rows; the route asks WMS whether one exists rather than the command reading it (#359)
+  const bins = container.resolve<IBinDirectory>(TOKENS.IBinDirectory);
 
   await registerOrgScope(server);
   // RMA's command bus calls want a non-null actorId; fall back to 'system'
@@ -300,6 +303,10 @@ export async function rmaRoutes(server: FastifyInstance) {
     const orgId = req.orgId!;
     const actorId = resolveActorId(req);
 
+    if (body.quarantineBinId && !(await bins.binExists(orgId, body.quarantineBinId))) {
+      reply.code(404); return { data: null, error: `Bin ${body.quarantineBinId} not found` };
+    }
+
     const result = await commandBus.dispatch({
       type: RECEIVE_RMA_LINE, orgId, actorId, payload: { rmaLineId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
@@ -337,6 +344,10 @@ export async function rmaRoutes(server: FastifyInstance) {
 
     const orgId = req.orgId!;
     const actorId = resolveActorId(req);
+
+    if (body.routeToBinId && !(await bins.binExists(orgId, body.routeToBinId))) {
+      reply.code(404); return { data: null, error: `Bin ${body.routeToBinId} not found` };
+    }
 
     const result = await commandBus.dispatch({
       type: INSPECT_RMA_LINE, orgId, actorId, payload: { rmaLineId: id, ...body },
