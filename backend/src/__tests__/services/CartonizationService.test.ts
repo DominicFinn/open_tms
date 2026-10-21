@@ -12,7 +12,7 @@ describe('CartonizationService', () => {
   it('recommends smallest fitting carton', async () => {
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(mockProductUom) },
-      orderLineItem: { findUnique: jest.fn() },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn() },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -38,7 +38,7 @@ describe('CartonizationService', () => {
   it('returns alternatives after recommended', async () => {
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(mockProductUom) },
-      orderLineItem: { findUnique: jest.fn() },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn() },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -56,7 +56,7 @@ describe('CartonizationService', () => {
     const hugeItem = { ...mockProductUom, lengthMm: 1000, widthMm: 1000, heightMm: 1000, weightGrams: 50000 };
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(hugeItem) },
-      orderLineItem: { findUnique: jest.fn() },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn() },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -72,7 +72,7 @@ describe('CartonizationService', () => {
   it('reports SKUs missing dimensions', async () => {
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(null) }, // no UOM data
-      orderLineItem: { findUnique: jest.fn().mockResolvedValue(null) }, // no line item dims
+      wmsFulfilmentOrderLine: { findFirst: jest.fn().mockResolvedValue(null) }, // no line item dims
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -85,11 +85,11 @@ describe('CartonizationService', () => {
     expect(result.recommended).toBeNull(); // Can't recommend without dims
   });
 
-  it('falls back to OrderLineItem dimensions when ProductUom missing', async () => {
+  it('falls back to the order line dimensions, from the warehouse copy, when ProductUom missing', async () => {
     const lineItem = { id: 'oli-1', length: 10, width: 8, height: 5, weight: 0.5, dimUnit: 'cm', weightUnit: 'kg' };
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(null) },
-      orderLineItem: { findUnique: jest.fn().mockResolvedValue(lineItem) },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn().mockResolvedValue(lineItem) },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -102,13 +102,14 @@ describe('CartonizationService', () => {
     expect(result.recommended).not.toBeNull();
     expect(result.itemsMissingDimensions).toEqual([]);
     expect(result.totalItemWeightGrams).toBe(500); // 0.5kg = 500g
+    expect(prisma.wmsFulfilmentOrderLine.findFirst).toHaveBeenCalledWith({ where: { orgId: 'org-1', sourceLineId: 'oli-1' } });
   });
 
   it('respects weight limits', async () => {
     const heavyItem = { ...mockProductUom, lengthMm: 50, widthMm: 50, heightMm: 50, weightGrams: 5000 };
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(heavyItem) },
-      orderLineItem: { findUnique: jest.fn() },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn() },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue(mockCartons) },
     } as any;
 
@@ -127,7 +128,7 @@ describe('CartonizationService', () => {
   it('returns empty when no cartons in catalogue', async () => {
     const prisma = {
       productUom: { findFirst: jest.fn().mockResolvedValue(mockProductUom) },
-      orderLineItem: { findUnique: jest.fn() },
+      wmsFulfilmentOrderLine: { findFirst: jest.fn() },
       cartonCatalogue: { findMany: jest.fn().mockResolvedValue([]) },
     } as any;
 

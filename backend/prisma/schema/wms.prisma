@@ -66,6 +66,7 @@ model Facility {
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
   @@index([orgId])
+  manifestUploads ManifestUpload[]
 }
 
 model WarehouseZone {
@@ -867,11 +868,19 @@ model WmsFulfilmentOrderLine {
   quantity      Int     @default(0)
   unitOfMeasure String  @default("each")
   weight        Float?
+  weightUnit    String  @default("kg")
+  /// Per-unit dimensions copied from the source line, so cartonisation needn't read it (#359).
+  length        Float?
+  width         Float?
+  height        Float?
+  dimUnit       String  @default("cm")
   hazmat        Boolean @default(false)
   temperature   String?
 
   @@unique([fulfilmentOrderId, sourceLineId])
   @@index([orgId, sku])
+  /// Receiving's cross-dock and cartonisation find a line by its source line id (#359).
+  @@index([orgId, sourceLineId])
 }
 
 /// A unit the warehouse handles: a pallet, tote or box, with its contents (#357, split step 2b).
@@ -950,4 +959,59 @@ model HandlingUnitLine {
   temperature  String?
 
   @@index([handlingUnitId])
+}
+
+// ── Manifest Ingestion (WMS since #359: supplier ASNs into receiving) ───────────────────────────────────────
+
+model ManifestTemplate {
+  id             String  @id @default(uuid())
+  name           String // e.g. "Supplier X format", "FedEx ASN"
+  headerChecksum String // SHA-256 of sorted column headers for auto-detection
+  columnMapping  Json // { sku: "Product Code", quantity: "Qty", ... }
+  fileType       String  @default("csv") // csv, xlsx
+  delimiter      String? // for CSV: comma, tab, pipe
+  hasHeaderRow   Boolean @default(true)
+  usageCount     Int     @default(0) // how many times this template has been used
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  uploads ManifestUpload[]
+
+  @@unique([orgId, headerChecksum])
+  @@index([orgId])
+}
+
+model ManifestUpload {
+  id              String            @id @default(uuid())
+  /// Destination warehouse, as a soft reference to the core Location. No FK: manifests are a
+  /// warehouse intake and leave Prisma with the other WMS tables (ADR 0005, #359).
+  locationId      String
+  /// The destination as a facility, like every other warehouse model (#285, #359).
+  facilityId      String?
+  facility        Facility?         @relation(fields: [facilityId], references: [id])
+  fileName        String
+  fileStorageKey  String? // S3/DB storage key for the raw file
+  status          String            @default("uploaded") // uploaded, mapped, processing, completed, failed
+  templateId      String?
+  template        ManifestTemplate? @relation(fields: [templateId], references: [id])
+  receivingTaskId String? // created on processing
+  totalRows       Int               @default(0)
+  processedRows   Int               @default(0)
+  errorRows       Int               @default(0)
+  errors          Json? // [{ row: 5, field: "sku", message: "..." }]
+  detectedHeaders Json? // column headers found in the file
+  supplierName    String?
+  reference       String? // BOL, PO number, etc.
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([status])
 }

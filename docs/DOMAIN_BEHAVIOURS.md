@@ -3027,6 +3027,22 @@ covers every organisation.
 
 ---
 
+### Cross-module reads in the warehouse (#359)
+
+WMS commands read no TMS table. What they need from TMS comes from the warehouse's own copies:
+`WmsFulfilmentOrder` and its lines (which carry each source line's dimensions, for cartonisation)
+and `HandlingUnit`. Receiving's cross-dock and cartonisation find a line by its source line id;
+staging checks the order against `WmsFulfilmentOrder`. Where a route names something TMS owns, it
+asks through a port before dispatching: `POST /api/v1/staging` checks the shipment through
+`IShipmentDirectory` (404 if not in the org). Load plans order by order position; the shipment-stop
+query that used to sit there was read and then ignored.
+
+Manifest ingestion (supplier ASNs into receiving) is a warehouse intake: `ManifestTemplate` and
+`ManifestUpload` are WMS models, `ManifestUpload` carries `facilityId`, and its `locationId` is a soft
+reference.
+
+---
+
 ### Domain: Handling Units
 
 The warehouse's own record of a pallet, tote or box (#357, split step 2b). Until this, warehouse

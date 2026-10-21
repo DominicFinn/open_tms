@@ -56,19 +56,10 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
     // In future: look up shipment stops and order by stop sequence descending
     const orderIds = [...new Set(assignments.map(a => a.orderId))];
 
-    // If shipment has stops, use stop sequence for reverse ordering
-    let orderSequence: Map<string, number>;
-    if (p.shipmentId) {
-      const stops = await tx.shipmentStop.findMany({
-        where: { shipmentId: p.shipmentId, shipment: { orgId: command.orgId } },
-        orderBy: { sequenceNumber: 'desc' }, // Reverse: last stop = lowest sequence number = load first
-      });
-      // Map orders to their stop sequence
-      // For now, just assign by order position since we don't have direct order-to-stop mapping
-      orderSequence = new Map(orderIds.map((id, i) => [id, i]));
-    } else {
-      orderSequence = new Map(orderIds.map((id, i) => [id, i]));
-    }
+    // Load order by order position. Ordering by the shipment's stops needs an order-to-stop
+    // mapping the warehouse doesn't have yet; the stop query that used to sit here read the TMS
+    // table and then ignored the result (#359).
+    const orderSequence = new Map(orderIds.map((id, i) => [id, i]));
 
     const loadPlan = await tx.loadPlan.create({
       data: {

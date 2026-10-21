@@ -92,10 +92,17 @@ export async function manifestIngestionRoutes(server: FastifyInstance) {
       where: { orgId, headerChecksum: parsed.headerChecksum },
     });
 
+    // The destination facility, derived from the Location the upload names (#359)
+    const facility = await prisma.facility.findFirst({
+      where: { orgId, sourceLocationId: body.locationId },
+      select: { id: true },
+    });
+
     // Create upload record
     const upload = await prisma.manifestUpload.create({
       data: {
         locationId: body.locationId,
+        facilityId: facility?.id ?? null,
         fileName: body.fileName,
         status: matchedTemplate ? 'mapped' : 'uploaded',
         templateId: matchedTemplate?.id ?? null,

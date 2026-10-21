@@ -158,10 +158,10 @@ export class CartonizationService implements ICartonizationService {
       };
     }
 
-    // Fall back to OrderLineItem dimensions
+    // Fall back to the order line's dimensions, from the warehouse's own copy of the demand (#359)
     if (orderLineItemId) {
-      const lineItem = await this.prisma.orderLineItem.findUnique({
-        where: { id: orderLineItemId, order: { orgId } },
+      const lineItem = await this.prisma.wmsFulfilmentOrderLine.findFirst({
+        where: { orgId, sourceLineId: orderLineItemId },
       });
 
       if (lineItem?.length && lineItem?.width && lineItem?.height && lineItem?.weight) {

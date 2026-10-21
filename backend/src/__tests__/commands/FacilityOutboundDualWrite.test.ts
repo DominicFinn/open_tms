@@ -34,7 +34,10 @@ function buildPrisma(opts: {
       findFirst: jest.fn().mockResolvedValue('wave' in opts ? opts.wave : null),
       update: jest.fn().mockResolvedValue({}),
     },
-    wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue(opts.demandLines ?? []) },
+    wmsFulfilmentOrderLine: {
+      findMany: jest.fn().mockResolvedValue(opts.demandLines ?? []),
+      findFirst: jest.fn().mockResolvedValue({ fulfilmentOrder: { sourceId: 'ord-1' } }),
+    },
     inventoryRecord: {
       findMany: jest.fn().mockResolvedValue(opts.inventory ?? []),
       findFirst: jest.fn().mockResolvedValue(null),
@@ -51,14 +54,12 @@ function buildPrisma(opts: {
       findFirst: jest.fn().mockResolvedValue('trackableUnit' in opts ? opts.trackableUnit : { id: 'tu-1' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    order: { findFirst: jest.fn().mockResolvedValue({ id: 'ord-1' }) },
-    shipment: { findFirst: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
+    wmsFulfilmentOrder: { findFirst: jest.fn().mockResolvedValue({ id: 'wfo-1' }) },
     receivingTask: {
       findFirst: jest.fn().mockResolvedValue('receivingTask' in opts ? opts.receivingTask : null),
       update: jest.fn().mockResolvedValue({}),
     },
     receivingAppointment: { update: jest.fn().mockResolvedValue({}) },
-    orderLineItem: { findUnique: jest.fn().mockResolvedValue({ orderId: 'ord-1' }) },
     putawayRule: { findMany: jest.fn().mockResolvedValue([]) },
     putawayTask: { create: jest.fn().mockResolvedValue({ id: 'pt-1' }) },
     domainEventLog: { create: jest.fn().mockResolvedValue({}) },

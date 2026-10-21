@@ -49,7 +49,6 @@ import { etaMonitorRoutes } from '../etaMonitor.js';
 import { slaRoutes } from '../sla.js';
 import { slaReportRoutes } from '../slaReports.js';
 import { mapRoutes } from '../map.js';
-import { manifestIngestionRoutes } from '../manifestIngestion.js';
 import { rmaRoutes } from '../rma.js';
 import { cutoffMonitorRoutes } from '../cutoffMonitor.js';
 import { packagingTypesRoutes } from '../packagingTypes.js';
@@ -122,7 +121,6 @@ export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Prom
   await app.register(slaRoutes);
   await app.register(slaReportRoutes);
   await app.register(mapRoutes);
-  await app.register(manifestIngestionRoutes);
   await app.register(rmaRoutes);
   await app.register(cutoffMonitorRoutes);
   await app.register(packagingTypesRoutes);
