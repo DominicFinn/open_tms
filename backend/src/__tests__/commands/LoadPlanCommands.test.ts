@@ -87,6 +87,7 @@ describe('CompleteLoadPlanCommandHandler', () => {
       },
       loadPlanLine: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       stagingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;

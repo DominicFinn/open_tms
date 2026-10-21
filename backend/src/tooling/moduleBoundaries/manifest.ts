@@ -122,7 +122,7 @@ export const PATH_RULES: readonly PathRule[] = [
 
   // --- wms ---
   { pattern: /^(routes\/warehouse|services\/WarehouseService)\.ts$/, module: 'tms', note: "the dock app: shipment preparation, tracking devices and its magic-link login. Named for where it is used, it touches no WMS table, and stays in Node when FinnWMS moves to .NET (#355)" },
-  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|facilit|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging)/i, module: 'wms', note: 'Facility is the wms root introduced in Phase 2a; Location stays core' },
+  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|facilit|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging|handlingUnit)/i, module: 'wms', note: 'Facility is the wms root introduced in Phase 2a; Location stays core' },
 
   // --- tms: everything else in the domain directories ---
   { pattern: /^(routes|commands|services|repositories|workers|integrations|events\/(projections|handlers))\//, module: 'tms' },

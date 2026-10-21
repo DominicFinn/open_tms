@@ -47,6 +47,7 @@ function buildPrisma(opts: {
       ),
       findUnique: jest.fn().mockResolvedValue({ label: 'STAGE-01' }),
     },
+    handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     trackableUnit: {
       findFirst: jest.fn().mockResolvedValue('trackableUnit' in opts ? opts.trackableUnit : { id: 'tu-1' }),
       update: jest.fn().mockResolvedValue({}),

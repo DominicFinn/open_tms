@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { mirrorHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
@@ -74,6 +75,7 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
         locationId: facility.sourceLocationId,
         orderId: p.orderId,
         trackableUnitId: p.trackableUnitId,
+        handlingUnitId: p.trackableUnitId,
         stagingBinId: p.stagingBinId,
         shipmentId: p.shipmentId ?? null,
         loadSequence: p.loadSequence ?? null,
@@ -89,6 +91,10 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
         currentBinId: p.stagingBinId,
         currentZoneId: bin.zoneId,
       },
+    });
+    await mirrorHandlingUnitState(tx, command.orgId, p.trackableUnitId, {
+      currentBinId: p.stagingBinId,
+      currentZoneId: bin.zoneId,
     });
 
     emit(this.createEvent(command, {

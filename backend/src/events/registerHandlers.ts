@@ -43,6 +43,8 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
 import { QualityIssueSummaryProjection } from './projections/QualityIssueSummaryProjection.js';
 import { WmsFulfilmentOrderProjection } from './projections/WmsFulfilmentOrderProjection.js';
+import { HandlingUnitProjection } from './projections/HandlingUnitProjection.js';
+import { TrackableUnitHandlingSource } from '../services/fulfilment/TrackableUnitHandlingSource.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
 import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
@@ -123,6 +125,8 @@ export async function registerEventHandlers(
     // Warehouse demand. Reads TMS orders through the port so the projection itself stays
     // inside WMS. See .claude/rules/module-boundaries.md.
     new WmsFulfilmentOrderProjection(prisma, new OrderFulfilmentDemandSource(prisma)),
+    // The warehouse's copy of each TMS unit (#357), read through the port in the same way.
+    new HandlingUnitProjection(prisma, new TrackableUnitHandlingSource(prisma)),
   ];
 
   // Add email handler if email service is available

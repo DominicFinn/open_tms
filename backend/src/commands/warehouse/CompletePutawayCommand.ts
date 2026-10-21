@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { mirrorChildHandlingUnitState, mirrorHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompletePutawayPayload {
@@ -128,6 +129,10 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       },
     });
 
+    const unitLocation = { currentBinId: actualBinId, currentZoneId: actualZone?.id ?? null };
+    await mirrorHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
+    await mirrorChildHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
+
     // 7. Update bin capacity counters
     if (unit.unitType === 'pallet') {
       await tx.warehouseBin.update({
@@ -182,6 +187,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
           referenceId: task.id,
           performedBy: command.actorId,
           trackableUnitId: unit.id,
+          handlingUnitId: unit.id,
           orgId: command.orgId,
         },
       });
@@ -216,6 +222,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
           referenceId: task.id,
           performedBy: command.actorId,
           trackableUnitId: unit.id,
+          handlingUnitId: unit.id,
           orgId: command.orgId,
         },
       });

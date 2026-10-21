@@ -3024,6 +3024,26 @@ covers every organisation.
 
 ---
 
+### Domain: Handling Units
+
+The warehouse's own record of a pallet, tote or box (#357, split step 2b). Until this, warehouse
+state (bin, zone, lot, quality, owner, nesting) was written onto the TMS `TrackableUnit`.
+
+`HandlingUnitProjection` keeps one `HandlingUnit` per TMS unit, with the **same id**, built from
+`trackable_unit.*`, `order_line_item.*` and `order.deleted` events through the `IHandlingUnitSource`
+port (implemented by TMS as `TrackableUnitHandlingSource`). It copies identity (identifier, type,
+barcode, order) and contents (`HandlingUnitLine`, one per packed order line) and never writes
+warehouse state, so a replayed event cannot move a pallet. A unit deleted upstream is marked with
+`sourceRemovedAt` rather than deleted, because the warehouse may still hold it.
+
+While reads are switched over, warehouse commands write both ids: every `trackableUnitId` on a
+receiving line, putaway task, pick or pack line, staging assignment, load plan line, inventory
+transaction or allocation also sets `handlingUnitId`, and every bin or zone change on a unit
+(putaway including nested units, cross-dock, staging, loading) is mirrored onto the handling unit,
+scoped by org. Backfill: `--only=handlingUnits`.
+
+---
+
 ### Domain: Waves & Picking
 
 Groups orders into pick waves and generates walk-sequence-optimized pick tasks. All three wave

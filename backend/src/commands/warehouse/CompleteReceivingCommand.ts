@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { mirrorHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
@@ -97,6 +98,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
               facilityId,
               orderId: orderLineItem?.orderId ?? 'unknown',
               trackableUnitId: (line as any).trackableUnitId,
+              handlingUnitId: (line as any).trackableUnitId,
               stagingBinId: stagingBin.id,
               status: 'staged',
               orgId: command.orgId,
@@ -107,6 +109,10 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
           await tx.trackableUnit.update({
             where: { id: (line as any).trackableUnitId, order: { orgId: command.orgId } },
             data: { currentBinId: stagingBin.id, currentZoneId: stagingBin.zoneId },
+          });
+          await mirrorHandlingUnitState(tx, command.orgId, (line as any).trackableUnitId, {
+            currentBinId: stagingBin.id,
+            currentZoneId: stagingBin.zoneId,
           });
 
           crossDockSorted++;
@@ -171,6 +177,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
               facilityId,
               receivingTaskId: task.id,
               trackableUnitId: (line as any).trackableUnitId,
+              handlingUnitId: (line as any).trackableUnitId,
               sourceBinId: task.dockBinId ?? null,
               targetBinId,
               status: 'pending',

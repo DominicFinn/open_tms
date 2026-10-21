@@ -156,6 +156,7 @@ describe('CompletePackLineCommandHandler', () => {
         count: jest.fn(),
       },
       packTask: { update: jest.fn().mockResolvedValue({}) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: { findFirst: jest.fn().mockResolvedValue(null) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -189,6 +190,7 @@ describe('CreateStagingAssignmentCommandHandler', () => {
       ...facilityMocks(),
       warehouseBin: { findFirst: jest.fn().mockResolvedValue(mockBin) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
         update: jest.fn().mockResolvedValue({}),
@@ -216,6 +218,12 @@ describe('CreateStagingAssignmentCommandHandler', () => {
     expect(tx.trackableUnit.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ currentBinId: 'bin-staging' }) })
     );
+    // Dual-write (#357): the assignment names the handling unit too, and the move is mirrored onto it
+    expect(tx.stagingAssignment.create.mock.calls[0][0].data).toMatchObject({ trackableUnitId: 'unit-1', handlingUnitId: 'unit-1' });
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
+      where: { orgId: 'test-org', id: { in: ['unit-1'] } },
+      data: { currentBinId: 'bin-staging', currentZoneId: 'zone-ship' },
+    });
     expect(result.events[0].type).toBe(EVENT_TYPES.STAGING_ASSIGNMENT_CREATED);
   });
 
@@ -248,6 +256,7 @@ describe('CreateStagingAssignmentCommandHandler', () => {
       ...facilityMocks(),
       warehouseBin: { findFirst: jest.fn().mockResolvedValue({ id: 'bin-staging', label: 'STAGE-01', active: true, zoneId: 'z' }) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
         update: jest.fn().mockResolvedValue({}),
@@ -298,6 +307,7 @@ describe('CompleteLoadingCommandHandler', () => {
         findMany: jest.fn().mockResolvedValue(assignments),
         updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       trackableUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -323,6 +333,11 @@ describe('CompleteLoadingCommandHandler', () => {
         data: { currentBinId: null, currentZoneId: null },
       })
     );
+    // Mirrored onto the handling units, within the org (#357)
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
+      where: { orgId: 'test-org', id: { in: ['unit-1', 'unit-2'] } },
+      data: { currentBinId: null, currentZoneId: null },
+    });
 
     expect(result.events[0].type).toBe(EVENT_TYPES.LOADING_COMPLETED);
   });
