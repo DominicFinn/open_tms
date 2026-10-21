@@ -6,6 +6,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import { warehouseRoutes } from '../warehouse.js';
 import { publicShipmentShareRoutes } from '../publicShipmentShare.js';
 import { authRoutes } from '../auth.js';
 import { carrierPortalRoutes } from '../carrierPortal.js';
@@ -71,6 +72,7 @@ import { reportsDashboardRoutes } from '../reportsDashboard.js';
  * themselves, so the global JWT hook must not apply to them.
  */
 export async function registerTmsPublicRoutes(server: FastifyInstance): Promise<void> {
+  await server.register(warehouseRoutes);            // Dock app: own magic link auth internally
   await server.register(publicShipmentShareRoutes);  // Share links: own access code + viewer JWT, own rate limits
   await server.register(authRoutes);                 // Internal user login / forgot-password / me (own JWT auth internally)
   await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally

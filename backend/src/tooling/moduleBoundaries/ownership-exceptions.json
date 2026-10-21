@@ -1,0 +1,262 @@
+[
+  {
+    "file": "commands/facilities/resolveFacility.ts",
+    "model": "Location",
+    "reason": "Derives a facility from a core Location while inventory is still keyed on Location. Goes with #297"
+  },
+  {
+    "file": "commands/rma/CompleteRmaCommand.ts",
+    "model": "InventoryRecord",
+    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
+  },
+  {
+    "file": "commands/rma/CompleteRmaCommand.ts",
+    "model": "InventoryTransaction",
+    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
+  },
+  {
+    "file": "commands/rma/CompleteRmaCommand.ts",
+    "model": "WarehouseBin",
+    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
+  },
+  {
+    "file": "commands/rma/InspectRmaLineCommand.ts",
+    "model": "WarehouseBin",
+    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
+  },
+  {
+    "file": "commands/rma/ReceiveRmaLineCommand.ts",
+    "model": "WarehouseBin",
+    "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
+  },
+  {
+    "file": "commands/warehouse/CompleteLoadingCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/CompleteLoadPlanCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/CompletePackLineCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/CompletePutawayCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/CompleteReceivingCommand.ts",
+    "model": "OrderLineItem",
+    "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "commands/warehouse/CompleteReceivingCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/CreateLoadPlanCommand.ts",
+    "model": "ShipmentStop",
+    "reason": "WMS reads a ShipmentStop row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
+    "model": "Order",
+    "reason": "WMS reads a Order row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
+    "model": "Shipment",
+    "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "commands/warehouse/RecordReceivingLineCommand.ts",
+    "model": "TrackableUnit",
+    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
+  },
+  {
+    "file": "events/handlers/BolGenerationHandler.ts",
+    "model": "LoadPlan",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "events/handlers/CustomerWebhookHandler.ts",
+    "model": "PackTask",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "events/handlers/PackAuditIssueLinkHandler.ts",
+    "model": "PackAudit",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "events/handlers/TriageAgentHandler.ts",
+    "model": "PackAudit",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "events/handlers/TriageAgentHandler.ts",
+    "model": "PackTask",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "routes/containerIntelligence.ts",
+    "model": "CartonCatalogue",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "Allocation",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "IndoorZoneAnchor",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "InventoryRecord",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "InventoryTransaction",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PackAudit",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PackLine",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PackTask",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PickLine",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PickTask",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PutawayRule",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "PutawayTask",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "ReceivingAppointment",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "ReceivingLine",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "ReceivingTask",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "StagingAssignment",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "WarehouseAisle",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "WarehouseBin",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "WarehouseZone",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "Wave",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "WaveOrder",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/comprehensive-seed.ts",
+    "model": "WaveTemplate",
+    "reason": "The seed clears WMS tables through Prisma. Reseeding WMS moves to the .NET side at the handover (#372)"
+  },
+  {
+    "file": "scripts/deriveFacilities.ts",
+    "model": "Facility",
+    "reason": "One-off Phase 2a backfill. Delete it at the handover (#372)"
+  },
+  {
+    "file": "services/CartonizationService.ts",
+    "model": "OrderLineItem",
+    "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
+    "model": "LoadPlan",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
+    "model": "PackTask",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "services/cutoff/ShipmentCutoffMonitorService.ts",
+    "model": "PickTask",
+    "reason": "Reads WMS data from outside WMS. Becomes a port or an event (#359)"
+  },
+  {
+    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
+    "model": "Issue",
+    "reason": "WMS reads a Issue row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
+    "model": "Rma",
+    "reason": "WMS reads a Rma row it does not own. Becomes a port onto the owning module (#359)"
+  },
+  {
+    "file": "services/warehouse/WarehouseOperationsDashboardService.ts",
+    "model": "Shipment",
+    "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
+  }
+]

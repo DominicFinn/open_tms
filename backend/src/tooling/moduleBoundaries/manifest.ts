@@ -25,6 +25,16 @@ export const ALLOWED_DEPENDENCIES: Record<ModuleName, readonly ModuleName[]> = {
 };
 
 /**
+ * Groups of modules whose tables are leaving Prisma for a .NET service (ADR 0005). A group's
+ * tables may only be touched from inside the group, and code inside the group may only touch the
+ * group's tables, because after the handover neither side can reach the other through Prisma.
+ * wms and inventory share a group: they move into one service, and their commands share
+ * transactions. Every other module still reaches into others' tables freely, until its own port
+ * is planned and its group is added here.
+ */
+export const SEALED_TABLE_GROUPS: readonly (readonly ModuleName[])[] = [['wms', 'inventory']];
+
+/**
  * Paths the DAG deliberately doesn't govern. Tests assert across modules on purpose, and seed,
  * backfill and maintenance scripts are composition-root code that runs against the full product.
  * Everything else must be classified.
@@ -111,6 +121,7 @@ export const PATH_RULES: readonly PathRule[] = [
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*(capa|sopChecklist|quality)/i, module: 'quality' },
 
   // --- wms ---
+  { pattern: /^(routes\/warehouse|services\/WarehouseService)\.ts$/, module: 'tms', note: "the dock app: shipment preparation, tracking devices and its magic-link login. Named for where it is used, it touches no WMS table, and stays in Node when FinnWMS moves to .NET (#355)" },
   { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|facilit|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging)/i, module: 'wms', note: 'Facility is the wms root introduced in Phase 2a; Location stays core' },
 
   // --- tms: everything else in the domain directories ---

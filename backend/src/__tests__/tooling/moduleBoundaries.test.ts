@@ -5,9 +5,17 @@ import { classify } from '../../tooling/moduleBoundaries/classify.js';
 import { check, loadExceptions } from '../../tooling/moduleBoundaries/checker.js';
 import { resolveSpecifier } from '../../tooling/moduleBoundaries/imports.js';
 import { ALLOWED_DEPENDENCIES, MODULES } from '../../tooling/moduleBoundaries/manifest.js';
+import {
+  checkOwnership,
+  crossesSealedGroup,
+  loadOwnershipExceptions,
+  readTableAccesses,
+} from '../../tooling/moduleBoundaries/ownership.js';
 
 const SOURCE_ROOT = path.resolve(__dirname, '../..');
 const EXCEPTIONS_PATH = path.join(SOURCE_ROOT, 'tooling/moduleBoundaries/exceptions.json');
+const OWNERSHIP_EXCEPTIONS_PATH = path.join(SOURCE_ROOT, 'tooling/moduleBoundaries/ownership-exceptions.json');
+const SCHEMA_DIR = path.resolve(SOURCE_ROOT, '../prisma/schema');
 
 async function writeFixture(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'module-boundaries-'));
@@ -34,6 +42,13 @@ describe('module manifest', () => {
   it('keeps the two conflated areas out of wms until Phase 2 moves them', () => {
     expect(classify('routes/locations.ts')).toBe('core');
     expect(classify('commands/trackableUnits/index.ts')).toBe('tms');
+  });
+
+  it('reads the dock app as tms, since it prepares shipments and touches no WMS table', () => {
+    expect(classify('routes/warehouse.ts')).toBe('tms');
+    expect(classify('services/WarehouseService.ts')).toBe('tms');
+    expect(classify('routes/warehouseZones.ts')).toBe('wms');
+    expect(classify('services/warehouse/WarehouseOperationsDashboardService.ts')).toBe('wms');
   });
 
   it('reads a returns authorisation as tms without catching lookalike names', () => {
@@ -138,11 +153,132 @@ describe('check', () => {
   });
 });
 
+describe('readTableAccesses', () => {
+  const models = ['Order', 'OrderLineItem', 'PickLine', 'Facility'];
+
+  it('finds delegate calls on the client and on a transaction', () => {
+    const source = 'await tx.pickLine.update({});\nawait prisma.facility\n  .findMany({});\n';
+
+    expect(readTableAccesses(source, models)).toEqual([
+      { model: 'PickLine', line: 1 },
+      { model: 'Facility', line: 2 },
+    ]);
+  });
+
+  it('tells a model from a longer one that starts with its name', () => {
+    expect(readTableAccesses('tx.orderLineItem.findUnique({})', models)).toEqual([{ model: 'OrderLineItem', line: 1 }]);
+  });
+
+  it('ignores a property that is not followed by a Prisma call', () => {
+    expect(readTableAccesses('const id = order.facility.id; payload.order.update;', models)).toEqual([]);
+  });
+
+  it('reads quoted table names, but only in a file that runs raw SQL', () => {
+    const raw = 'await prisma.$queryRaw`SELECT * FROM "Facility" WHERE "orgId" = ${orgId}`;';
+
+    expect(readTableAccesses(raw, models)).toEqual([{ model: 'Facility', line: 1 }]);
+    expect(readTableAccesses('const label = "Facility";', models)).toEqual([]);
+  });
+});
+
+describe('crossesSealedGroup', () => {
+  it('stops anything reaching into the FinnWMS tables, and FinnWMS reaching out', () => {
+    expect(crossesSealedGroup('tms', 'wms')).toBe(true);
+    expect(crossesSealedGroup('core', 'inventory')).toBe(true);
+    expect(crossesSealedGroup('wms', 'tms')).toBe(true);
+    expect(crossesSealedGroup('inventory', 'core')).toBe(true);
+    expect(crossesSealedGroup(null, 'wms')).toBe(true);
+  });
+
+  it('lets wms and inventory share tables, since they move into one service together', () => {
+    expect(crossesSealedGroup('wms', 'inventory')).toBe(false);
+    expect(crossesSealedGroup('inventory', 'wms')).toBe(false);
+  });
+
+  it('leaves modules that are not being ported alone', () => {
+    expect(crossesSealedGroup('tms', 'core')).toBe(false);
+    expect(crossesSealedGroup('finance', 'tms')).toBe(false);
+  });
+});
+
+describe('checkOwnership', () => {
+  async function fixture(files: Record<string, string>): Promise<{ root: string; schema: string }> {
+    const root = await writeFixture(files);
+    const schema = await writeFixture({
+      'wms.prisma': 'model Facility {\n  id String @id\n}\n',
+      'inventory.prisma': 'model InventoryRecord {\n  id String @id\n}\n',
+      'tms.prisma': 'model Order {\n  id String @id\n}\n',
+      'core.prisma': 'model Customer {\n  id String @id\n}\n',
+      'config.prisma': 'generator client {\n  provider = "prisma-client-js"\n}\n',
+    });
+    return { root, schema };
+  }
+
+  it('fails a tms file reading a wms table and a wms file reading a tms table', async () => {
+    const { root, schema } = await fixture({
+      'routes/shipments.ts': 'await prisma.facility.findMany({});\n',
+      'routes/waves.ts': 'await tx.order.findFirst({});\n',
+    });
+
+    const result = await checkOwnership(root, schema, []);
+
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: 'routes/shipments.ts', fromModule: 'tms', model: 'Facility', toModule: 'wms' }),
+        expect.objectContaining({ file: 'routes/waves.ts', fromModule: 'wms', model: 'Order', toModule: 'tms' }),
+      ]),
+    );
+    expect(result.violations).toHaveLength(2);
+  });
+
+  it('allows wms to touch inventory, and tms to touch core', async () => {
+    const { root, schema } = await fixture({
+      'routes/waves.ts': 'await tx.inventoryRecord.update({});\n',
+      'routes/shipments.ts': 'await prisma.customer.findMany({});\n',
+    });
+
+    const result = await checkOwnership(root, schema, []);
+
+    expect(result.violations).toEqual([]);
+  });
+
+  it('checks scripts, but not tests', async () => {
+    const { root, schema } = await fixture({
+      'scripts/seed.ts': 'await prisma.facility.deleteMany({});\n',
+      '__tests__/waves.test.ts': 'await prisma.order.findMany({});\n',
+    });
+
+    const result = await checkOwnership(root, schema, []);
+
+    expect(result.violations).toEqual([expect.objectContaining({ file: 'scripts/seed.ts', fromModule: null })]);
+  });
+
+  it('excuses a listed access and reports one that has gone', async () => {
+    const { root, schema } = await fixture({ 'routes/shipments.ts': 'await prisma.facility.findMany({});\n' });
+
+    const result = await checkOwnership(root, schema, [
+      { file: 'routes/shipments.ts', model: 'Facility', reason: 'known' },
+      { file: 'routes/orders.ts', model: 'Facility', reason: 'already fixed' },
+    ]);
+
+    expect(result.violations).toEqual([]);
+    expect(result.excused).toHaveLength(1);
+    expect(result.staleExceptions).toEqual([expect.objectContaining({ file: 'routes/orders.ts' })]);
+  });
+});
+
 describe('the backend as it stands', () => {
   it('has no boundary violations beyond the seeded burn-down list', async () => {
     const result = await check(SOURCE_ROOT, await loadExceptions(EXCEPTIONS_PATH));
 
     expect(result.unclassified).toEqual([]);
+    expect(result.violations).toEqual([]);
+    expect(result.staleExceptions).toEqual([]);
+  });
+
+  it('touches no FinnWMS table across the group boundary beyond the burn-down list', async () => {
+    const result = await checkOwnership(SOURCE_ROOT, SCHEMA_DIR, await loadOwnershipExceptions(OWNERSHIP_EXCEPTIONS_PATH));
+
     expect(result.violations).toEqual([]);
     expect(result.staleExceptions).toEqual([]);
   });
