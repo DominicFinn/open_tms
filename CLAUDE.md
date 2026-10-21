@@ -6,7 +6,7 @@ what applies everywhere.
 
 ## Project Structure
 
-- **Monorepo** with `backend/`, `frontend/`, `edi-collector/`, `packages/shared/`, `www/`
+- **Monorepo** with `backend/`, `frontend/`, `edi-collector/`, `packages/shared/`, `www/`, and `services/` for .NET services (ADR 0004)
 - Root `package.json` has hoisted `node_modules`; run `npm install` from root
 - Backend: Fastify + TypeScript + Prisma + PostgreSQL (port 3001)
 - Frontend: React 18 + TypeScript + Vite (port 5173)
@@ -21,7 +21,7 @@ Always loaded:
 | `.claude/rules/cqrs-and-events.md` | Command handlers, events, projections, **the mandatory checklist for any new entity**, test requirements |
 | `.claude/rules/security.md` | Tenancy as a security boundary, auth guards, validation, **rate limiting**, headers, webhooks, PII, secrets |
 | `.claude/rules/error-handling-and-logging.md` | try/catch at the edges, **no PII in logs**, structured logging, complexity limit |
-| `.claude/rules/language-and-tooling.md` | TypeScript everywhere — **no new JavaScript projects** |
+| `.claude/rules/language-and-tooling.md` | **C# for new backend services** (ADR 0004), no new JavaScript projects |
 | `.claude/rules/workflow.md` | GitHub Issues + Projects, TMS/WMS prefixes, `gh` CLI, worktrees, tidy-up |
 | `.claude/rules/pre-commit-checklist.md` | Walk before every PR |
 | `.claude/rules/feature-tracking.md` | `.tracking/<feature>.md` planning files for multi-layer work |
