@@ -43,7 +43,11 @@ envelope. Business rules live in handlers.
 - Forward-only `.sql` files in `services/<name>/migrations/`, named `NNNN_what_it_does.sql`. One
   concern per file.
 - **Never edit a migration that has run anywhere.** Fix forward with a new one.
-- Never touch a table Prisma owns. Moving a table out of Prisma follows the handover in ADR 0004.
+- Never run DDL on a table Prisma owns. Until the handover in ADR 0005, .NET reads and writes
+  those tables only through views in the `wms` schema; a view that is written to covers one table
+  and is created `WITH LOCAL CHECK OPTION`.
+- Prisma fills ids and `updatedAt` in its client, so until the handover .NET sets both on insert
+  and update.
 - `prisma migrate diff` must stay empty after a .NET migration.
 
 ## API

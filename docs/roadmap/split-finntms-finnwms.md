@@ -256,6 +256,13 @@ without a `Location` table resolves. That was the point of the phase.
 6. Frontend per-product builds: `frontend/src/apps/*` with lazy imports; `VITE_PRODUCT` selects
    manifests and brand tokens; replace the `authFetch.ts` monkey-patch with an explicit `apiClient`
 
+## Since ADR 0004: FinnWMS is moving to .NET
+
+ADR 0004 (Oct 2026) ports the backend to C#, starting with WMS and inventory as a separate .NET
+service, which is Fork B below in all but the database. The remaining Phase 2 steps (2b, 2c, #297)
+are now stage 0 of that port, and Phases 4 and 5 will be re-planned around it. The port plan is
+[finnwms-dotnet-port.md](finnwms-dotnet-port.md).
+
 ## Phase 4: standalone WMS install (~5 chunks on the recommended fork)
 
 - **Fork A (recommended): modular monolith.** Same binary, `ENABLED_MODULES=core,inventory,wms`,
@@ -279,7 +286,7 @@ ports and events. Don't design this in detail yet; Phase 2 outcomes will reshape
 
 ## What NOT to do
 
-1. No Fork B preemptively (separate repos/DBs/brokers/outbox)
+1. No Fork B preemptively (separate repos/DBs/brokers/outbox). Superseded for FinnWMS by ADR 0004
 2. Don't resurrect `auth-service/`; delete it
 3. Don't split the whole Organization table; carve `OrgWmsSettings` only
 4. Don't make `TrackableUnit.orderId` nullable as a shortcut
