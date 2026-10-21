@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ChevronLeft, Loader2, PackageSearch, Search } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { getInventoryAppFacility } from './inventory-facility';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,16 +27,9 @@ interface RecordRow {
   bin: { label: string; zone?: { name: string } | null } | null;
 }
 
-function currentLocationId(): string | null {
-  try {
-    return JSON.parse(localStorage.getItem('inventory_app_location') || '{}').id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default function InventoryAppLevels() {
-  const locationId = useMemo(currentLocationId, []);
+  const facilityId = useMemo(() => getInventoryAppFacility()?.id ?? null, []);
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,9 +39,9 @@ export default function InventoryAppLevels() {
   const [recordsLoading, setRecordsLoading] = useState(false);
 
   useEffect(() => {
-    if (!locationId) return;
+    if (!facilityId) return;
     setLoading(true);
-    fetch(`${API_URL}/api/v1/inventory/summary?locationId=${locationId}`)
+    fetch(`${API_URL}/api/v1/inventory/summary?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(json => {
         if (json.error) { setError(json.error); return; }
@@ -55,18 +49,18 @@ export default function InventoryAppLevels() {
       })
       .catch(() => setError('Network error. Check your connection.'))
       .finally(() => setLoading(false));
-  }, [locationId]);
+  }, [facilityId]);
 
   useEffect(() => {
-    if (!locationId || !selectedSku) return;
+    if (!facilityId || !selectedSku) return;
     setRecordsLoading(true);
-    fetch(`${API_URL}/api/v1/inventory?locationId=${locationId}&sku=${encodeURIComponent(selectedSku)}`)
+    fetch(`${API_URL}/api/v1/inventory?facilityId=${facilityId}&sku=${encodeURIComponent(selectedSku)}`)
       .then(r => r.json())
       .then(json => setRecords(json.error ? [] : (json.data || [])))
       .finally(() => setRecordsLoading(false));
-  }, [locationId, selectedSku]);
+  }, [facilityId, selectedSku]);
 
-  if (!locationId) {
+  if (!facilityId) {
     return (
       <Card className="flex flex-col items-center gap-3 p-8 text-center">
         <AlertTriangle className="h-10 w-10 text-muted-foreground" />

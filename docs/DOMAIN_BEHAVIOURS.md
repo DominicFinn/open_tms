@@ -2370,6 +2370,15 @@ these tables leave Prisma for the .NET service (ADR 0005). The inventory API sti
 `ownerCustomer: { id, name }`, now looked up through core within the caller's org, so a record
 pointing at another org's customer shows no name.
 
+**Inventory is read by facility** (#297). The inventory and observation endpoints take
+`facilityId`, wave release allocates from the wave's facility, cycle counts and replenishment read
+stock and rules by facility and org, putaway resolves a scanned label within the task's facility,
+and the WMS dashboard counts stock by facility directly. `locationId` is nullable on inventory and
+written only when the bin has one, so a facility with no Location (a standalone FinnWMS) can hold
+stock. `requireLocationForInventory` is gone. A wave or putaway task with no facility is refused
+rather than guessed at. The inventory app picks a facility, and its session may read
+`/api/v1/facilities` (on both stacks) but no longer the dock app's Location list.
+
 ---
 
 ### Domain: Warehouse Zones & Bins

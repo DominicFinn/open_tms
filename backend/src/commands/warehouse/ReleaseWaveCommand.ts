@@ -4,7 +4,6 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
-import { requireLocationForInventory } from '../inventoryLocation.js';
 
 export interface ReleaseWavePayload {
   waveId: string;
@@ -44,6 +43,13 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
     if (wave.status !== 'planning') throw new Error(`Wave is ${wave.status}, can only release from planning`);
 
     const orderIds = wave.waveOrders.map(wo => wo.orderId);
+
+    // Phase 2a (#227, #245): stock is allocated, and pick tasks created, at the wave's facility.
+    // The fallback covers waves created before the backfill. Inventory is read by facility since
+    // #297, so a wave with neither can't allocate anything and is refused.
+    const facilityId = wave.facilityId
+      ?? (wave.locationId ? await resolveFacilityForLocation(tx, command, wave.locationId, emit) : null);
+    if (!facilityId) throw new Error(`Wave ${wave.id} has no facility to allocate stock from`);
 
     // Load the demand for the wave's orders from the warehouse's own read model rather than
     // the TMS order tables. An allocation records the demand as (sourceType, sourceLineId), so
@@ -87,7 +93,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
       // tenant's quantityAvailable and hard-allocate their stock to our wave (#220).
       const inventory = await tx.inventoryRecord.findMany({
         where: {
-          locationId: requireLocationForInventory(wave.locationId, `Wave ${wave.id}`),
+          facilityId,
           orgId: command.orgId,
           sku: line.sku,
           quantityAvailable: { gt: 0 },
@@ -143,12 +149,6 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
     // Create pick tasks based on strategy
     let pickTasksCreated = 0;
-
-    // Phase 2a (#227, #245): all three strategies create their tasks at the wave's facility. The
-    // wave already carries it, so use that rather than re-deriving from a location that may now be
-    // null; the fallback covers waves created before the backfill.
-    const facilityId = wave.facilityId
-      ?? (wave.locationId ? await resolveFacilityForLocation(tx, command, wave.locationId, emit) : null);
 
     if (wave.pickStrategy === 'discrete') {
       // One pick task per order

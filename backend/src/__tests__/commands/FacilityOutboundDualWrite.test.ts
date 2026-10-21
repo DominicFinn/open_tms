@@ -193,7 +193,7 @@ describe('Facility dual-write on wave release (#227)', () => {
 
     expect(tx.inventoryRecord.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ orgId: 'test-org', locationId: 'loc-1', sku: 'SKU-1' }),
+        where: expect.objectContaining({ orgId: 'test-org', facilityId: 'fac-1', sku: 'SKU-1' }),
       })
     );
   });

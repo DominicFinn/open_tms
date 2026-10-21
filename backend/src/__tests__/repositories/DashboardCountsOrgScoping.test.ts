@@ -52,7 +52,7 @@ describe('WmsDashboardRepository org scoping', () => {
    * no facilityId, because inventory is still keyed on Location until Phase 4, so spreading the
    * facility filter into it was a 500 (#285). It goes through the bins the facility owns instead.
    */
-  it('narrows every count to the facility, inventory through its bins', async () => {
+  it('narrows every count to the facility, inventory included (#297)', async () => {
     const prisma = buildPrisma();
     await new WmsDashboardRepository(prisma).counts('org-1', { facilityId: 'fac-1' });
 
@@ -71,8 +71,7 @@ describe('WmsDashboardRepository org scoping', () => {
     }
 
     const stock = prisma.inventoryRecord.groupBy.mock.calls[0][0].where;
-    expect(stock.facilityId).toBeUndefined();
-    expect(stock.bin).toEqual({ orgId: 'org-1', facilityId: 'fac-1' });
+    expect(stock).toEqual({ orgId: 'org-1', facilityId: 'fac-1', quantityOnHand: { gt: 0 } });
   });
 
   it('counts distinct SKUs with stock on hand', async () => {

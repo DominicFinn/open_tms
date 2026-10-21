@@ -20,23 +20,23 @@ export async function inventoryObservationRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const repo = container.resolve<IInventoryObservationRepository>(TOKENS.IInventoryObservationRepository);
 
-  // GET /api/v1/inventory/observations?locationId=xxx&sku=xxx — recent observations, newest first
+  // GET /api/v1/inventory/observations?facilityId=xxx&sku=xxx: recent observations, newest first
   server.get('/api/v1/inventory/observations', {
     schema: {
       tags: ['Inventory - Observations'],
-      summary: 'List recent inventory observations for a location',
+      summary: 'List recent inventory observations for a facility',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        required: ['facilityId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           sku: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as { locationId: string; sku?: string };
-    const observations = await repo.listRecent(req.orgId!, q.locationId, q.sku);
+    const q = req.query as { facilityId: string; sku?: string };
+    const observations = await repo.listRecent(req.orgId!, q.facilityId, q.sku);
     return { data: observations, error: null };
   });
 
@@ -47,9 +47,9 @@ export async function inventoryObservationRoutes(server: FastifyInstance) {
       summary: 'Record an inventory observation (scan or spot-check)',
       body: {
         type: 'object',
-        required: ['locationId', 'binId', 'sku'],
+        required: ['facilityId', 'binId', 'sku'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           binId: { type: 'string', format: 'uuid' },
           sku: { type: 'string', minLength: 1 },
           uomCode: { type: 'string' },
@@ -61,7 +61,7 @@ export async function inventoryObservationRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       binId: z.string().uuid(),
       sku: z.string().min(1),
       uomCode: z.string().optional(),

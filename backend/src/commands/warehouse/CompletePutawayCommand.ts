@@ -3,7 +3,6 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { requireLocationForInventory } from '../inventoryLocation.js';
 
 export interface CompletePutawayPayload {
   taskId: string;
@@ -52,9 +51,11 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     if (task.status === 'completed') throw new Error('Task is already completed');
     if (task.status === 'cancelled') throw new Error('Task is cancelled');
 
-    // 2. Resolve the scanned bin
+    // 2. Resolve the scanned bin. Labels are unique per facility, and the task carries its facility
+    // since Phase 2a (#225, backfilled), so the scan is resolved there (#297).
+    if (!task.facilityId) throw new Error(`Putaway task ${task.id} has no facility`);
     const scannedBin = await tx.warehouseBin.findFirst({
-      where: { locationId: task.locationId, label: p.scannedBinLabel, orgId: command.orgId },
+      where: { facilityId: task.facilityId, label: p.scannedBinLabel, orgId: command.orgId },
       include: { zone: true },
     });
     if (!scannedBin) {
@@ -188,7 +189,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       // Create new record
       inventoryRecord = await tx.inventoryRecord.create({
         data: {
-          locationId: requireLocationForInventory(task.locationId, `Putaway task ${task.id}`),
+          locationId: actualBin.locationId,
           facilityId: actualBin.facilityId,
           binId: actualBinId,
           sku,

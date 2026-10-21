@@ -4,6 +4,7 @@ import { LogOut, PackageSearch, ScanLine, Warehouse as WarehouseIcon, type Lucid
 
 import { cn } from '@/lib/utils';
 import { clearInventoryAppSession, getInventoryAppToken, getInventoryAppUser } from './inventory-session';
+import { clearInventoryAppFacility, getInventoryAppFacility } from './inventory-facility';
 
 interface InventoryAppUser {
   email?: string;
@@ -32,7 +33,7 @@ export function InventoryAppLayout() {
       navigate('/inventory-app/login');
       return;
     }
-    if (!localStorage.getItem('inventory_app_location')) {
+    if (!getInventoryAppFacility()) {
       navigate('/inventory-app/select-location');
       return;
     }
@@ -41,20 +42,13 @@ export function InventoryAppLayout() {
 
   function handleLogout() {
     clearInventoryAppSession();
-    localStorage.removeItem('inventory_app_location');
+    clearInventoryAppFacility();
     navigate('/inventory-app/login');
   }
 
   if (!user) return null;
 
-  const locationName = (() => {
-    try {
-      const loc = JSON.parse(localStorage.getItem('inventory_app_location') || '{}');
-      return loc.name || '';
-    } catch {
-      return '';
-    }
-  })();
+  const locationName = getInventoryAppFacility()?.name ?? '';
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground font-sans">

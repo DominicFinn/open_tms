@@ -7,10 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { getInventoryAppUser } from './inventory-session';
+import { saveInventoryAppFacility } from './inventory-facility';
+import type { components } from '../generated/wmsApi';
 
-export default function InventoryAppSelectLocation() {
+type FacilityRow = components['schemas']['FacilityDto'];
+
+/** The inventory app's site picker: lists the org's facilities, since inventory is read by facility (#297). */
+export default function InventoryAppSelectFacility() {
   const navigate = useNavigate();
-  const [locations, setLocations] = useState<any[]>([]);
+  const [facilities, setFacilities] = useState<FacilityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -21,15 +26,16 @@ export default function InventoryAppSelectLocation() {
       return;
     }
 
-    fetch(`${API_URL}/api/v1/warehouse/locations`)
+    fetch(`${API_URL}/api/v1/facilities?perPage=100`)
       .then(r => r.json())
       .then(json => {
         if (json.error) {
           setError(json.error);
           return;
         }
-        setLocations(json.data || []);
-        if (json.data?.length === 1) setSelectedId(json.data[0].id);
+        const rows: FacilityRow[] = json.data || [];
+        setFacilities(rows);
+        if (rows.length === 1) setSelectedId(rows[0].id);
       })
       .catch(() => setError('Network error. Check your connection.'))
       .finally(() => setLoading(false));
@@ -37,8 +43,9 @@ export default function InventoryAppSelectLocation() {
 
   function handleContinue() {
     if (!selectedId) return;
-    const loc = locations.find(l => l.id === selectedId);
-    localStorage.setItem('inventory_app_location', JSON.stringify(loc));
+    const facility = facilities.find(f => f.id === selectedId);
+    if (!facility) return;
+    saveInventoryAppFacility({ id: facility.id, name: facility.name });
     navigate('/inventory-app');
   }
 
@@ -67,20 +74,20 @@ export default function InventoryAppSelectLocation() {
           </Card>
         )}
 
-        {!error && locations.length === 0 ? (
+        {!error && facilities.length === 0 ? (
           <Card className="flex flex-col items-center gap-3 p-8 text-center">
             <MapPinOff className="h-10 w-10 text-muted-foreground" />
             <p className="text-base font-semibold">No sites available</p>
-            <p className="text-sm text-muted-foreground">Ask your admin to set up locations first.</p>
+            <p className="text-sm text-muted-foreground">Ask your admin to set up a warehouse first.</p>
           </Card>
         ) : (
           <div className="space-y-3">
-            {locations.map(loc => {
-              const selected = selectedId === loc.id;
+            {facilities.map(facility => {
+              const selected = selectedId === facility.id;
               return (
                 <Card
-                  key={loc.id}
-                  onClick={() => setSelectedId(loc.id)}
+                  key={facility.id}
+                  onClick={() => setSelectedId(facility.id)}
                   className={cn(
                     'cursor-pointer p-4 transition-colors active:bg-muted/50',
                     selected ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/30',
@@ -91,9 +98,9 @@ export default function InventoryAppSelectLocation() {
                       <WarehouseIcon className="h-6 w-6" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold">{loc.name}</div>
+                      <div className="text-base font-semibold">{facility.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        {[loc.city, loc.state, loc.country].filter(Boolean).join(', ') || '-'}
+                        {[facility.address.city, facility.address.state, facility.address.country].filter(Boolean).join(', ') || '-'}
                       </div>
                     </div>
                     {selected && <CheckCircle2 className="h-6 w-6 shrink-0 text-primary" />}

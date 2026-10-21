@@ -33,16 +33,16 @@ export async function inventoryRoutes(server: FastifyInstance) {
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const customers = container.resolve<ICustomersRepository>(TOKENS.ICustomersRepository);
 
-  // GET /api/v1/inventory?locationId=xxx&sku=xxx&binId=xxx
+  // GET /api/v1/inventory?facilityId=xxx&sku=xxx&binId=xxx
   server.get('/api/v1/inventory', {
     schema: {
       tags: ['WMS - Inventory'],
       summary: 'List inventory records with optional filters',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        required: ['facilityId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           sku: { type: 'string' },
           binId: { type: 'string', format: 'uuid' },
           zoneId: { type: 'string', format: 'uuid' },
@@ -53,7 +53,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as any;
-    const where: any = { orgId: req.orgId!, locationId: q.locationId };
+    const where: any = { orgId: req.orgId!, facilityId: q.facilityId };
     if (q.sku) where.sku = { contains: q.sku, mode: 'insensitive' };
     if (q.binId) where.binId = q.binId;
     if (q.zoneId) where.bin = { zoneId: q.zoneId };
@@ -72,25 +72,25 @@ export async function inventoryRoutes(server: FastifyInstance) {
     return { data: await withOwnerCustomers(customers, req.orgId!, records), error: null };
   });
 
-  // GET /api/v1/inventory/summary?locationId=xxx — aggregate by SKU
+  // GET /api/v1/inventory/summary?facilityId=xxx: aggregate by SKU
   server.get('/api/v1/inventory/summary', {
     schema: {
       tags: ['WMS - Inventory'],
       summary: 'Inventory summary aggregated by SKU across all bins',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        required: ['facilityId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
+    const { facilityId } = req.query as { facilityId: string };
 
     const summary = await prisma.inventoryRecord.groupBy({
       by: ['sku', 'uomCode'],
-      where: { orgId: req.orgId!, locationId, quantityOnHand: { gt: 0 } },
+      where: { orgId: req.orgId!, facilityId, quantityOnHand: { gt: 0 } },
       _sum: {
         quantityOnHand: true,
         quantityAllocated: true,
@@ -140,16 +140,16 @@ export async function inventoryRoutes(server: FastifyInstance) {
     return { data: withOwner, error: null };
   });
 
-  // GET /api/v1/inventory/transactions?locationId=xxx — recent transaction ledger
+  // GET /api/v1/inventory/transactions?facilityId=xxx: recent transaction ledger
   server.get('/api/v1/inventory/transactions', {
     schema: {
       tags: ['WMS - Inventory'],
       summary: 'Recent inventory transactions (ledger)',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        required: ['facilityId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           transactionType: { type: 'string' },
           limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
         },
@@ -157,7 +157,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as any;
-    const where: any = { orgId: req.orgId!, inventoryRecord: { locationId: q.locationId } };
+    const where: any = { orgId: req.orgId!, inventoryRecord: { facilityId: q.facilityId } };
     if (q.transactionType) where.transactionType = q.transactionType;
 
     const transactions = await prisma.inventoryTransaction.findMany({

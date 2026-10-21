@@ -155,6 +155,50 @@ describe('jwtAuth', () => {
     });
   });
 
+  describe('authenticateJWT inventory scope', () => {
+    const inventoryPayload = {
+      sub: 'op-2',
+      email: 'counter@example.com',
+      roles: ['warehouse'],
+      permissions: ['wms:read'],
+      scope: 'inventory',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iss: 'open-tms-auth',
+    };
+
+    it.each([
+      ['GET', '/api/v1/facilities'],
+      ['GET', '/api/v1/inventory/summary?facilityId=f-1'],
+      ['GET', '/api/v1/inventory/observations?facilityId=f-1'],
+      ['POST', '/api/v1/inventory/observations'],
+      ['GET', '/api/v1/warehouse/bins?facilityId=f-1'],
+    ])('allows the inventory app on %s %s', async (method, url) => {
+      const req = mockReq(`Bearer ${makeToken(inventoryPayload)}`, method, url);
+      const reply = mockReply();
+
+      await authenticateJWT(req, reply);
+
+      expect(req.user).toBeDefined();
+      expect(reply.code).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['POST', '/api/v1/facilities'],
+      ['POST', '/api/v1/inventory/inv-1/adjust'],
+      ['GET', '/api/v1/warehouse/locations'],
+      ['GET', '/api/v1/warehouse/shipments'],
+      ['GET', '/api/v1/shipments'],
+    ])('refuses the inventory app on %s %s with 403', async (method, url) => {
+      const req = mockReq(`Bearer ${makeToken(inventoryPayload)}`, method, url);
+      const reply = mockReply();
+
+      await authenticateJWT(req, reply);
+
+      expect(req.user).toBeUndefined();
+      expect(reply.code).toHaveBeenCalledWith(403);
+    });
+  });
+
   describe('requirePermission', () => {
     it('allows user with wildcard permission', async () => {
       const req = mockReq();

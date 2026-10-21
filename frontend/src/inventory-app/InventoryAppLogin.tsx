@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getInventoryAppToken, getInventoryAppUser, saveInventoryAppSession } from './inventory-session';
+import { getInventoryAppFacility } from './inventory-facility';
 
 /**
  * Inventory-app login (#233): reuses the warehouse PWA's magic-link + password login
@@ -35,8 +36,7 @@ export default function InventoryAppLogin() {
 
   useEffect(() => {
     if (getInventoryAppUser() && getInventoryAppToken()) {
-      const loc = localStorage.getItem('inventory_app_location');
-      navigate(loc ? '/inventory-app' : '/inventory-app/select-location');
+      navigate(getInventoryAppFacility() ? '/inventory-app' : '/inventory-app/select-location');
     }
   }, [navigate]);
 

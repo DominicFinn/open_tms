@@ -16,7 +16,7 @@ public static class FacilityEndpoints
     {
         var group = routes.MapGroup("/api/v1/facilities")
             .WithTags("WMS - Facilities")
-            .RequireAuthorization(Policies.WmsRead);
+            .RequireAuthorization(Policies.WmsReadForInventoryApp);
 
         group.MapGet("/", ListAsync)
             .WithName("ListFacilities")

@@ -10,14 +10,14 @@ import { InventoryObservation, PrismaClient } from '@prisma/client';
 const MAX_ROWS = 200;
 
 export interface IInventoryObservationRepository {
-  listRecent(orgId: string, locationId: string, sku?: string): Promise<InventoryObservation[]>;
+  listRecent(orgId: string, facilityId: string, sku?: string): Promise<InventoryObservation[]>;
 }
 
 export class InventoryObservationRepository implements IInventoryObservationRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async listRecent(orgId: string, locationId: string, sku?: string): Promise<InventoryObservation[]> {
-    const where: any = { orgId, locationId };
+  async listRecent(orgId: string, facilityId: string, sku?: string): Promise<InventoryObservation[]> {
+    const where: any = { orgId, facilityId };
     if (sku) where.sku = { contains: sku, mode: 'insensitive' };
     return this.prisma.inventoryObservation.findMany({
       where,
