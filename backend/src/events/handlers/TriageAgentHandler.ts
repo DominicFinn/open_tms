@@ -24,6 +24,7 @@ import { AutomationRuleHandler } from './AutomationRuleHandler.js';
 import { EVENT_TYPES } from '../eventTypes.js';
 import { priorityRank } from '../../services/issues/issueTypeRegistry.js';
 import { randomUUID } from 'crypto';
+import type { IPackTaskContext } from '../../ports/warehouseQueries.js';
 
 /** Unified condition format shared between agent decisions and automation rules */
 export interface RuleCondition {
@@ -133,6 +134,8 @@ export class TriageAgentHandler implements IEventHandler {
     private llm: ILlmProvider,
     private commandBus: ICommandBus,
     automationRules?: AutomationRuleHandler | null,
+    /** Pack task context, asked of WMS rather than read from its tables (#359). */
+    private packTaskContext: IPackTaskContext | null = null,
   ) {
     this.automationRules = automationRules ?? null;
   }
@@ -333,24 +336,12 @@ export class TriageAgentHandler implements IEventHandler {
     // WMS sources (#133): pack-audit issues attach to a pack task. Give the
     // agent the task, its lines, and the recent audit history so it can judge
     // one-off scale drift vs a repeating mis-pack.
-    if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId) {
-      const packTask = await this.prisma.packTask.findUnique({
-        where: { id: issue.sourceEntityId, orgId: issue.orgId },
-        select: {
-          id: true,
-          orderId: true,
-          status: true,
-          packLines: { select: { sku: true, expectedQuantity: true, packedQuantity: true } },
-        },
-      });
-      if (packTask) {
+    if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId && this.packTaskContext) {
+      const context = await this.packTaskContext.get(issue.orgId, issue.sourceEntityId);
+      if (context) {
+        const { recentAudits, ...packTask } = context;
         ctx.packTask = packTask;
-        ctx.recentAudits = await this.prisma.packAudit.findMany({
-          where: { packTaskId: packTask.id, orgId: issue.orgId },
-          select: { verdict: true, weightVariancePercent: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        });
+        ctx.recentAudits = recentAudits;
       }
     }
     return ctx;

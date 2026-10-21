@@ -2134,8 +2134,11 @@ When not ready, the check returns the list of missing requirements. This gates:
 The happy-path trigger remains `POST /load-plans/:id/complete`, after WMS picking and loading, by
 which point the cargo detail is populated. Since #173 the route does not generate the document
 itself. Completing a load plan emits `load_plan.completed` carrying `bolRequested`, and
-`BolGenerationHandler` on the TMS side generates the BOL, links it to the load plan, and emits
-`load_plan.bol_generated` (schema v2, carrying `documentId` and `fileName`).
+`BolGenerationHandler` on the TMS side generates the BOL and emits `load_plan.bol_generated`
+(schema v2, carrying `documentId` and `fileName`). Since #359 the warehouse records the link:
+`LoadPlanBolLinkHandler` sets `LoadPlan.bolDocumentId`, keeping the first document if two arrive.
+The TMS handler no longer reads or writes the load plan, and skips a load plan it has already
+published a BOL for, found in the event log.
 
 Two consequences worth knowing:
 - Generation is asynchronous, so the completion response carries `bolRequested`, not
@@ -2738,7 +2741,7 @@ Default tolerance is 10%, overridable per-audit via `weightTolerancePercent` on 
 Dim-weight is calculated only when an audit links to a `CartonCatalogue` (expected dims) AND the caller supplies all three actual dims. Formula is the industry standard `(L × W × H cm) / 5000 = kg`. The result is stored as a separate `dimWeightVariancePercent` column; verdict today is driven only by the scale weight, but the dim-weight delta is surfaced in UI so ops can investigate.
 
 ### Issue auto-creation
-When verdict is `warning` or `fail`, the deterministic issue engine raises the issue from its registry entry (`pack_audit_variance`: `category: 'exception'`, `sourceEntityType: 'pack_task'`, verdict `fail` maps to high priority, `warning` to medium), with the engine's full signal ledger, dedup, corroboration scoring and SLA stamping. `PackAuditIssueLinkHandler` maintains the `PackAudit.issueId` back-link (on `issue.created` for the first raise, on the variance event for repeats against an open issue). The previous behaviour (inline `issue.create` in the command's transaction with the invalid `category: 'quality'`) bypassed the issue pipeline, so those issues never fired `issue.created` and never reached `IssueReadModel` or the triage board; `scripts/fix-pack-audit-issues.ts` repairs historical rows, followed by the read-model backfill.
+When verdict is `warning` or `fail`, the deterministic issue engine raises the issue from its registry entry (`pack_audit_variance`: `category: 'exception'`, `sourceEntityType: 'pack_task'`, verdict `fail` maps to high priority, `warning` to medium), with the engine's full signal ledger, dedup, corroboration scoring and SLA stamping. `PackAuditLinkHandler` (WMS since #359, asking core for the open issue through `IOpenIssueLookup`) maintains the `PackAudit.issueId` back-link (on `issue.created` for the first raise, on the variance event for repeats against an open issue). The previous behaviour (inline `issue.create` in the command's transaction with the invalid `category: 'quality'`) bypassed the issue pipeline, so those issues never fired `issue.created` and never reached `IssueReadModel` or the triage board; `scripts/fix-pack-audit-issues.ts` repairs historical rows, followed by the read-model backfill.
 
 ### Events
 - `pack.audit_recorded` - every audit, payload includes verdict, variances, expected/actual weight, tolerance, issueId (null at emit time; linked after commit)

@@ -1,4 +1,4 @@
-import { CartonCatalogue } from '@prisma/client';
+import type { CartonSpec } from '../../ports/warehouseQueries.js';
 
 /**
  * Container Intelligence: given a list of pack items and a catalogue of cartons,
@@ -88,7 +88,7 @@ interface ItemGroup {
 }
 
 export class ContainerIntelligenceService {
-  recommend(items: PackItem[], cartons: CartonCatalogue[], options: RecommendOptions = {}): RecommendationResult {
+  recommend(items: PackItem[], cartons: CartonSpec[], options: RecommendOptions = {}): RecommendationResult {
     const result: RecommendationResult = {
       packages: [],
       warnings: [],
@@ -172,7 +172,7 @@ export class ContainerIntelligenceService {
 
   private packGroup(
     group: ItemGroup,
-    cartons: CartonCatalogue[],
+    cartons: CartonSpec[],
     _options: RecommendOptions,
     result: RecommendationResult,
   ): PackageSuggestion | null {

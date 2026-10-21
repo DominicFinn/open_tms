@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import type { ICartonCatalogue } from '../ports/warehouseQueries.js';
 import { container, TOKENS } from '../di/index.js';
 import { ContainerIntelligenceService } from '../services/containers/ContainerIntelligenceService.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
@@ -9,7 +9,8 @@ export async function containerIntelligenceRoutes(server: FastifyInstance) {
   // Organization row comes back first (#117).
   await registerOrgScope(server);
 
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  // The warehouse's carton list, asked of WMS rather than read from its table (#359)
+  const cartonCatalogue = container.resolve<ICartonCatalogue>(TOKENS.ICartonCatalogue);
   const service = new ContainerIntelligenceService();
 
   server.post('/api/v1/containers/recommend', {
@@ -50,9 +51,7 @@ export async function containerIntelligenceRoutes(server: FastifyInstance) {
     const body = req.body as any;
     const orgId = req.orgId!;
 
-    const where: any = { orgId, active: true };
-    if (body.locationId) where.locationId = body.locationId;
-    const cartons = await prisma.cartonCatalogue.findMany({ where });
+    const cartons = await cartonCatalogue.listActive(orgId, body.locationId);
 
     const result = service.recommend(
       body.items,

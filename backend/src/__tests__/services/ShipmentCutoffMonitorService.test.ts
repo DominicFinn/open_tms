@@ -6,6 +6,7 @@ import {
   buildLocalDateTime,
 } from '../../services/cutoff/ShipmentCutoffMonitorService';
 import { EVENT_TYPES } from '../../events/eventTypes';
+import { WarehouseQueries } from '../../services/warehouse/WarehouseQueries';
 
 const DEFAULT_CONFIG = {
   minutesPerPendingPick: 45,
@@ -150,7 +151,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('returns no risk when there is no carrier assigned', async () => {
     const prisma = makePrisma();
     const bus = { publish: jest.fn() };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
     const result = await svc.evaluateShipment(makeShipment({ carrierId: null }), now, 'org-1');
     expect(result.severity).toBeNull();
     expect(result.cutoffAt).toBeNull();
@@ -159,7 +160,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('scopes the cutoff and pending work queries to the shipment org', async () => {
     const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
     await svc.evaluateShipment(makeShipment(), now, 'org-1');
 
     expect(prisma.carrierCutoff.findMany).toHaveBeenCalledWith({
@@ -173,7 +174,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('returns no risk when carrier has no cutoff for today', async () => {
     const prisma = makePrisma({ cutoffs: [] });
     const bus = { publish: jest.fn() };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.severity).toBeNull();
   });
@@ -182,7 +183,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     // 150 min to cutoff, 4 pending picks × 45 = 180 min of work → 30 min past cutoff
     const prisma = makePrisma({ pickCount: 4, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.severity).toBe('critical');
@@ -207,7 +208,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     // 3 picks = 135min → buffer 15 → warning
     const prisma = makePrisma({ pickCount: 3, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.severity).toBe('warning');
@@ -223,7 +224,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     // 150 min to cutoff, 1 pick × 45 = 45min, buffer = 105 → minor
     const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.severity).toBe('minor');
@@ -235,7 +236,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     const shipmentUpdate = jest.fn().mockResolvedValue({});
     const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1, shipmentUpdate });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const result = await svc.evaluateShipment(makeShipment({ lastCutoffRiskSeverity: 'critical' }), now, 'org-1');
     expect(result.severity).toBe('minor');
@@ -250,7 +251,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('does not emit cutoff_cleared when the shipment was not previously at risk', async () => {
     const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     await svc.evaluateShipment(makeShipment({ lastCutoffRiskSeverity: null }), now, 'org-1');
     expect((bus.publish as jest.Mock).mock.calls.find(c => c[0].type === EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED)).toBeFalsy();
@@ -259,7 +260,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('dedupes warning re-notifications within the window', async () => {
     const prisma = makePrisma({ pickCount: 3, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const shipment = makeShipment({
       lastCutoffRiskSeverity: 'warning',
@@ -277,7 +278,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('escalates to critical even within the dedup window', async () => {
     const prisma = makePrisma({ pickCount: 4, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const shipment = makeShipment({
       lastCutoffRiskSeverity: 'warning',
@@ -296,7 +297,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
   it('fires again after the dedup window even at the same severity', async () => {
     const prisma = makePrisma({ pickCount: 3, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const shipment = makeShipment({
       lastCutoffRiskSeverity: 'warning',
@@ -316,7 +317,7 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     // For blocking stage test, just verify the field; severity doesn't matter.
     const prisma = makePrisma({ pickCount: 0, packCount: 0, loadPlanCount: 0 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };
-    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any, new WarehouseQueries(prisma));
 
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.blockingStage).toBe('load_planning');

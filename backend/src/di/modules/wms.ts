@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { WarehouseQueries } from '../../services/warehouse/WarehouseQueries.js';
 import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
@@ -116,6 +117,11 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.ICartonizationService).toFactory(() => {
     return new CartonizationService(container.resolve(TOKENS.PrismaClient));
   });
+
+  // The warehouse's answers to TMS and core (#359). One instance behind three ports.
+  container.singleton(TOKENS.IFulfilmentProgress).toFactory(() => new WarehouseQueries(container.resolve(TOKENS.PrismaClient)));
+  container.singleton(TOKENS.IPackTaskContext).toFactory(() => container.resolve(TOKENS.IFulfilmentProgress));
+  container.singleton(TOKENS.ICartonCatalogue).toFactory(() => container.resolve(TOKENS.IFulfilmentProgress));
 }
 
 export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandlerDeps): void {

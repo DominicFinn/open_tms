@@ -14,7 +14,7 @@ export async function warehouseOperationsDashboardRoutes(server: FastifyInstance
   await registerWmsGuard(server);
 
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
-  const service = new WarehouseOperationsDashboardService(prisma);
+  const service = new WarehouseOperationsDashboardService(prisma, container.resolve(TOKENS.IOperationsSignals));
 
   server.get('/api/v1/wms/operations-dashboard', {
     schema: {

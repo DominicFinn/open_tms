@@ -64,22 +64,18 @@ export class CustomerWebhookHandler implements IEventHandler {
   /**
    * Resolve the relevant customerId for an event. Most domain events carry it
    * directly in the payload (rma, order, shipment, invoice). Pack audit events
-   * don't - they reference a packTaskId, so we resolve via PackTask → Order.customerId.
+   * carry the order instead, so we resolve via Order.customerId. The pack task itself is a
+   * warehouse row and isn't read here (#359).
    */
   private async resolveCustomerId(event: DomainEvent): Promise<string | null> {
     const payload = event.payload as Record<string, unknown> | null;
     if (payload && typeof payload.customerId === 'string') return payload.customerId;
 
     if (event.type === 'pack.audit_recorded' || event.type === 'pack.audit_variance_detected') {
-      const packTaskId = payload?.packTaskId as string | undefined;
-      if (!packTaskId) return null;
-      const task = await this.prisma.packTask.findUnique({
-        where: { id: packTaskId, orgId: event.orgId },
-        select: { orderId: true },
-      });
-      if (!task?.orderId) return null;
+      const orderId = payload?.orderId as string | undefined;
+      if (!orderId) return null;
       const order = await this.prisma.order.findUnique({
-        where: { id: task.orderId, orgId: event.orgId },
+        where: { id: orderId, orgId: event.orgId },
         select: { customerId: true },
       });
       return order?.customerId ?? null;

@@ -1,5 +1,8 @@
 /**
- * PackAuditIssueLinkHandler
+ * PackAuditLinkHandler (WMS)
+ *
+ * Writes PackAudit, a warehouse table, so it lives in WMS. It asks core for the open issue through
+ * IOpenIssueLookup rather than reading the issue table (#359).
  *
  * The issue engine now raises pack-audit issues from the registry entry
  * (pack_audit_variance, #133) — this handler only maintains the
@@ -19,6 +22,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import type { IOpenIssueLookup } from '../../ports/openIssueLookup.js';
 import { DomainEvent } from '../DomainEvent.js';
 import { IEventHandler } from '../IEventHandler.js';
 import { SubscribeOptions } from '../IEventBus.js';
@@ -26,12 +30,15 @@ import { EVENT_TYPES } from '../eventTypes.js';
 
 const PACK_AUDIT_ISSUE_TYPE = 'pack_audit_variance';
 
-export class PackAuditIssueLinkHandler implements IEventHandler {
+export class PackAuditLinkHandler implements IEventHandler {
   readonly name = 'handler.pack_audit_issue_link';
   readonly eventPatterns = ['issue.created', EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED];
   readonly options: SubscribeOptions = { concurrency: 1, priority: 10 };
 
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private openIssues: IOpenIssueLookup,
+  ) {}
 
   async handle(event: DomainEvent): Promise<void> {
     try {
@@ -59,21 +66,12 @@ export class PackAuditIssueLinkHandler implements IEventHandler {
     const packTaskId = (event.payload as { packTaskId?: string })?.packTaskId;
     if (!packTaskId) return;
 
-    const open = await this.prisma.issue.findFirst({
-      where: {
-        orgId: event.orgId,
-        issueType: PACK_AUDIT_ISSUE_TYPE,
-        sourceEntityType: 'pack_task',
-        sourceEntityId: packTaskId,
-        status: { notIn: ['resolved', 'closed'] },
-      },
-      select: { id: true },
-    });
-    if (!open) return;
+    const openIssueId = await this.openIssues.findOpenIssueId(event.orgId, PACK_AUDIT_ISSUE_TYPE, 'pack_task', packTaskId);
+    if (!openIssueId) return;
 
     await this.prisma.packAudit.updateMany({
       where: { id: event.entityId, orgId: event.orgId, issueId: null },
-      data: { issueId: open.id },
+      data: { issueId: openIssueId },
     });
   }
 }

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import type { IOperationsSignals } from '../../ports/operationsSignals.js';
 
 export interface ThroughputKpis {
   today: { receipts: number; putaways: number; picks: number; packs: number; shipmentsDispatched: number };
@@ -54,7 +55,11 @@ export interface DashboardPayload {
 }
 
 export class WarehouseOperationsDashboardService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    /** Issues, shipments and returns, asked of their owners rather than read here (#359). */
+    private signals: IOperationsSignals,
+  ) {}
 
   async buildSnapshot(orgId: string, now: Date = new Date()): Promise<DashboardPayload> {
     const [throughput, cycleTimes, quality, liveWork, exceptions, capacity] = await Promise.all([
@@ -87,7 +92,7 @@ export class WarehouseOperationsDashboardService {
       this.prisma.putawayTask.count({ where: { orgId, status: 'completed', updatedAt: { gte: since } } }),
       this.prisma.pickTask.count({ where: { orgId, status: 'completed', completedAt: { gte: since } } }),
       this.prisma.packTask.count({ where: { orgId, status: 'completed', updatedAt: { gte: since } } }),
-      this.prisma.shipment.count({ where: { orgId, status: { in: ['in_transit', 'delivered'] }, updatedAt: { gte: since } } }),
+      this.signals.shipmentsDispatchedSince(orgId, since),
     ]);
 
     const [r1, p1, pick1, pack1, ship1] = await countCompleted(startOfToday);
@@ -122,29 +127,8 @@ export class WarehouseOperationsDashboardService {
         .map(p => p.updatedAt.getTime() - p.receivingTask!.createdAt.getTime())
     );
 
-    // Order to ship: Order.createdAt vs earliest shipment dispatchedAt/updatedAt
-    // Simple v1: sample shipments dispatched in window, join back to order created time via OrderShipment
-    const recentDispatched = await this.prisma.shipment.findMany({
-      where: {
-        orgId,
-        status: { in: ['in_transit', 'delivered'] },
-        updatedAt: { gte: thirtyDaysAgo },
-      },
-      select: {
-        updatedAt: true,
-        orderShipments: { select: { order: { select: { createdAt: true } } } },
-      },
-      take: 500,
-    });
-    const orderToShipMs: number[] = [];
-    for (const s of recentDispatched) {
-      for (const os of s.orderShipments) {
-        if (os.order) orderToShipMs.push(s.updatedAt.getTime() - os.order.createdAt.getTime());
-      }
-    }
-    const orderToShipHours = orderToShipMs.length > 0
-      ? Math.round((orderToShipMs.reduce((a, b) => a + b, 0) / orderToShipMs.length / 3_600_000) * 10) / 10
-      : null;
+    const orderToShip = await this.signals.orderToShip(orgId, thirtyDaysAgo);
+    const orderToShipHours = orderToShip.averageHours;
 
     return {
       pickCycleMinutes,
@@ -153,7 +137,7 @@ export class WarehouseOperationsDashboardService {
       samples: {
         pickCycle: picks.length,
         dockToStock: putaways.filter(p => p.receivingTask).length,
-        orderToShip: orderToShipMs.length,
+        orderToShip: orderToShip.samples,
       },
     };
   }
@@ -222,12 +206,8 @@ export class WarehouseOperationsDashboardService {
   }
 
   private async buildExceptions(orgId: string): Promise<ExceptionKpis> {
-    const [openIssues, criticalIssues, cutoffCritical, cutoffWarning, pendingRmas, packFailures] = await Promise.all([
-      this.prisma.issue.count({ where: { orgId, status: { in: ['open', 'in_progress'] } } }),
-      this.prisma.issue.count({ where: { orgId, status: { in: ['open', 'in_progress'] }, priority: 'critical' } }),
-      this.prisma.shipment.count({ where: { orgId, lastCutoffRiskSeverity: 'critical' } }),
-      this.prisma.shipment.count({ where: { orgId, lastCutoffRiskSeverity: 'warning' } }),
-      this.prisma.rma.count({ where: { orgId, status: { in: ['authorized', 'in_transit', 'received', 'inspecting'] } } }),
+    const [signals, packFailures] = await Promise.all([
+      this.signals.current(orgId),
       this.prisma.packAudit.count({
         where: {
           orgId, verdict: 'fail',
@@ -237,10 +217,10 @@ export class WarehouseOperationsDashboardService {
     ]);
 
     return {
-      openIssues,
-      criticalIssues,
-      cutoffAtRisk: { critical: cutoffCritical, warning: cutoffWarning },
-      pendingReturns: pendingRmas,
+      openIssues: signals.openIssues,
+      criticalIssues: signals.criticalIssues,
+      cutoffAtRisk: { critical: signals.cutoffCritical, warning: signals.cutoffWarning },
+      pendingReturns: signals.pendingRmas,
       packAuditFailuresOpen: packFailures,
     };
   }

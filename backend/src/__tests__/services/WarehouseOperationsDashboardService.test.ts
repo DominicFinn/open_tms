@@ -1,4 +1,5 @@
 import { WarehouseOperationsDashboardService } from '../../services/warehouse/WarehouseOperationsDashboardService';
+import { OperationsSignalsSource } from '../../services/operations/OperationsSignalsSource';
 
 function makePrisma(overrides: any = {}) {
   const defaults = {
@@ -26,7 +27,7 @@ describe('WarehouseOperationsDashboardService', () => {
 
   it('returns a full snapshot with all sections', async () => {
     const prisma = makePrisma();
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.generatedAt).toBe(now.toISOString());
     expect(snap.throughput).toBeDefined();
@@ -58,7 +59,7 @@ describe('WarehouseOperationsDashboardService', () => {
       packTask: { count: byWindow(7, 55) },
       shipment: { count: byWindow(4, 28) },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.throughput.today).toEqual({ receipts: 3, putaways: 5, picks: 8, packs: 7, shipmentsDispatched: 4 });
     expect(snap.throughput.last7Days).toEqual({ receipts: 21, putaways: 32, picks: 60, packs: 55, shipmentsDispatched: 28 });
@@ -70,7 +71,7 @@ describe('WarehouseOperationsDashboardService', () => {
     const prisma = makePrisma({
       pickTask: { findMany: jest.fn().mockResolvedValue([{ startedAt, completedAt }]) },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.cycleTimes.pickCycleMinutes).toBe(18);
     expect(snap.cycleTimes.samples.pickCycle).toBe(1);
@@ -78,7 +79,7 @@ describe('WarehouseOperationsDashboardService', () => {
 
   it('returns null for cycle times when no samples exist', async () => {
     const prisma = makePrisma();
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.cycleTimes.pickCycleMinutes).toBeNull();
     expect(snap.cycleTimes.dockToStockMinutes).toBeNull();
@@ -95,7 +96,7 @@ describe('WarehouseOperationsDashboardService', () => {
         ]),
       },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.cycleTimes.dockToStockMinutes).toBe(45);
   });
@@ -110,7 +111,7 @@ describe('WarehouseOperationsDashboardService', () => {
         return 0;
       });
     const prisma = makePrisma({ pickTask: { count: pickCount } });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     // Only quality.buildQuality uses short_pick; throughput uses completed-today and completed-7d.
     // The mock returns 90 for any 'completed' query, so throughput counts will also be 90. That's OK for the test.
@@ -126,7 +127,7 @@ describe('WarehouseOperationsDashboardService', () => {
         return 100; // total
       });
     const prisma = makePrisma({ packAudit: { count: packAuditCount } });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.quality.packAuditPassRatePercent).toBe(95);
     expect(snap.quality.packAuditSamples).toBe(100);
@@ -144,7 +145,7 @@ describe('WarehouseOperationsDashboardService', () => {
         ]),
       },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.quality.inventoryAccuracyPercent).toBe(98);
     expect(snap.quality.cycleCountSamples).toBe(3);
@@ -159,7 +160,7 @@ describe('WarehouseOperationsDashboardService', () => {
         ]),
       },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.quality.inventoryAccuracyPercent).toBe(100);
     expect(snap.quality.cycleCountSamples).toBe(1);
@@ -178,7 +179,7 @@ describe('WarehouseOperationsDashboardService', () => {
       wave: { count: waveCount },
       receivingTask: { count: receivingCount },
     });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     // Live work reuses task counts; the mocks return the same for all calls.
     expect(snap.liveWork.activeWaves).toBe(2);
@@ -190,7 +191,7 @@ describe('WarehouseOperationsDashboardService', () => {
       .mockResolvedValueOnce(200)  // total
       .mockResolvedValueOnce(150); // occupied
     const prisma = makePrisma({ warehouseBin: { count: binCount } });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.capacity.totalBins).toBe(200);
     expect(snap.capacity.binsWithInventory).toBe(150);
@@ -199,7 +200,7 @@ describe('WarehouseOperationsDashboardService', () => {
 
   it('returns null utilization when there are no bins', async () => {
     const prisma = makePrisma();
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.capacity.utilizationPercent).toBeNull();
   });
@@ -212,7 +213,7 @@ describe('WarehouseOperationsDashboardService', () => {
         return 0;
       });
     const prisma = makePrisma({ shipment: { count: shipmentCount } });
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     const snap = await svc.buildSnapshot('org-1', now);
     expect(snap.exceptions.cutoffAtRisk.critical).toBe(3);
     expect(snap.exceptions.cutoffAtRisk.warning).toBe(5);
@@ -220,7 +221,7 @@ describe('WarehouseOperationsDashboardService', () => {
 
   it('scopes every query on a tenant-owned model to the org (#303)', async () => {
     const prisma = makePrisma();
-    const svc = new WarehouseOperationsDashboardService(prisma);
+    const svc = new WarehouseOperationsDashboardService(prisma, new OperationsSignalsSource(prisma));
     await svc.buildSnapshot('org-1', now);
 
     // CycleCountLine has no orgId of its own; it is scoped through its cycle count.

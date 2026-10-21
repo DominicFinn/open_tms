@@ -6,10 +6,13 @@
  * decides what that means for paperwork. A standalone FinnWMS registers no subscriber, produces
  * no BOL, and nothing in the warehouse notices.
  *
- * IDEMPOTENCY: pg-boss redelivers on failure, so the handler skips a load plan that already has
- * a document, and claims the link with a conditional update rather than a blind write. Two
- * concurrent deliveries can each render a PDF, but only one link is ever recorded: a wasted
- * render is cheap, a load plan pointing at two BOLs is not.
+ * The load plan is a warehouse row, so this handler neither reads nor writes it (#359). It
+ * publishes `load_plan.bol_generated` with the document, and the warehouse records the link.
+ *
+ * IDEMPOTENCY: pg-boss redelivers on failure, so the handler skips a load plan it has already
+ * published a BOL for, found in the event log. Two concurrent deliveries can each render a PDF,
+ * but the warehouse keeps only the first link: a wasted render is cheap, a load plan pointing at
+ * two BOLs is not.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -48,11 +51,12 @@ export class BolGenerationHandler implements IEventHandler {
     const payload = (event.payload ?? {}) as LoadPlanCompletedPayload;
     if (!payload.bolRequested || !payload.shipmentId) return;
 
-    const plan = await this.prisma.loadPlan.findFirst({
-      where: { id: event.entityId, orgId: event.orgId },
-      select: { id: true, bolDocumentId: true },
+    const loadPlanId = event.entityId;
+    const alreadyGenerated = await this.prisma.domainEventLog.findFirst({
+      where: { orgId: event.orgId, type: EVENT_TYPES.LOAD_PLAN_BOL_GENERATED, entityType: 'load_plan', entityId: loadPlanId },
+      select: { id: true },
     });
-    if (!plan || plan.bolDocumentId) return;
+    if (alreadyGenerated) return;
 
     const document = await this.documentService.generateBOL(
       event.orgId,
@@ -61,28 +65,15 @@ export class BolGenerationHandler implements IEventHandler {
       event.actorId ?? undefined
     );
 
-    const claimed = await this.prisma.loadPlan.updateMany({
-      where: { id: plan.id, orgId: event.orgId, bolDocumentId: null },
-      data: { bolDocumentId: document.id },
-    });
-
-    if (claimed.count === 0) {
-      console.warn('[BolGenerationHandler] BOL already linked, discarding duplicate', {
-        loadPlanId: plan.id,
-        orgId: event.orgId,
-      });
-      return;
-    }
-
     await this.eventBus.publish(
       createEvent({
         type: EVENT_TYPES.LOAD_PLAN_BOL_GENERATED,
         entityType: 'load_plan',
-        entityId: plan.id,
+        entityId: loadPlanId,
         orgId: event.orgId,
         actorId: event.actorId ?? undefined,
         payload: {
-          loadPlanId: plan.id,
+          loadPlanId,
           shipmentId: payload.shipmentId,
           documentId: document.id,
           fileName: document.fileName,

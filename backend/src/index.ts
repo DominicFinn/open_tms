@@ -212,7 +212,7 @@ async function start() {
         const cutoffBoss = (queue as any).boss;
         if (cutoffBoss) {
           const eventBus = container.resolve<any>(TOKENS.IEventBus);
-          const cutoffService = new ShipmentCutoffMonitorService(server.prisma, eventBus);
+          const cutoffService = new ShipmentCutoffMonitorService(server.prisma, eventBus, container.resolve(TOKENS.IFulfilmentProgress));
           await registerCutoffMonitorSchedule(cutoffBoss);
           await queue.subscribe(CUTOFF_MONITOR_QUEUE, createCutoffMonitorWorker(cutoffService));
           server.log.info('Cutoff-at-risk monitor worker registered');

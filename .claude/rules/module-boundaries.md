@@ -49,6 +49,13 @@ Two sanctioned ways, in order of preference:
 Direct imports across a disallowed edge, and reaching into another module's Prisma models, are both
 out. No FK crosses the tms/wms boundary either. References there are soft string ids.
 
+**A command never calls a port.** Once FinnWMS runs on .NET, a port is a network call, and a
+command runs inside a transaction (see the transactions rule). What a command needs from another
+module comes from a local projection (`WmsFulfilmentOrder`, `HandlingUnit`) or from the event that
+triggered it. Ports are for reads made outside a transaction: routes, services, cron jobs and event
+handlers. Register a port's implementation in the implementing module's DI file under a token, and
+resolve it by token, so neither side imports the other. The current ports are in `backend/src/ports/`.
+
 ## Running the check
 
 ```bash

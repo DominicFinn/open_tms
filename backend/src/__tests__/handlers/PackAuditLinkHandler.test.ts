@@ -1,4 +1,5 @@
-import { PackAuditIssueLinkHandler } from '../../events/handlers/PackAuditIssueLinkHandler';
+import { PackAuditLinkHandler } from '../../events/handlers/PackAuditLinkHandler';
+import { OpenIssueLookup } from '../../services/issues/OpenIssueLookup';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { DomainEvent } from '../../events/DomainEvent';
 
@@ -24,10 +25,10 @@ function ev(overrides: Partial<DomainEvent>): DomainEvent {
   } as DomainEvent;
 }
 
-describe('PackAuditIssueLinkHandler', () => {
+describe('PackAuditLinkHandler', () => {
   it('links unlinked audits to a freshly-raised pack-audit issue', async () => {
     const prisma = makePrisma();
-    const handler = new PackAuditIssueLinkHandler(prisma);
+    const handler = new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma));
 
     await handler.handle(ev({
       type: 'issue.created',
@@ -43,7 +44,7 @@ describe('PackAuditIssueLinkHandler', () => {
 
   it('ignores issue.created for other issue types', async () => {
     const prisma = makePrisma();
-    const handler = new PackAuditIssueLinkHandler(prisma);
+    const handler = new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma));
 
     await handler.handle(ev({
       type: 'issue.created',
@@ -55,7 +56,7 @@ describe('PackAuditIssueLinkHandler', () => {
 
   it('links a repeat-variance audit to the already-open issue', async () => {
     const prisma = makePrisma({ id: 'issue-open' });
-    const handler = new PackAuditIssueLinkHandler(prisma);
+    const handler = new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma));
 
     await handler.handle(ev({
       type: EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED,
@@ -79,7 +80,7 @@ describe('PackAuditIssueLinkHandler', () => {
 
   it('does nothing on a variance when no issue is open yet (issue.created will link it)', async () => {
     const prisma = makePrisma(null);
-    const handler = new PackAuditIssueLinkHandler(prisma);
+    const handler = new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma));
 
     await handler.handle(ev({
       type: EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED,
@@ -94,7 +95,7 @@ describe('PackAuditIssueLinkHandler', () => {
   it('never throws when the database fails (edge swallows, logs)', async () => {
     const prisma = makePrisma();
     prisma.packAudit.updateMany.mockRejectedValue(new Error('db down'));
-    const handler = new PackAuditIssueLinkHandler(prisma);
+    const handler = new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma));
 
     await expect(handler.handle(ev({
       type: 'issue.created',

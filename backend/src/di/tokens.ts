@@ -156,6 +156,12 @@ export const TOKENS = {
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
   ICartonizationService: Symbol.for('ICartonizationService'),
   IFulfilmentDemandSource: Symbol.for('IFulfilmentDemandSource'),
+  // Cross-module ports (#359). Registered by the implementing module, resolved by the caller.
+  IFulfilmentProgress: Symbol.for('IFulfilmentProgress'),
+  IPackTaskContext: Symbol.for('IPackTaskContext'),
+  ICartonCatalogue: Symbol.for('ICartonCatalogue'),
+  IOperationsSignals: Symbol.for('IOperationsSignals'),
+  IOpenIssueLookup: Symbol.for('IOpenIssueLookup'),
   ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),
 
   // Order line-item rating tokens (Phase 1)
