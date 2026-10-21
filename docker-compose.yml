@@ -20,6 +20,8 @@ services:
       S3_SECRET_ACCESS_KEY: minioadmin
       S3_REGION: us-east-1
       S3_FORCE_PATH_STYLE: "true"
+      # Ported WMS routes go to the .NET service (ADR 0004). Unset to serve them from Node again.
+      WMS_SERVICE_URL: http://wms:8080
     depends_on:
       - db
       - minio
@@ -33,6 +35,20 @@ services:
       - backend
     ports:
       - "8080:80"
+  # FinnWMS .NET service (ADR 0004). Reads Prisma-owned tables through views, so it starts after
+  # the backend has migrated; it restarts until those tables exist.
+  wms:
+    build: ./services/wms
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Wms: Host=db;Port=5432;Database=tms;Username=tms;Password=tms
+      Wms__MigrateOnStartup: "true"
+    depends_on:
+      - db
+      - backend
+    ports:
+      - "5080:8080"
+    restart: on-failure
   minio:
     image: minio/minio
     ports:

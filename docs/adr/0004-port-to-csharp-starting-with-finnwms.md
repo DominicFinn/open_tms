@@ -117,7 +117,9 @@ and `inventory` modules together, as one .NET service.**
 
 ### Operations
 
-- `/health` and `/metrics` from the first commit, in the same Prometheus format as the Node side.
+- `/health` and `/metrics` from the first commit. `/metrics` is in Prometheus format. (Corrected
+  2026-10-21: the original text said this matched the Node side, but Node's `/metrics` is
+  tenant-scoped JSON.)
 - OpenTelemetry traces for HTTP, Npgsql and the outbox relay.
 - The service ships as its own container and joins `docker-compose.yml`.
 

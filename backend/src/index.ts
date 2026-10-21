@@ -54,6 +54,7 @@ import { registerInventoryPublicRoutes, registerInventoryAuthenticatedRoutes } f
 import { registerQualityPublicRoutes, registerQualityAuthenticatedRoutes } from './routes/modules/quality.js';
 import { registerTmsPublicRoutes, registerTmsAuthenticatedRoutes } from './routes/modules/tms.js';
 import { registerWmsPublicRoutes, registerWmsAuthenticatedRoutes } from './routes/modules/wms.js';
+import wmsServiceProxy from './plugins/wmsServiceProxy.js';
 
 const server = Fastify({ logger: true });
 
@@ -66,6 +67,8 @@ async function start() {
     origin: process.env.NODE_ENV === 'production' ? allowedOrigins : true,
     credentials: true,
   });
+  // After CORS, so forwarded responses still carry the CORS headers.
+  await server.register(wmsServiceProxy);
   await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {

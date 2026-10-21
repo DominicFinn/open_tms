@@ -480,3 +480,8 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
 ### Internal user auth
 
 - **Role & permission management UI** ✅ (#142) - create/edit/delete custom roles from /settings with a grouped permission picker (catalogue-driven, so new permission families appear automatically); system roles locked in the UI and on the API (seeder re-syncs them on boot); roles:read/roles:write guards added to all role routes, closing a privilege-escalation hole where any authenticated user could create and self-assign a '*' role
+
+### Port to C#: FinnWMS service (Oct 2026)
+
+- **ADR 0004** (#351) ✅ - the backend moves to C# and .NET one module at a time, starting with WMS and inventory together as one service, with hand-written SQL through Dapper, DbUp migrations and Postgres row-level security
+- **Walking skeleton** (#352) ✅ - `services/wms/` on .NET 10: validates the existing internal JWTs, runs every query in a tenant session (`SET LOCAL app.org_id` and `SET LOCAL ROLE wms_app`), serves `/health` and Prometheus `/metrics` with OpenTelemetry traces, and publishes a committed OpenAPI document. `GET /api/v1/facilities` and `/:id` are ported, read through a transitional view over Prisma's table, and the Node backend forwards them when `WMS_SERVICE_URL` is set, so unsetting it rolls back. The frontend's facility picker uses types generated from the OpenAPI document. Responses match the Node implementation exactly

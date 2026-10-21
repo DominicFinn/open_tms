@@ -42,6 +42,7 @@ Loaded when you touch matching files:
 | `.claude/rules/design-system.md` | `frontend/src/**` — shadcn/ui primitives, styling prohibitions, tokens, icons |
 | `.claude/rules/ui-verification.md` | `frontend/src/**` — **never assume UI work is done**; field audit + E2E checklist |
 | `.claude/rules/realtime.md` | frontend + events — **broadcast, don't poll**; after commit; no PII on channels |
+| `.claude/rules/dotnet.md` | `services/**`: C# layering, **hand-written SQL in repositories**, tenant sessions and RLS, migrations, tests |
 | `.claude/rules/marketing-website.md` | `www/**`, `README.md` — no em dashes, project identity |
 | `.claude/rules/domains/*.md` | Per-domain rules: issues, edi, financials, archival, agents-and-automation, tracking-and-routing, tendering |
 

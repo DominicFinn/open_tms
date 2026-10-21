@@ -1,0 +1,13 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Repositories and handlers are resolved from DI and substituted in tests, so they stay instance
+# members even when they hold no state yet.
+dotnet_diagnostic.CA1822.severity = none
+
+[tests/**.cs]
+# Test names read as sentences.
+dotnet_diagnostic.CA1707.severity = none
