@@ -9,7 +9,9 @@ supersedes the old one and link the two.
 | # | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-security-event-geofencing.md) | Security event geofencing | Accepted | 2026 |
-| [0002](0002-modular-monolith-product-composition.md) | Modular monolith with build-time product composition (FinnTMS / FinnWMS split) | Accepted | 2026-08-16 |
+| [0002](0002-modular-monolith-product-composition.md) | Modular monolith with build-time product composition (FinnTMS / FinnWMS split) | Accepted, partly superseded by 0004 | 2026-08-16 |
+| [0003](0003-two-map-modes.md) | Two map modes: Google when a key is configured, OSM when not | Accepted | 2026-09-02 |
+| [0004](0004-port-to-csharp-starting-with-finnwms.md) | Port to C#, starting with FinnWMS | Accepted | 2026-10-21 |
 
 ## Convention
 

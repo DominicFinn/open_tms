@@ -1,6 +1,7 @@
 # ADR 0002: Modular Monolith with Build-Time Product Composition (FinnTMS / FinnWMS)
 
-- **Status:** Accepted
+- **Status:** Accepted. Partly superseded by [ADR 0004](0004-port-to-csharp-starting-with-finnwms.md),
+  which ports the backend to C# and runs FinnWMS as a separate .NET service
 - **Date:** 2026-08-16
 - **Relates to:** the split announced in the `open-tms-is-changing` article
   (`www/src/content/articles.ts`), `docs/roadmap/split-finntms-finnwms.md`
