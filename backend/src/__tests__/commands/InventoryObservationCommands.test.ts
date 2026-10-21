@@ -7,7 +7,7 @@ import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
 const mockBin = { id: 'bin-1', orgId: 'test-org', locationId: 'loc-1', facilityId: 'fac-1', label: 'BULK-A-01-01' };
 const mockRecord = {
-  id: 'inv-1', locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-001',
+  id: 'inv-1', facilityId: 'fac-1', binId: 'bin-1', sku: 'SKU-001',
   uomCode: 'EA', lotNumber: null, orgId: 'test-org',
 };
 
@@ -38,7 +38,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(RECORD_INVENTORY_OBSERVATION, {
-        locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-001', observedQuantity: 12,
+        facilityId: 'fac-1', binId: 'bin-1', sku: 'SKU-001', observedQuantity: 12,
       })
     );
 
@@ -66,7 +66,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(RECORD_INVENTORY_OBSERVATION, {
-        locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-999',
+        facilityId: 'fac-1', binId: 'bin-1', sku: 'SKU-999',
       })
     );
 
@@ -87,7 +87,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
 
     await handler.execute(
       createTestCommand(RECORD_INVENTORY_OBSERVATION, {
-        locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-001',
+        facilityId: 'fac-1', binId: 'bin-1', sku: 'SKU-001',
       }, { actorId: 'user-42' })
     );
 
@@ -96,7 +96,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
     );
   });
 
-  it('fails if bin not found at the given location for this org', async () => {
+  it('fails if bin not found at the given facility for this org', async () => {
     const tx = buildTx({ bin: null });
     const prisma = buildPrisma(tx);
     const { bus } = mockEventBus();
@@ -104,7 +104,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(RECORD_INVENTORY_OBSERVATION, {
-        locationId: 'loc-1', binId: 'missing-bin', sku: 'SKU-001',
+        facilityId: 'fac-1', binId: 'missing-bin', sku: 'SKU-001',
       })
     );
 

@@ -220,7 +220,7 @@ import WarehouseReceive from './warehouse/WarehouseReceive';
 // Inventory App (#233)
 import { InventoryAppLayout } from './inventory-app/inventory-app-layout';
 import InventoryAppLogin from './inventory-app/InventoryAppLogin';
-import InventoryAppSelectLocation from './inventory-app/InventoryAppSelectLocation';
+import InventoryAppSelectFacility from './inventory-app/InventoryAppSelectFacility';
 import InventoryAppLevels from './inventory-app/InventoryAppLevels';
 import InventoryAppScan from './inventory-app/InventoryAppScan';
 import WarehousePack from './warehouse/WarehousePack';
@@ -310,7 +310,7 @@ root.render(
 
         {/* Inventory App (#233) — standalone, lighter sibling of the warehouse PWA */}
         <Route path="/inventory-app/login" element={<InventoryAppLogin />} />
-        <Route path="/inventory-app/select-location" element={<InventoryAppSelectLocation />} />
+        <Route path="/inventory-app/select-location" element={<InventoryAppSelectFacility />} />
         <Route path="/inventory-app" element={<InventoryAppLayout />}>
           <Route index element={<InventoryAppLevels />} />
           <Route path="scan" element={<InventoryAppScan />} />

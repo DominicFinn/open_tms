@@ -60,6 +60,8 @@ public static partial class AuthServiceCollectionExtensions
             .AddAuthorizationBuilder()
             .AddPolicy(Policies.WmsRead, p => p.RequireAuthenticatedUser()
                 .AddRequirements(new PermissionRequirement("wms:read")))
+            .AddPolicy(Policies.WmsReadForInventoryApp, p => p.RequireAuthenticatedUser()
+                .AddRequirements(new PermissionRequirement("wms:read", "inventory")))
             .AddPolicy(Policies.WmsWrite, p => p.RequireAuthenticatedUser()
                 .AddRequirements(new PermissionRequirement("wms:write")));
 

@@ -19,7 +19,7 @@ const mockUnit = {
   order: { id: 'order-1' },
 };
 const mockTask = {
-  id: 'task-1', locationId: 'loc-1', receivingTaskId: 'recv-1',
+  id: 'task-1', locationId: 'loc-1', facilityId: 'fac-1', receivingTaskId: 'recv-1',
   trackableUnitId: 'unit-1', sourceBinId: 'bin-dock', targetBinId: 'bin-target',
   status: 'assigned', putawayType: 'directed', assignedToUserId: 'user-1',
   orgId: 'test-org', createdAt: new Date(), updatedAt: new Date(),
@@ -228,7 +228,29 @@ describe('CompletePutawayCommandHandler', () => {
     expect(tx.inventoryRecord.create).not.toHaveBeenCalled();
   });
 
-  it('fails if scanned bin not found at location', async () => {
+  it('resolves the scanned label within the task facility (#297)', async () => {
+    const tx = buildTx();
+    const handler = new CompletePutawayCommandHandler(buildPrisma(tx), mockEventBus().bus);
+
+    await handler.execute(createTestCommand(COMPLETE_PUTAWAY, { taskId: 'task-1', scannedBinLabel: 'BULK-A-01-01' }));
+
+    expect(tx.warehouseBin.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { facilityId: 'fac-1', label: 'BULK-A-01-01', orgId: 'test-org' } })
+    );
+  });
+
+  it('refuses a task with no facility rather than guessing where the scan was', async () => {
+    const tx = buildTx({ task: { facilityId: null } });
+    const handler = new CompletePutawayCommandHandler(buildPrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMPLETE_PUTAWAY, { taskId: 'task-1', scannedBinLabel: 'BULK-A-01-01' }));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('has no facility');
+    expect(tx.inventoryRecord.create).not.toHaveBeenCalled();
+  });
+
+  it('fails if scanned bin not found at its facility', async () => {
     const tx = buildTx();
     tx.warehouseBin.findFirst.mockResolvedValue(null);
     const prisma = buildPrisma(tx);

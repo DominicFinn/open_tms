@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Camera, CheckCircle2, ChevronLeft, Loader2, Search } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { getInventoryAppFacility } from './inventory-facility';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,16 +25,9 @@ interface Observation {
   bin: { label: string } | null;
 }
 
-function currentLocationId(): string | null {
-  try {
-    return JSON.parse(localStorage.getItem('inventory_app_location') || '{}').id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default function InventoryAppScan() {
-  const locationId = useMemo(currentLocationId, []);
+  const facilityId = useMemo(() => getInventoryAppFacility()?.id ?? null, []);
   const [bins, setBins] = useState<Bin[]>([]);
   const [binSearch, setBinSearch] = useState('');
   const [selectedBin, setSelectedBin] = useState<Bin | null>(null);
@@ -51,17 +45,17 @@ export default function InventoryAppScan() {
   const [recentLoading, setRecentLoading] = useState(true);
 
   useEffect(() => {
-    if (!locationId) return;
-    fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${locationId}`)
+    if (!facilityId) return;
+    fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(json => setBins(json.error ? [] : (json.data || [])));
     loadRecent();
-  }, [locationId]);
+  }, [facilityId]);
 
   function loadRecent() {
-    if (!locationId) return;
+    if (!facilityId) return;
     setRecentLoading(true);
-    fetch(`${API_URL}/api/v1/inventory/observations?locationId=${locationId}`)
+    fetch(`${API_URL}/api/v1/inventory/observations?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(json => setRecent(json.error ? [] : (json.data || [])))
       .finally(() => setRecentLoading(false));
@@ -79,7 +73,7 @@ export default function InventoryAppScan() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedBin || !locationId || !sku.trim()) return;
+    if (!selectedBin || !facilityId || !sku.trim()) return;
     setSubmitting(true);
     setFormError('');
 
@@ -88,7 +82,7 @@ export default function InventoryAppScan() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId,
+          facilityId,
           binId: selectedBin.id,
           sku: sku.trim(),
           observedQuantity: quantity.trim() === '' ? undefined : Number(quantity),
@@ -112,7 +106,7 @@ export default function InventoryAppScan() {
     }
   }
 
-  if (!locationId) {
+  if (!facilityId) {
     return (
       <Card className="flex flex-col items-center gap-3 p-8 text-center">
         <AlertTriangle className="h-10 w-10 text-muted-foreground" />

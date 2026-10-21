@@ -3,7 +3,6 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { requireLocationForInventory } from '../inventoryLocation.js';
 
 /**
  * Completes an RMA after all lines are dispositioned.
@@ -99,7 +98,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
         } else if (bin) {
           const newRecord = await tx.inventoryRecord.create({
             data: {
-              locationId: requireLocationForInventory(bin.locationId, `Bin ${line.currentBinId}`),
+              locationId: bin.locationId,
               facilityId: bin.facilityId,
               binId: line.currentBinId,
               sku: line.sku,

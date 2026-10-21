@@ -215,7 +215,7 @@ describe('Facility dual-write on generated putaway tasks (#225)', () => {
       .execute(createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' }));
 
     expect(tx.replenishmentRule.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org', locationId: 'loc-1' }) })
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org', facilityId: 'fac-1' }) })
     );
   });
 

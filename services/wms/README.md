@@ -71,4 +71,4 @@ The Node backend forwards these when `WMS_SERVICE_URL` is set (`backend/src/plug
 
 | Route | Issue |
 |---|---|
-| `GET /api/v1/facilities`, `GET /api/v1/facilities/:id` | #352 |
+| `GET /api/v1/facilities`, `GET /api/v1/facilities/:id` | #352. The inventory app's session may read these too (#297) |

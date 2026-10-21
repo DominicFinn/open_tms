@@ -89,6 +89,14 @@ public sealed class FacilityEndpointTests(DatabaseFixture db) : IAsyncDisposable
         Assert.False(string.IsNullOrEmpty(body.GetProperty("error").GetString()));
     }
 
+    [Fact]
+    public async Task The_inventory_app_session_can_list_facilities_to_pick_its_site()
+    {
+        var (status, _) = await GetAsync("/api/v1/facilities", TestTokens.Mint(DatabaseFixture.NewOrgId(), scope: "inventory"));
+
+        Assert.Equal(HttpStatusCode.OK, status);
+    }
+
     public static TheoryData<string, string?> Unauthenticated => new()
     {
         { "no token", null },
@@ -111,7 +119,7 @@ public sealed class FacilityEndpointTests(DatabaseFixture db) : IAsyncDisposable
     public static TheoryData<string, string> Forbidden => new()
     {
         { "warehouse session", TestTokens.Mint(DatabaseFixture.NewOrgId(), scope: "warehouse") },
-        { "inventory session", TestTokens.Mint(DatabaseFixture.NewOrgId(), scope: "inventory") },
+        { "inventory session without wms:read", TestTokens.Mint(DatabaseFixture.NewOrgId(), ["inventory:read"], scope: "inventory") },
         { "no wms permission", TestTokens.Mint(DatabaseFixture.NewOrgId(), ["shipments:read"]) },
     };
 

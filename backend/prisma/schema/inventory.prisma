@@ -27,11 +27,11 @@ model ProductUom {
 
 model InventoryRecord {
   id                String       @id @default(uuid())
-  /// Soft reference to the core Location the stock was keyed on before facilities (#297). No FK:
-  /// these tables leave Prisma for the .NET service (ADR 0005). Goes once reads use facilityId.
-  locationId        String
-  /// The facility of the record's bin, copied onto the row so stock can be read by facility
-  /// without a join (#297). Soft, like every reference out of inventory.
+  /// Soft reference to the core Location the stock was keyed on before facilities. Nothing reads it
+  /// since #297, and a facility with no Location writes null. The column goes after a soak.
+  locationId        String?
+  /// The facility of the record's bin, copied onto the row so stock is read by facility without a
+  /// join (#297). Soft, like every reference out of inventory.
   facilityId        String?
   binId             String
   bin               WarehouseBin @relation(fields: [binId], references: [id])
@@ -59,7 +59,7 @@ model InventoryRecord {
   observations InventoryObservation[]
 
   @@unique([binId, sku, uomCode, lotNumber, ownerCustomerId])
-  @@index([locationId])
+  @@index([facilityId, sku])
   @@index([orgId])
   @@index([sku])
   @@index([ownerCustomerId])
@@ -103,7 +103,7 @@ model InventoryTransaction {
 model InventoryObservation {
   id                String           @id @default(uuid())
   /// Soft references, as on InventoryRecord (#297).
-  locationId        String
+  locationId        String?
   facilityId        String?
   binId             String
   bin               WarehouseBin     @relation(fields: [binId], references: [id])
@@ -122,7 +122,7 @@ model InventoryObservation {
 
   createdAt DateTime @default(now())
 
-  @@index([orgId, locationId, observedAt])
+  @@index([orgId, facilityId, observedAt])
 }
 
 model Allocation {

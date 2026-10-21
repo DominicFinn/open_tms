@@ -198,7 +198,7 @@ describe('WMS and inventory routes: cross-tenant ids read as 404 (#303)', () => 
     ]);
     mockDeps.customers.namesByIds.mockResolvedValueOnce([{ id: owner, name: 'Acme Ltd' }]);
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/inventory?locationId=00000000-0000-4000-8000-00000000000c' });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/inventory?facilityId=00000000-0000-4000-8000-00000000000c' });
 
     expect(res.statusCode).toBe(200);
     expect(mockDeps.customers.namesByIds).toHaveBeenCalledWith(ORG_A, [owner]);
@@ -207,14 +207,14 @@ describe('WMS and inventory routes: cross-tenant ids read as 404 (#303)', () => 
 
   it('inventory lists, summary and ledger filter by the caller org', async () => {
     const loc = '00000000-0000-4000-8000-00000000000c';
-    await app.inject({ method: 'GET', url: `/api/v1/inventory?locationId=${loc}` });
-    await app.inject({ method: 'GET', url: `/api/v1/inventory/summary?locationId=${loc}` });
-    await app.inject({ method: 'GET', url: `/api/v1/inventory/transactions?locationId=${loc}` });
+    await app.inject({ method: 'GET', url: `/api/v1/inventory?facilityId=${loc}` });
+    await app.inject({ method: 'GET', url: `/api/v1/inventory/summary?facilityId=${loc}` });
+    await app.inject({ method: 'GET', url: `/api/v1/inventory/transactions?facilityId=${loc}` });
 
     const { inventoryRecord, inventoryTransaction } = mockDeps.prisma;
-    expect(inventoryRecord.findMany.mock.calls[0][0].where.orgId).toBe(ORG_A);
-    expect(inventoryRecord.groupBy.mock.calls[0][0].where.orgId).toBe(ORG_A);
-    expect(inventoryTransaction.findMany.mock.calls[0][0].where.orgId).toBe(ORG_A);
+    expect(inventoryRecord.findMany.mock.calls[0][0].where).toMatchObject({ orgId: ORG_A, facilityId: loc });
+    expect(inventoryRecord.groupBy.mock.calls[0][0].where).toMatchObject({ orgId: ORG_A, facilityId: loc });
+    expect(inventoryTransaction.findMany.mock.calls[0][0].where).toMatchObject({ orgId: ORG_A, inventoryRecord: { facilityId: loc } });
   });
 
   it('dispatches writes with the caller org and the authenticated actor', async () => {

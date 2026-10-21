@@ -5,7 +5,7 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 
 export interface RecordInventoryObservationPayload {
-  locationId: string;
+  facilityId: string;
   binId: string;
   sku: string;
   uomCode?: string;
@@ -39,12 +39,12 @@ export class RecordInventoryObservationCommandHandler extends BaseCommandHandler
     const p = command.payload;
     const uomCode = p.uomCode ?? 'EA';
 
-    // Bin must belong to the caller's org and the stated location — cross-tenant/cross-location
+    // Bin must belong to the caller's org and the stated facility: cross-tenant and cross-facility
     // ids read as "not found", same as everywhere else (see the security rule).
     const bin = await tx.warehouseBin.findFirst({
-      where: { id: p.binId, orgId: command.orgId, locationId: p.locationId },
+      where: { id: p.binId, orgId: command.orgId, facilityId: p.facilityId },
     });
-    if (!bin) throw new Error(`Bin ${p.binId} not found at location ${p.locationId}`);
+    if (!bin) throw new Error(`Bin ${p.binId} not found at facility ${p.facilityId}`);
 
     // Best-effort link to the matching stock record, if one exists — an observation is valid
     // even when no InventoryRecord exists yet at this bin/sku (e.g. an unexpected find).
@@ -60,8 +60,8 @@ export class RecordInventoryObservationCommandHandler extends BaseCommandHandler
 
     const observation = await tx.inventoryObservation.create({
       data: {
-        locationId: p.locationId,
-        facilityId: bin.facilityId,
+        locationId: bin.locationId,
+        facilityId: p.facilityId,
         binId: p.binId,
         sku: p.sku,
         uomCode,
@@ -79,7 +79,8 @@ export class RecordInventoryObservationCommandHandler extends BaseCommandHandler
       entityType: 'inventory_observation',
       entityId: observation.id,
       payload: {
-        locationId: p.locationId,
+        facilityId: p.facilityId,
+        locationId: bin.locationId,
         binId: p.binId,
         sku: p.sku,
         uomCode,

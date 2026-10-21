@@ -38,7 +38,9 @@ export class CreateCycleCountCommandHandler extends BaseCommandHandler<
     const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
     // Find inventory records to count based on count type
-    const where: any = { locationId: facility.sourceLocationId, quantityOnHand: { gt: 0 } };
+    // By facility and org (#297). The old filter was the facility's Location alone, with no org, so
+    // a tenant sharing a location id would have had its stock counted into ours.
+    const where: any = { facilityId: facility.id, orgId: command.orgId, quantityOnHand: { gt: 0 } };
     if (p.countType === 'zone' && p.zoneId) {
       where.bin = { zoneId: p.zoneId };
     }

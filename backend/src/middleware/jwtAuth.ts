@@ -135,9 +135,9 @@ function warehouseScopeAllows(method: string, url: string): boolean {
  */
 const INVENTORY_SCOPE_READONLY_PREFIXES = [
   '/api/v1/inventory',
+  '/api/v1/facilities',
   '/api/v1/warehouse/zones',
   '/api/v1/warehouse/bins',
-  '/api/v1/warehouse/locations',
 ];
 
 function inventoryScopeAllows(method: string, url: string): boolean {

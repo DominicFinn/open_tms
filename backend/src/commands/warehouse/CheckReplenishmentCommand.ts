@@ -42,9 +42,9 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
     // install.
     const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
-    // orgId as well as locationId: another tenant sharing a location id would otherwise have their
+    // By facility and org (#297): another tenant sharing a location id would otherwise have their
     // rules evaluated against our stock (#220).
-    const where: any = { locationId: facility.sourceLocationId, orgId: command.orgId, active: true };
+    const where: any = { facilityId: facility.id, orgId: command.orgId, active: true };
     if (p.sku) where.sku = p.sku;
 
     const rules = await tx.replenishmentRule.findMany({ where });

@@ -41,6 +41,10 @@ describe('CreateCycleCountCommandHandler', () => {
         ]),
       })
     );
+    // Stock is read by facility and org (#297). It used to be the Location alone, with no org.
+    expect(tx.inventoryRecord.findMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({ facilityId: 'fac-1', orgId: 'test-org' })
+    );
   });
 
   it('fails if no inventory to count', async () => {

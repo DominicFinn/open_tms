@@ -143,6 +143,32 @@ describe('ReleaseWaveCommandHandler', () => {
     expect(eventTypes).toContain(EVENT_TYPES.WAVE_RELEASED);
   });
 
+  it('refuses a wave with no facility, since stock is read by facility (#297)', async () => {
+    const tx = {
+      ...facilityMocks(),
+      wave: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'wave-1', waveNumber: 'W-001', locationId: null, facilityId: null, status: 'planning',
+          pickStrategy: 'discrete', orgId: 'test-org', waveOrders: [{ orderId: 'order-1', priority: 0 }],
+        }),
+        update: jest.fn(),
+      },
+      wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue([]) },
+      inventoryRecord: { findMany: jest.fn(), update: jest.fn() },
+      allocation: { create: jest.fn() },
+      domainEventLog: { create: jest.fn() },
+    } as any;
+    const prisma = { $transaction: jest.fn((fn: Function) => fn(tx)), domainEventLog: { findFirst: jest.fn() } } as any;
+
+    const result = await new ReleaseWaveCommandHandler(prisma, mockEventBus().bus).execute(
+      createTestCommand(RELEASE_WAVE, { waveId: 'wave-1' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('has no facility');
+    expect(tx.inventoryRecord.findMany).not.toHaveBeenCalled();
+  });
+
   it('records demand from a non-TMS source under its own type', async () => {
     const tx = {
       ...facilityMocks(),
