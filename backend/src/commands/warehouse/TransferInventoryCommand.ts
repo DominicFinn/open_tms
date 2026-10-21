@@ -126,6 +126,7 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
       const newTarget = await tx.inventoryRecord.create({
         data: {
           locationId: source.locationId,
+          facilityId: targetBin.facilityId,
           binId: p.targetBinId,
           sku: source.sku,
           uomCode: source.uomCode,

@@ -69,7 +69,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
 
         const bin = await tx.warehouseBin.findUnique({
           where: { id: line.currentBinId, orgId: command.orgId },
-          select: { locationId: true },
+          select: { locationId: true, facilityId: true },
         });
 
         if (bin && existingRecord) {
@@ -100,6 +100,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
           const newRecord = await tx.inventoryRecord.create({
             data: {
               locationId: requireLocationForInventory(bin.locationId, `Bin ${line.currentBinId}`),
+              facilityId: bin.facilityId,
               binId: line.currentBinId,
               sku: line.sku,
               uomCode: 'EA',

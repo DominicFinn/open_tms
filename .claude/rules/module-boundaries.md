@@ -107,11 +107,12 @@ wire every module together, which is their job, so the check skips them. The per
 route files are not exempt: each is checked against its own module's dependencies. Tests and
 `scripts/` are exempt too.
 
-## What the check does not catch yet
+## What the checks do not catch yet
 
-It reads import statements only. A wms file reading `tx.order` through the shared Prisma client is
-just as much a leak and goes undetected. The schema folder now records who owns each model, so
-teaching the check to read Prisma model access is the next chunk.
+The table ownership check reads delegate calls, not relations. A `tms` query that `include`s a WMS
+relation, or filters through one, reads WMS data without a delegate call on a WMS model. Those
+relations go as stage 0 of the FinnWMS port cuts the foreign keys behind them, after which Prisma
+won't compile the query. Until then, treat an include across the sealed group as the same leak.
 
-Until then, that one is on you: if you are writing warehouse code and you find yourself touching a
-TMS model, stop and read from a WMS read model instead.
+Modules outside the sealed group are only checked for imports, so a `tms` file reading a `core`
+table goes unremarked, as before.

@@ -477,7 +477,7 @@ describe('CompleteRmaCommand', () => {
         create: jest.fn().mockResolvedValue({ id: 'inv-new', quantityOnHand: 2 }),
         update: jest.fn().mockResolvedValue({}),
       },
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-1' }) },
+      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-1', facilityId: 'fac-1' }) },
       inventoryTransaction: { create: jest.fn().mockResolvedValue({}) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -495,7 +495,9 @@ describe('CompleteRmaCommand', () => {
     expect(result.success).toBe(true);
     expect(result.data?.restockTasksCreated).toBe(1);
     expect(result.data?.actualRefundCents).toBe(5000);  // uses suggested
-    expect(tx.inventoryRecord.create).toHaveBeenCalled();
+    expect(tx.inventoryRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1' }) })
+    );
     expect(tx.inventoryTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

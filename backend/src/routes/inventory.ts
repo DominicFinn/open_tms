@@ -7,6 +7,21 @@ import { TRANSFER_INVENTORY } from '../commands/warehouse/TransferInventoryComma
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
+import type { ICustomersRepository } from '../repositories/CustomersRepository.js';
+
+/**
+ * Inventory holds the owning customer as a soft id since #297, so the name comes from core rather
+ * than a join. The response keeps its `ownerCustomer: { id, name } | null` shape.
+ */
+async function withOwnerCustomers<T extends { ownerCustomerId: string | null }>(
+  customers: ICustomersRepository,
+  orgId: string,
+  records: T[],
+): Promise<Array<T & { ownerCustomer: { id: string; name: string } | null }>> {
+  const ids = [...new Set(records.map(r => r.ownerCustomerId).filter((id): id is string => id !== null))];
+  const names = new Map((await customers.namesByIds(orgId, ids)).map(c => [c.id, c]));
+  return records.map(r => ({ ...r, ownerCustomer: r.ownerCustomerId ? names.get(r.ownerCustomerId) ?? null : null }));
+}
 
 const REASON_CODES = ['damage', 'expired', 'recount', 'scrap', 'found', 'return', 'other'] as const;
 
@@ -16,6 +31,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const customers = container.resolve<ICustomersRepository>(TOKENS.ICustomersRepository);
 
   // GET /api/v1/inventory?locationId=xxx&sku=xxx&binId=xxx
   server.get('/api/v1/inventory', {
@@ -48,13 +64,12 @@ export async function inventoryRoutes(server: FastifyInstance) {
       where,
       include: {
         bin: { select: { id: true, label: true, binType: true, zone: { select: { id: true, name: true, zoneType: true } } } },
-        ownerCustomer: { select: { id: true, name: true } },
       },
       orderBy: [{ sku: 'asc' }, { bin: { walkSequence: 'asc' } }],
       take: 500,
     });
 
-    return { data: records, error: null };
+    return { data: await withOwnerCustomers(customers, req.orgId!, records), error: null };
   });
 
   // GET /api/v1/inventory/summary?locationId=xxx — aggregate by SKU
@@ -113,7 +128,6 @@ export async function inventoryRoutes(server: FastifyInstance) {
       include: {
         bin: { select: { id: true, label: true, binType: true, zone: { select: { name: true, zoneType: true } } } },
         transactions: { orderBy: { createdAt: 'desc' }, take: 50 },
-        ownerCustomer: { select: { id: true, name: true } },
       },
     });
 
@@ -122,7 +136,8 @@ export async function inventoryRoutes(server: FastifyInstance) {
       return { data: null, error: 'Inventory record not found' };
     }
 
-    return { data: record, error: null };
+    const [withOwner] = await withOwnerCustomers(customers, req.orgId!, [record]);
+    return { data: withOwner, error: null };
   });
 
   // GET /api/v1/inventory/transactions?locationId=xxx — recent transaction ledger

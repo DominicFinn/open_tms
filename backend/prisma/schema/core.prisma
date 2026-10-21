@@ -56,7 +56,6 @@ model Customer {
 
   // WMS relations
   ownedTrackableUnits TrackableUnit[]   @relation("OwnedUnits")
-  ownedInventory      InventoryRecord[] @relation("InventoryOwner")
 
   // Customer Portal
   customerUsers CustomerUser[]
@@ -139,8 +138,6 @@ model Location {
   // there are no back-relations to them here: a schema without those tables still resolves, which
   // is what a standalone FinnWMS needs. Inventory and manifest ingest keep theirs, because both
   // are still keyed on Location until inventory carries a facility.
-  inventoryRecords      InventoryRecord[]
-  inventoryObservations InventoryObservation[]
   manifestUploads       ManifestUpload[]
 
   consolidationStops ConsolidationStop[]

@@ -61,6 +61,7 @@ export class RecordInventoryObservationCommandHandler extends BaseCommandHandler
     const observation = await tx.inventoryObservation.create({
       data: {
         locationId: p.locationId,
+        facilityId: bin.facilityId,
         binId: p.binId,
         sku: p.sku,
         uomCode,

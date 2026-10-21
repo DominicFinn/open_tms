@@ -5,7 +5,7 @@ import {
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
-const mockBin = { id: 'bin-1', orgId: 'test-org', locationId: 'loc-1', label: 'BULK-A-01-01' };
+const mockBin = { id: 'bin-1', orgId: 'test-org', locationId: 'loc-1', facilityId: 'fac-1', label: 'BULK-A-01-01' };
 const mockRecord = {
   id: 'inv-1', locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-001',
   uomCode: 'EA', lotNumber: null, orgId: 'test-org',
@@ -51,7 +51,7 @@ describe('RecordInventoryObservationCommandHandler', () => {
     expect(tx.inventoryObservation.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          locationId: 'loc-1', binId: 'bin-1', sku: 'SKU-001', observedQuantity: 12,
+          locationId: 'loc-1', facilityId: 'fac-1', binId: 'bin-1', sku: 'SKU-001', observedQuantity: 12,
           orgId: 'test-org', inventoryRecordId: 'inv-1',
         }),
       })

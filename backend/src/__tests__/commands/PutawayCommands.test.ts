@@ -9,7 +9,7 @@ const mockZone = { id: 'zone-1', name: 'Bulk A', zoneType: 'bulk_storage', tempe
 const mockTargetBin = {
   id: 'bin-target', label: 'BULK-A-01-01', binType: 'pallet', active: true,
   temperatureZone: null, hazmatCertified: false, zone: mockZone,
-  locationId: 'loc-1', currentPalletCount: 0, maxPalletPositions: 4,
+  locationId: 'loc-1', facilityId: 'fac-1', currentPalletCount: 0, maxPalletPositions: 4,
 };
 const mockUnit = {
   id: 'unit-1', identifier: 'PLT-001', unitType: 'pallet', barcode: 'BC-001',
@@ -128,8 +128,10 @@ describe('CompletePutawayCommandHandler', () => {
       expect.objectContaining({ data: expect.objectContaining({ currentBinId: 'bin-target' }) })
     );
 
-    // Inventory record created
-    expect(tx.inventoryRecord.create).toHaveBeenCalled();
+    // Inventory record created, carrying the bin's facility (#297)
+    expect(tx.inventoryRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', binId: 'bin-target' }) })
+    );
     expect(tx.inventoryTransaction.create).toHaveBeenCalled();
 
     // Bin capacity updated (pallet)
