@@ -53,7 +53,7 @@ import { registerFinancePublicRoutes, registerFinanceAuthenticatedRoutes } from 
 import { registerInventoryPublicRoutes, registerInventoryAuthenticatedRoutes } from './routes/modules/inventory.js';
 import { registerQualityPublicRoutes, registerQualityAuthenticatedRoutes } from './routes/modules/quality.js';
 import { registerTmsPublicRoutes, registerTmsAuthenticatedRoutes } from './routes/modules/tms.js';
-import { registerWmsPublicRoutes, registerWmsAuthenticatedRoutes } from './routes/modules/wms.js';
+import { registerWmsAuthenticatedRoutes } from './routes/modules/wms.js';
 import wmsServiceProxy from './plugins/wmsServiceProxy.js';
 
 const server = Fastify({ logger: true });
@@ -128,7 +128,6 @@ async function start() {
   await registerInventoryPublicRoutes(server);
   await registerQualityPublicRoutes(server);
   await registerTmsPublicRoutes(server);
-  await registerWmsPublicRoutes(server);
 
   // ── Authenticated routes (require JWT) ───────────────────────────────
   // All routes below require a valid internal user JWT token.

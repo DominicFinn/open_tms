@@ -14,6 +14,7 @@ Measured on 2026-10-21, after the walking skeleton (#352):
 | Endpoints in scope | 91, across 18 route files |
 | Command handlers | 42 |
 | Node files that touch these tables | 65 in wms/inventory, 9 outside them |
+| WMS files that touch TMS or core tables | 6, plus the `TrackableUnit` writes #357 removes |
 | Foreign keys crossing the boundary | 13 (11 out, 2 in) |
 | Workers and event handlers to port | `waveAutoReleaseWorker`, `AutoReplenishmentHandler` |
 
@@ -34,7 +35,7 @@ Every stage before 4 can be rolled back by unsetting `WMS_SERVICE_URL`. Stage 4 
 | #357 | Split `TrackableUnit`: WMS handling units move to a new `HandlingUnit` (split step 2b) |
 | #358 | `Allocation` references demand by `(demandType, demandId)` (split step 2c) |
 | #297 | `InventoryRecord` gets a facility; the `Location` and `Customer` FKs from inventory go |
-| #359 | The 9 files outside WMS move onto ports and events |
+| #359 | The 9 files outside WMS that reach in, and the 6 WMS files that reach out to TMS and core tables, move onto ports and events |
 
 The foreign keys these cut:
 

@@ -58,6 +58,21 @@ npm run lint:boundaries          # from the repo root
 It runs in CI on every PR and as part of the backend test suite. It fails on three things: an edge
 the DAG disallows, a file no manifest rule covers, and an exception that is no longer needed.
 
+## Table ownership
+
+The same command runs a second check, because the Prisma client is shared and an import check
+can't see a file reaching another module's tables through it. The `wms` and `inventory` tables are
+leaving Prisma for the .NET service (ADR 0005), so they form a sealed group in
+`SEALED_TABLE_GROUPS`:
+
+- Code outside the group never touches the group's tables through Prisma, not even to read.
+- Code inside the group never touches anyone else's tables. Use a port or an event instead.
+- `wms` and `inventory` may share tables with each other: they move together.
+
+The check reads delegate calls (`prisma.<model>.<method>` or `tx.<model>.<method>`) and, in files
+that run raw SQL, quoted table names. Scripts are checked too. Only tests are left out. Its
+burn-down list is `ownership-exceptions.json`, and the same rules apply to it as to the import one.
+
 ## The exception list is a burn-down, not a parking space
 
 `backend/src/tooling/moduleBoundaries/exceptions.json` holds the leaks that existed when the check
