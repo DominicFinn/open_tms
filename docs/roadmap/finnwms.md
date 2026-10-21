@@ -4,6 +4,10 @@ Open warehouse work. WMS v1 has shipped (see [completed.md](completed.md)). The 
 is [WMS_SPECIFICATION.md](../WMS_SPECIFICATION.md) and the comparison with tier-1 WMS products is
 [12-WMS-GAP-ANALYSIS.md](../gap-analysis/12-WMS-GAP-ANALYSIS.md).
 
+FinnWMS is being ported to .NET ([finnwms-dotnet-port.md](finnwms-dotnet-port.md)). New work
+here lands on the .NET side once its cluster has ported, and the WMS Prisma schema is frozen until
+the handover.
+
 v2 waits on the split programme's phase 2 (`Facility`, then `HandlingUnit`), so it isn't built on
 the conflated `Location` and `TrackableUnit` models and then moved. Each item is FinnWMS product
 work under the module boundary rules.

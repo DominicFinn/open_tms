@@ -21,6 +21,12 @@ Put a new model in the module that owns the behaviour, and keep it there. No FK 
 tms/wms boundary. References there are soft string ids. See
 [module-boundaries](module-boundaries.md).
 
+**`wms.prisma` and `inventory.prisma` are being handed to the .NET service** (ADR 0005, #355). The
+.NET side reads and writes these tables through views, and a view blocks dropping or retyping a
+column it reads. So once stage 0 of the port finishes, a change to either file lands in the same PR
+as the matching view migration in `services/wms/migrations/`. No new foreign key may point into or
+out of them.
+
 ## Naming
 
 Prisma conventions, not SQL conventions:
