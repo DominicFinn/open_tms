@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
+import { requireHandlingUnit } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompletePackLinePayload {
@@ -42,13 +43,7 @@ export class CompletePackLineCommandHandler extends BaseCommandHandler<
       throw new Error(`Pack task is ${task.status}`);
     }
 
-    if (p.trackableUnitId) {
-      const unit = await tx.trackableUnit.findFirst({
-        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-        select: { id: true },
-      });
-      if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
-    }
+    if (p.trackableUnitId) await requireHandlingUnit(tx, command.orgId, p.trackableUnitId);
 
     // Auto-start task if pending
     if (task.status === 'pending') {

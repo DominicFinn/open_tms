@@ -30,34 +30,9 @@
     "reason": "Returns put stock back into WMS tables directly. Becomes an inventory port or event (#359)"
   },
   {
-    "file": "commands/warehouse/CompleteLoadingCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
-  },
-  {
-    "file": "commands/warehouse/CompleteLoadPlanCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
-  },
-  {
-    "file": "commands/warehouse/CompletePackLineCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
-  },
-  {
-    "file": "commands/warehouse/CompletePutawayCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
-  },
-  {
     "file": "commands/warehouse/CompleteReceivingCommand.ts",
     "model": "OrderLineItem",
     "reason": "WMS reads a OrderLineItem row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "commands/warehouse/CompleteReceivingCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
   },
   {
     "file": "commands/warehouse/CreateLoadPlanCommand.ts",
@@ -73,16 +48,6 @@
     "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
     "model": "Shipment",
     "reason": "WMS reads a Shipment row it does not own. Becomes a port onto the owning module (#359)"
-  },
-  {
-    "file": "commands/warehouse/CreateStagingAssignmentCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
-  },
-  {
-    "file": "commands/warehouse/RecordReceivingLineCommand.ts",
-    "model": "TrackableUnit",
-    "reason": "WMS handling units still live on TrackableUnit. Goes with the HandlingUnit split (#357)"
   },
   {
     "file": "events/handlers/BolGenerationHandler.ts",

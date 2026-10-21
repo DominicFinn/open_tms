@@ -18,7 +18,8 @@ interface PutawayTaskDetail {
   id: string;
   status: string;
   putawayType: string;
-  trackableUnit: { identifier: string; unitType: string; barcode: string | null };
+  /** Null for a replenishment, which moves stock rather than a unit. */
+  handlingUnit: { identifier: string; unitType: string; barcode: string | null } | null;
   sourceBin: { label: string } | null;
   targetBin: { label: string; zone: { name: string } };
 }
@@ -143,7 +144,7 @@ export default function WarehousePutawayTask() {
               <div className="mt-3 text-center">
                 <div className="text-sm text-muted-foreground">Unit</div>
                 <div className="mb-4 text-lg font-semibold">
-                  {task.trackableUnit.identifier}
+                  {task.handlingUnit?.identifier ?? 'Replenishment'}
                 </div>
 
                 <div className="flex items-center justify-center gap-4">

@@ -193,6 +193,9 @@ describe('Facility dual-write on generated putaway tasks (#225)', () => {
     expect(tx.putawayTask.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', putawayType: 'replenishment' }) })
     );
+    // A replenishment moves stock, not a unit, so it names no unit. It used to put an inventory
+    // record id in trackableUnitId, which the foreign key refused (#357).
+    expect(tx.putawayTask.create.mock.calls[0][0].data).not.toHaveProperty('trackableUnitId');
   });
 
   it('does not create a facility when a replenishment run produces no tasks', async () => {

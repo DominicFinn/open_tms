@@ -15,8 +15,7 @@ const mockUnit = {
   id: 'unit-1', identifier: 'PLT-001', unitType: 'pallet', barcode: 'BC-001',
   lotNumber: 'LOT-A', expiryDate: null, qualityStatus: 'available',
   ownerCustomerId: null,
-  lineItems: [{ sku: 'SKU-001', description: 'Widget', quantity: 10, weight: 5.0, temperature: null, hazmat: false }],
-  order: { id: 'order-1' },
+  lines: [{ sku: 'SKU-001', description: 'Widget', quantity: 10, weight: 5.0, temperature: null, hazmat: false }],
 };
 const mockTask = {
   id: 'task-1', locationId: 'loc-1', facilityId: 'fac-1', receivingTaskId: 'recv-1',
@@ -87,11 +86,9 @@ describe('CompletePutawayCommandHandler', () => {
       findFirst: jest.fn().mockResolvedValue(overrides.scannedBin ?? mockTargetBin),
       update: jest.fn().mockResolvedValue({}),
     },
-    handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-    trackableUnit: {
-      findUnique: jest.fn().mockResolvedValue(overrides.unit ?? mockUnit),
-      update: jest.fn().mockResolvedValue({}),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    handlingUnit: {
+      findFirst: jest.fn().mockResolvedValue(overrides.unit ?? mockUnit),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     inventoryRecord: {
       findFirst: jest.fn().mockResolvedValue(overrides.existingInventory ?? null),
@@ -124,9 +121,9 @@ describe('CompletePutawayCommandHandler', () => {
     expect(result.data?.actualBinLabel).toBe('BULK-A-01-01');
     expect(result.data?.constraintWarnings).toEqual([]);
 
-    // Unit location updated
-    expect(tx.trackableUnit.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ currentBinId: 'bin-target' }) })
+    // The warehouse reads its own unit, within the org (#357)
+    expect(tx.handlingUnit.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'unit-1', orgId: 'test-org' } })
     );
 
     // Inventory record created, carrying the bin's facility (#297)
@@ -135,8 +132,7 @@ describe('CompletePutawayCommandHandler', () => {
     );
     expect(tx.inventoryTransaction.create).toHaveBeenCalled();
 
-    // Dual-write (#357): the unit and anything nested in it move on the handling unit side too,
-    // and the stock ledger names the handling unit
+    // The unit and anything nested in it move on the handling unit, and the ledger names it (#357)
     expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith({
       where: { orgId: 'test-org', id: { in: ['unit-1'] } },
       data: { currentBinId: 'bin-target', currentZoneId: mockZone.id },
@@ -182,7 +178,7 @@ describe('CompletePutawayCommandHandler', () => {
   it('warns on temperature mismatch', async () => {
     const coldUnit = {
       ...mockUnit,
-      lineItems: [{ ...mockUnit.lineItems[0], temperature: 'frozen' }],
+      lines: [{ ...mockUnit.lines[0], temperature: 'frozen' }],
     };
     const ambientBin = { ...mockTargetBin, temperatureZone: 'ambient', zone: { ...mockZone, temperatureZone: 'ambient' } };
     const tx = buildTx({ unit: coldUnit, scannedBin: ambientBin });
@@ -203,7 +199,7 @@ describe('CompletePutawayCommandHandler', () => {
   it('warns on hazmat in non-certified bin', async () => {
     const hazmatUnit = {
       ...mockUnit,
-      lineItems: [{ ...mockUnit.lineItems[0], hazmat: true }],
+      lines: [{ ...mockUnit.lines[0], hazmat: true }],
     };
     const tx = buildTx({ unit: hazmatUnit });
     const prisma = buildPrisma(tx);
@@ -250,6 +246,17 @@ describe('CompletePutawayCommandHandler', () => {
     expect(tx.warehouseBin.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { facilityId: 'fac-1', label: 'BULK-A-01-01', orgId: 'test-org' } })
     );
+  });
+
+  it('refuses a task with no unit, such as a replenishment, rather than inventing one', async () => {
+    const tx = buildTx({ task: { trackableUnitId: null, handlingUnitId: null } });
+    const handler = new CompletePutawayCommandHandler(buildPrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(createTestCommand(COMPLETE_PUTAWAY, { taskId: 'task-1', scannedBinLabel: 'BULK-A-01-01' }));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('has no unit');
+    expect(tx.inventoryRecord.create).not.toHaveBeenCalled();
   });
 
   it('refuses a task with no facility rather than guessing where the scan was', async () => {

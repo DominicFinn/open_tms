@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
-import { mirrorChildHandlingUnitState, mirrorHandlingUnitState } from './handlingUnitState.js';
+import { setChildHandlingUnitState, setHandlingUnitState } from './handlingUnitState.js';
 import { Command } from '../types.js';
 
 export interface CompletePutawayPayload {
@@ -73,22 +73,23 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       deviationReason = `Directed to ${(task as any).targetBin?.label ?? task.targetBinId}, scanned at ${p.scannedBinLabel}`;
     }
 
-    // 4. Validate bin constraints against the unit being stored
-    const unit = await tx.trackableUnit.findUnique({
-      where: { id: task.trackableUnitId, order: { orgId: command.orgId } },
-      include: {
-        lineItems: true,
-        order: true,
-      },
+    // 4. Validate bin constraints against the unit being stored. The warehouse reads its own
+    // handling unit and its contents (#357). A task with none (a replenishment, which moves stock
+    // rather than a unit) can't be completed here.
+    const unitId = task.handlingUnitId ?? task.trackableUnitId;
+    if (!unitId) throw new Error(`Putaway task ${task.id} has no unit to put away`);
+    const unit = await tx.handlingUnit.findFirst({
+      where: { id: unitId, orgId: command.orgId },
+      include: { lines: true },
     });
-    if (!unit) throw new Error(`TrackableUnit ${task.trackableUnitId} not found`);
+    if (!unit) throw new Error(`Handling unit ${unitId} not found`);
 
     const constraintWarnings: string[] = [];
     const actualBin = scannedBin;
     const actualZone = scannedBin.zone;
 
     // Temperature check: if unit has temperature-sensitive items, bin/zone must match
-    const unitTemp = unit.lineItems?.find(li => li.temperature)?.temperature;
+    const unitTemp = unit.lines?.find(li => li.temperature)?.temperature;
     if (unitTemp && unitTemp !== 'ambient') {
       const binTemp = actualBin.temperatureZone || actualZone?.temperatureZone;
       if (binTemp && binTemp !== unitTemp) {
@@ -100,7 +101,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     }
 
     // Hazmat check: if unit has hazmat items, bin/zone must be certified
-    const hasHazmat = unit.lineItems?.some(li => li.hazmat);
+    const hasHazmat = unit.lines?.some(li => li.hazmat);
     if (hasHazmat) {
       const binHazmat = actualBin.hazmatCertified || actualZone?.hazmatCertified;
       if (!binHazmat) {
@@ -111,27 +112,10 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     // 5. Use the actual scanned bin as the destination
     const actualBinId = actualBin.id;
 
-    // 6. Update TrackableUnit location
-    await tx.trackableUnit.update({
-      where: { id: unit.id, order: { orgId: command.orgId } },
-      data: {
-        currentBinId: actualBinId,
-        currentZoneId: actualZone?.id ?? null,
-      },
-    });
-
-    // Also update any nested child units
-    await tx.trackableUnit.updateMany({
-      where: { parentUnitId: unit.id, order: { orgId: command.orgId } },
-      data: {
-        currentBinId: actualBinId,
-        currentZoneId: actualZone?.id ?? null,
-      },
-    });
-
+    // 6. Move the unit, and anything nested in it
     const unitLocation = { currentBinId: actualBinId, currentZoneId: actualZone?.id ?? null };
-    await mirrorHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
-    await mirrorChildHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
+    await setHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
+    await setChildHandlingUnitState(tx, command.orgId, unit.id, unitLocation);
 
     // 7. Update bin capacity counters
     if (unit.unitType === 'pallet') {
@@ -141,7 +125,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       });
     }
     // Weight update if available
-    const totalWeight = unit.lineItems?.reduce((sum, li) => sum + (li.weight ?? 0), 0) ?? 0;
+    const totalWeight = unit.lines?.reduce((sum, li) => sum + (li.weight ?? 0), 0) ?? 0;
     if (totalWeight > 0) {
       await tx.warehouseBin.update({
         where: { id: actualBinId, orgId: command.orgId },
@@ -150,8 +134,8 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
     }
 
     // 8. Create or update InventoryRecord + InventoryTransaction
-    const sku = unit.lineItems?.[0]?.sku ?? unit.identifier;
-    const quantity = unit.lineItems?.reduce((sum, li) => sum + li.quantity, 0) ?? 1;
+    const sku = unit.lines?.[0]?.sku ?? unit.identifier;
+    const quantity = unit.lines?.reduce((sum, li) => sum + li.quantity, 0) ?? 1;
 
     // Find or create inventory record for this bin+sku combination
     let inventoryRecord = await tx.inventoryRecord.findFirst({
@@ -186,7 +170,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
           referenceType: 'putaway_task',
           referenceId: task.id,
           performedBy: command.actorId,
-          trackableUnitId: unit.id,
+          trackableUnitId: task.trackableUnitId,
           handlingUnitId: unit.id,
           orgId: command.orgId,
         },
@@ -221,7 +205,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
           referenceType: 'putaway_task',
           referenceId: task.id,
           performedBy: command.actorId,
-          trackableUnitId: unit.id,
+          trackableUnitId: task.trackableUnitId,
           handlingUnitId: unit.id,
           orgId: command.orgId,
         },
@@ -256,6 +240,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       entityId: task.id,
       payload: {
         trackableUnitId: unit.id,
+        handlingUnitId: unit.id,
         actualBinId,
         actualBinLabel: p.scannedBinLabel,
         deviation,
@@ -277,6 +262,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
         quantity,
         lotNumber: unit.lotNumber,
         trackableUnitId: unit.id,
+        handlingUnitId: unit.id,
         source: 'putaway',
       },
     }));

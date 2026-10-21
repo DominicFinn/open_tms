@@ -57,6 +57,7 @@ import { CreateCycleCountCommandHandler } from '../../commands/warehouse/CreateC
 import { RecordCycleCountLineCommandHandler } from '../../commands/warehouse/RecordCycleCountLineCommand.js';
 import { CreateReplenishmentRuleCommandHandler } from '../../commands/warehouse/CreateReplenishmentRuleCommand.js';
 import { CheckReplenishmentCommandHandler } from '../../commands/warehouse/CheckReplenishmentCommand.js';
+import { MoveHandlingUnitCommandHandler } from '../../commands/warehouse/MoveHandlingUnitCommand.js';
 import { CreateWaveTemplateCommandHandler } from '../../commands/warehouse/CreateWaveTemplateCommand.js';
 import { ApplyWaveTemplateCommandHandler } from '../../commands/warehouse/ApplyWaveTemplateCommand.js';
 import { CreateLoadPlanCommandHandler } from '../../commands/warehouse/CreateLoadPlanCommand.js';
@@ -165,6 +166,7 @@ export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new UpdateReplenishmentRuleCommandHandler(prisma, eventBus));
   bus.register(new DeleteReplenishmentRuleCommandHandler(prisma, eventBus));
   bus.register(new CheckReplenishmentCommandHandler(prisma, eventBus));
+  bus.register(new MoveHandlingUnitCommandHandler(prisma, eventBus));
 
   // Wave template commands
   bus.register(new CreateWaveTemplateCommandHandler(prisma, eventBus));

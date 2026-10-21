@@ -53,7 +53,7 @@ export class PackingRepository implements IPackingRepository {
       where,
       include: {
         stagingBin: { select: { label: true } },
-        trackableUnit: { select: { identifier: true, unitType: true } },
+        handlingUnit: { select: { identifier: true, unitType: true } },
       },
       orderBy: [{ loadSequence: 'asc' }, { createdAt: 'desc' }],
     });

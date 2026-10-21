@@ -55,7 +55,7 @@ interface StagingAssignment {
   trackableUnitId: string;
   status: string;
   stagingBin: { label: string } | null;
-  trackableUnit: { identifier: string; unitType: string } | null;
+  handlingUnit: { identifier: string; unitType: string } | null;
 }
 
 type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
@@ -230,7 +230,7 @@ export default function VNextWmsLoadPlan() {
                           className="h-4 w-4 rounded border border-input bg-background accent-primary"
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-sm font-semibold">{a.trackableUnit?.identifier ?? a.trackableUnitId.slice(0, 8)}</TableCell>
+                      <TableCell className="font-mono text-sm font-semibold">{a.handlingUnit?.identifier ?? a.trackableUnitId.slice(0, 8)}</TableCell>
                       <TableCell>{a.orderId.slice(0, 8)}</TableCell>
                       <TableCell>{a.stagingBin?.label ?? '-'}</TableCell>
                     </TableRow>

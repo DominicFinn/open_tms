@@ -87,8 +87,7 @@ describe('CompleteLoadPlanCommandHandler', () => {
       },
       loadPlanLine: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       stagingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
-      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      trackableUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      handlingUnit: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -114,8 +113,8 @@ describe('CompleteLoadPlanCommandHandler', () => {
     );
 
     // Units cleared from bins
-    expect(tx.trackableUnit.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { currentBinId: null, currentZoneId: null } })
+    expect(tx.handlingUnit.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org' }), data: { currentBinId: null, currentZoneId: null } })
     );
 
     // The warehouse says a BOL was asked for and stops. Generating it, and emitting

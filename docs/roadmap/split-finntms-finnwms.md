@@ -230,7 +230,7 @@ without a `Location` table resolves. That was the point of the phase.
 
   The one awkward case remaining is `TrackableUnit`, which has no `orgId` and can only be scoped
   through its order. That is the argument for 2b, and it is worth doing soon.
-- **2b. TrackableUnit split (L-XL, 5-7):** in progress as #357 (step 1 of 3: `HandlingUnit`, projection, backfill, dual-write). new WMS `HandlingUnit` (standalone LPN with soft
+- **2b. TrackableUnit split (L-XL, 5-7):** in progress as #357. Steps 1 (`HandlingUnit`, projection, backfill, dual-write) and 2 (the warehouse reads and writes only handling units; returns move them by event) are done. new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade
   delete on stock-referenced rows is the real hazard. TrackableUnit keeps its name and stays TMS.

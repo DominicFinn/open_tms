@@ -74,16 +74,21 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
       },
     });
 
-    // Move the trackable unit if provided
+    // Moving the unit is the warehouse's job: it holds the unit's bin and quality on its
+    // HandlingUnit, so it hears about the move by event (#357).
     if (p.trackableUnitId && p.quarantineBinId) {
-      await tx.trackableUnit.update({
-        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-        data: {
-          currentBinId: p.quarantineBinId,
-          currentZoneId: bin?.zoneId ?? null,
+      emit(this.createEvent(command, {
+        type: EVENT_TYPES.RMA_UNIT_MOVED,
+        entityType: 'rma_line',
+        entityId: line.id,
+        payload: {
+          rmaId: rma.id,
+          unitId: p.trackableUnitId,
+          binId: p.quarantineBinId,
+          zoneId: bin?.zoneId ?? null,
           qualityStatus: 'quarantine',
         },
-      });
+      }));
     }
 
     // If RMA was authorized, bump to received

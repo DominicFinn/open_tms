@@ -78,9 +78,9 @@ model InventoryTransaction {
   reasonCode        String? // damage, expired, recount, return, scrap, found
   performedBy       String?
   trackableUnitId   String?
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
 
   orgId String
@@ -138,9 +138,9 @@ model Allocation {
   inventoryRecordId String
   inventoryRecord   InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
   trackableUnitId   String?
-  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written; soft
-  /// until the split finishes and the TrackableUnit reference goes.
+  /// The warehouse's own unit (#357). Same id as trackableUnitId while both are written.
   handlingUnitId String?
+  handlingUnit   HandlingUnit? @relation(fields: [handlingUnitId], references: [id])
   trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
   quantity          Int
   uomCode           String          @default("EA")

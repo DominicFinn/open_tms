@@ -10,17 +10,17 @@ import { PrismaClient, PutawayRule, PutawayTask } from '@prisma/client';
 import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const TASK_LIST_INCLUDE = {
-  trackableUnit: { select: { id: true, identifier: true, unitType: true, barcode: true } },
+  handlingUnit: { select: { id: true, identifier: true, unitType: true, barcode: true } },
   sourceBin: { select: { id: true, label: true } },
   targetBin: { select: { id: true, label: true } },
 } as const;
 
 const TASK_DETAIL_INCLUDE = {
-  trackableUnit: {
+  handlingUnit: {
     select: {
       id: true, identifier: true, unitType: true, barcode: true,
       lotNumber: true, expiryDate: true, qualityStatus: true,
-      lineItems: { select: { sku: true, description: true, quantity: true, weight: true, temperature: true, hazmat: true } },
+      lines: { select: { sku: true, description: true, quantity: true, weight: true, temperature: true, hazmat: true } },
     },
   },
   sourceBin: { select: { id: true, label: true, binType: true } },

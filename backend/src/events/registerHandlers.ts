@@ -59,6 +59,7 @@ import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNotificationHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
+import { HandlingUnitReturnsHandler } from './handlers/HandlingUnitReturnsHandler.js';
 import { PackAuditIssueLinkHandler } from './handlers/PackAuditIssueLinkHandler.js';
 import { BolGenerationHandler } from './handlers/BolGenerationHandler.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
@@ -201,6 +202,7 @@ export async function registerEventHandlers(
   if (commandBus) {
     handlers.push(shipmentRoutePlanningHandler(prisma, commandBus));
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
+    handlers.push(new HandlingUnitReturnsHandler(commandBus));
     handlers.push(new ConsolidationProgressHandler(new ConsolidationRepository(prisma), commandBus));
   }
 
