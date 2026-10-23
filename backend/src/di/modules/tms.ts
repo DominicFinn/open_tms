@@ -351,7 +351,8 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
     return new ArrivalCriteriaEvaluationService(
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IOrderDeliveryService),
-      container.resolve(TOKENS.ICommandBus)
+      container.resolve(TOKENS.ICommandBus),
+      container.resolve(TOKENS.IGeofenceRepository)
     );
   });
 

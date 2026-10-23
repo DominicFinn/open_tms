@@ -176,7 +176,9 @@ async function start() {
 
       const webhookCommandBus = container.resolve<any>(TOKENS.ICommandBus);
       const deliveryService = new OrderDeliveryService(server.prisma, webhookCommandBus);
-      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService, webhookCommandBus);
+      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(
+        server.prisma, deliveryService, webhookCommandBus, container.resolve(TOKENS.IGeofenceRepository),
+      );
       // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
 

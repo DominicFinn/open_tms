@@ -642,8 +642,12 @@ Drawn by hand in the Locations create/edit form (`GeofenceEditor`, Leaflet, no d
 click to place a radial center or polygon vertices) as its own "Geofence" section. One geofence per
 location in the UI today; the API itself supports several per entity.
 
-**Not in scope here**: what counts as being inside a geofence (arrival/departure detection) — that's
-`ArrivalCriteria` / `ArrivalCriteriaEvaluationService`, untouched by this feature.
+**Ping matching (#347).** A location's drawn geofence is the source of truth for geofence arrival and
+departure. `ArrivalCriteriaEvaluationService` loads the active drawn geofences of a shipment's stop
+locations and destination, and each one replaces that location's `geofence`-type `ArrivalCriteria`
+(radial: centre + radius; polygon: point-in-polygon, with the furthest vertex from the centroid
+standing in for the radius when checkpoints are measured). WiFi and BLE criteria still apply. A
+location with no drawn geofence keeps matching on its geofence criteria, so no backfill is needed.
 
 | Command | Trigger | Events Emitted | Side Effects |
 |---------|---------|----------------|-------------|
