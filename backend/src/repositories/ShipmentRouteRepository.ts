@@ -33,10 +33,43 @@ export interface ShipmentForPlanning {
   currentStopsKey: string | null;
 }
 
+export interface JourneyRecordStop {
+  id: string;
+  locationId: string;
+  locationName: string;
+  sequenceNumber: number;
+  stopType: string;
+  purpose: string | null;
+  label: string | null;
+  status: string;
+  actualArrival: Date | null;
+  actualDeparture: Date | null;
+}
+
+export interface JourneyCheckpointRecord {
+  checkpointIndex: number;
+  lat: number;
+  lng: number;
+  distanceAlongRouteMeters: number;
+  fractionComplete: number;
+  eventTime: Date;
+}
+
+export interface ShipmentJourneyRecord {
+  originId: string | null;
+  destinationId: string | null;
+  /** In sequence order. */
+  stops: JourneyRecordStop[];
+  /** In checkpoint order. */
+  checkpoints: JourneyCheckpointRecord[];
+}
+
 export interface IShipmentRouteRepository {
   /** `undefined` when the shipment isn't in the org; `null` when it has no route. */
   findEffectiveRoute(orgId: string, shipmentId: string): Promise<EffectiveRoute | null | undefined>;
   findForPlanning(orgId: string, shipmentId: string): Promise<ShipmentForPlanning | null>;
+  /** What was recorded along a shipment's journey (#283, #348); `null` when it isn't in the org or is deleted. */
+  findJourney(orgId: string, shipmentId: string): Promise<ShipmentJourneyRecord | null>;
 }
 
 const routeFields = {
@@ -76,6 +109,35 @@ export class ShipmentRouteRepository implements IShipmentRouteRepository {
       laneId: shipment.laneId,
       currentStopsKey: shipment.route?.stopsKey ?? null,
       stops: shipment.stops.map((s) => ({ locationId: s.locationId, lat: s.location.lat, lng: s.location.lng })),
+    };
+  }
+
+  async findJourney(orgId: string, shipmentId: string): Promise<ShipmentJourneyRecord | null> {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId, deletedAt: null },
+      select: {
+        originId: true,
+        destinationId: true,
+        stops: {
+          orderBy: { sequenceNumber: 'asc' },
+          select: {
+            id: true, locationId: true, sequenceNumber: true, stopType: true, purpose: true, label: true,
+            status: true, actualArrival: true, actualDeparture: true, location: { select: { name: true } },
+          },
+        },
+      },
+    });
+    if (!shipment) return null;
+    const checkpoints = await this.prisma.shipmentJourneyCheckpoint.findMany({
+      where: { shipmentId, orgId },
+      orderBy: { checkpointIndex: 'asc' },
+      select: { checkpointIndex: true, lat: true, lng: true, distanceAlongRouteMeters: true, fractionComplete: true, eventTime: true },
+    });
+    return {
+      originId: shipment.originId,
+      destinationId: shipment.destinationId,
+      stops: shipment.stops.map(({ location, ...stop }) => ({ ...stop, locationName: location.name })),
+      checkpoints,
     };
   }
 }
