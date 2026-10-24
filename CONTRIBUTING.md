@@ -121,7 +121,7 @@ git push origin feature/your-feature-name
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 24+
 - Docker & Docker Compose
 - Git
 - A code editor (VS Code recommended)
