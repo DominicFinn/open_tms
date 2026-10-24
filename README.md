@@ -201,7 +201,7 @@ See [Domain Behaviours](./docs/DOMAIN_BEHAVIOURS.md) for the complete reference 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 24+
 - Docker & Docker Compose
 - npm or yarn
 
