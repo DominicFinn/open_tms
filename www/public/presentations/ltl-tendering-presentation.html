@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>LTL and Carrier Tendering - Open TMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --p300:#93c5fd; --p400:#60a5fa; --p500:#3b82f6; --p600:#2563eb; --p900:#1e3a8a; --p950:#172554;
+    --a400:#a78bfa; --a500:#8b5cf6;
+    --s200:#e2e8f0; --s300:#cbd5e1; --s400:#94a3b8; --s500:#64748b; --s700:#334155; --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --cyan:#06b6d4;
+    --amber:#f59e0b; --emerald:#10b981; --pink:#ec4899; --rose:#f43f5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff; background: var(--s950);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: linear-gradient(135deg, var(--s950) 0%, var(--p950) 50%, var(--s900) 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.03; z-index: -1; pointer-events: none;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0; padding: 48px 64px 72px;
+    display: none; flex-direction: column; opacity: 0;
+    transition: opacity .4s ease; overflow: hidden;
+  }
+  .slide.active { display: flex; opacity: 1; }
+
+  .glow-orb { position: absolute; width: 700px; height: 700px; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(120px); }
+  .glow-orb.p { background: rgba(37,99,235,0.14); }
+  .glow-orb.a { background: rgba(139,92,246,0.12); }
+  .glow-orb.g { background: rgba(34,197,94,0.08); }
+
+  .content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.1);
+    font-size: 13px; font-weight: 500; color: var(--p300);
+    letter-spacing: 0.02em; width: fit-content;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  h1.title { font-size: 64px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; margin: 18px 0 12px; }
+  h2.section { font-size: 38px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 12px 0 8px; }
+  .subtitle { font-size: 17px; color: var(--s300); line-height: 1.55; max-width: 1040px; }
+  .subtitle.lg { font-size: 21px; max-width: 1000px; }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--p500), var(--a500));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+
+  .glass {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 18px 20px;
+  }
+  .glass.hl {
+    background: linear-gradient(135deg, rgba(37,99,235,0.10), rgba(139,92,246,0.10));
+    border-color: rgba(59,130,246,0.22);
+  }
+  .glass.ok { border-color: rgba(34,197,94,0.28); background: rgba(34,197,94,0.05); }
+  .glass.gap { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.05); }
+  .glass h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--s200); }
+  .glass p, .glass li { font-size: 13.5px; color: var(--s300); line-height: 1.55; }
+  .glass ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .glass ul li { padding-left: 16px; position: relative; }
+  .glass ul li::before { content: ''; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--p400); }
+  .glass.ok ul li::before { background: var(--green); }
+  .glass.gap ul li::before { background: var(--amber); }
+
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .chip {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(96,165,250,0.14); color: var(--p300); border: 1px solid rgba(96,165,250,0.25);
+    white-space: nowrap;
+  }
+  .chip.g { background: rgba(34,197,94,0.14); color: #86efac; border-color: rgba(34,197,94,0.25); }
+  .chip.m { background: rgba(245,158,11,0.14); color: #fcd34d; border-color: rgba(245,158,11,0.25); }
+  .chip.k { background: rgba(167,139,250,0.14); color: var(--a400); border-color: rgba(167,139,250,0.25); }
+
+  .term { font-weight: 700; color: var(--p300); font-size: 14px; margin-bottom: 4px; }
+
+  /* Flow of numbered steps */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
+  .step {
+    position: relative; padding: 16px 16px 14px; border-radius: 14px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    opacity: 0; animation: fade-in .4s ease forwards; animation-delay: var(--d, 0s);
+  }
+  @keyframes fade-in { to { opacity: 1; } }
+  .step .n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--p400); font-weight: 700; margin-bottom: 6px; }
+  .step .t { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .step .d { font-size: 12.5px; color: var(--s300); line-height: 1.5; }
+  .step .tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .step.new { border-color: rgba(245,158,11,0.3); }
+
+  .note {
+    margin-top: 16px; font-size: 13px; color: var(--s300); line-height: 1.55;
+    padding: 12px 16px; background: rgba(255,255,255,0.03);
+    border-radius: 10px; border-left: 3px solid var(--p500);
+  }
+  .note.m { border-left-color: var(--amber); }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--s400); }
+  .legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend .l-built::before { background: rgba(255,255,255,0.15); }
+  .legend .l-new::before { background: var(--amber); }
+
+  /* Table */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 18px; }
+  .tbl th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--s500); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .tbl td { padding: 10px 12px; color: var(--s300); line-height: 1.45; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .tbl td:first-child { color: var(--s200); font-weight: 600; white-space: nowrap; }
+
+  .nav {
+    position: fixed; bottom: 18px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; z-index: 100;
+  }
+  .nav-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.12); }
+  .nav-count { font-size: 12.5px; font-family: 'JetBrains Mono', monospace; color: var(--s400); min-width: 60px; text-align: center; font-weight: 500; }
+
+  .progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.05); z-index: 100; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--p500), var(--a500), var(--pink)); transition: width .4s ease; }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px; font-weight: 600;
+  }
+  .kbd {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-bottom-width: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--s200);
+  }
+
+  @media (max-width: 1100px) {
+    .flow { grid-template-columns: repeat(2, 1fr); }
+    .g4 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 760px) {
+    .slide { padding: 28px 16px 84px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .content { height: auto; min-height: 100%; }
+    h1.title { font-size: 40px; }
+    h2.section { font-size: 28px; }
+    .subtitle, .subtitle.lg { font-size: 15.5px; }
+    .g2, .g3, .g4, .flow { grid-template-columns: 1fr; }
+    .glow-orb { width: 360px; height: 360px; }
+    .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: 100%; }
+    .tbl thead { display: none; }
+    .tbl tr { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .tbl td { padding: 2px 0; border: 0; white-space: normal; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div class="deck" id="deck"></div>
+<div class="nav">
+  <button class="nav-btn" onclick="prev()" aria-label="Previous">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+  </button>
+  <div class="nav-count" id="navCount">01 / 15</div>
+  <button class="nav-btn" onclick="next()" aria-label="Next">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = [];
+  function render() {
+    const deck = document.getElementById('deck');
+    deck.innerHTML = slides.map((s, i) => `<section class="slide ${i===current?'active':''}" data-i="${i}">${s}</section>`).join('');
+    document.getElementById('navCount').textContent = String(current+1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+    document.getElementById('progressBar').style.width = ((current+1)/slides.length*100) + '%';
+  }
+  function go(i) { if (i < 0 || i >= slides.length) return; current = i; render(); }
+  function next() { go(current+1); }
+  function prev() { go(current-1); }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length-1);
+  });
+  // Horizontal swipe on touch screens; vertical movement is left for scrolling a long slide.
+  let touchX = null, touchY = null;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    const dy = e.changedTouches[0].clientY - touchY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { dx < 0 ? next() : prev(); }
+    touchX = touchY = null;
+  }, { passive: true });
+</script>
+
+<script id="slides-content">
+// 1 - TITLE
+slides.push(`
+  <div class="glow-orb p" style="top:-200px;left:-200px;"></div>
+  <div class="glow-orb a" style="bottom:-250px;right:-150px;"></div>
+  <div class="content">
+    <div class="logo-badge">
+      <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="color:var(--p400);"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/></svg>
+      <span>Open TMS &middot; LTL and tendering</span>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; max-width:1100px;">
+      <div class="pill" style="margin-bottom:24px;"><span class="dot"></span><span>Working proposal &middot; #386, #387, #388</span></div>
+      <h1 class="title">LTL and <span class="gradient-text">carrier tendering</span></h1>
+      <p class="subtitle lg" style="margin-top:16px;">
+        How we think freight should get from an order to a booked truck to a paid invoice in Open TMS,
+        now that consolidations have landed. What's built, what's missing, and how the pieces should fit.
+      </p>
+      <p style="margin-top:36px; font-size:14px; color:var(--s400); line-height:1.6;">
+        <span class="kbd">&rarr;</span> <span class="kbd">&larr;</span> or swipe to move between slides
+      </p>
+    </div>
+  </div>
+`);
+
+// 2 - TERMS
+slides.push(`
+  <div class="glow-orb p" style="top:10%;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Terms</div>
+    <h2 class="section">The words we use</h2>
+    <p class="subtitle">So we mean the same thing on every slide after this one.</p>
+    <div class="grid g3" style="margin-top:22px;">
+      <div class="glass"><div class="term">FTL</div><p>Full truckload. One order, one customer, the whole truck. We already enforce one order per FTL shipment.</p></div>
+      <div class="glass"><div class="term">LTL</div><p>Less than truckload. Freight that takes part of a trailer. Priced by weight and freight class from the carrier's tariff.</p></div>
+      <div class="glass"><div class="term">Consolidation (a run)</div><p>Several shipments, possibly from several customers, on one truck we book ourselves. Each customer keeps their own shipment.</p></div>
+      <div class="glass"><div class="term">Tender, offer, bid</div><p>A tender asks carriers to move a load. Each carrier asked gets an offer. A carrier answers with a bid, through the portal or an EDI 990.</p></div>
+      <div class="glass"><div class="term">Award</div><p>Picking the winning bid. The carrier and the agreed rate become the cost of the load.</p></div>
+      <div class="glass"><div class="term">Rate confirmation</div><p>The document that tells the carrier exactly what they've agreed to move, where, when, and for how much.</p></div>
+    </div>
+  </div>
+`);
+
+// 3 - LTL PRICING
+slides.push(`
+  <div class="glow-orb a" style="top:-120px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">LTL pricing</div>
+    <h2 class="section">How an LTL shipment is priced</h2>
+    <p class="subtitle">This is all built in <span class="chip">LtlRatingService</span>. The inputs come from cartonising the order: weight, cube and, from those, density and class.</p>
+    <div class="grid g3" style="margin-top:22px;">
+      <div class="glass hl"><h3>Freight class</h3><p>NMFC class from density (pounds per cubic foot). Light, bulky freight is a higher class and costs more per pound. A customer can pre-classify, and we keep theirs as a hint.</p></div>
+      <div class="glass hl"><h3>Weight breaks</h3><p>The tariff gives a rate per hundredweight (CWT) for each class at each weight break. Heavier shipments get a lower rate per CWT.</p></div>
+      <div class="glass hl"><h3>Deficit weight</h3><p>If rating at the next break up is cheaper, we bill the higher weight. Standard LTL behaviour, and we already do it.</p></div>
+      <div class="glass"><h3>Minimum charge</h3><p>Small shipments pay the carrier's minimum, whatever the maths says.</p></div>
+      <div class="glass"><h3>FAK</h3><p>Freight All Kinds. A negotiated override that rates every class as one class, common on contract lanes.</p></div>
+      <div class="glass"><h3>Accessorials and re-weigh</h3><p>Liftgate, residential, inside delivery and so on on top. Carriers re-weigh and re-class at the dock, and we raise adjustment charges when they do.</p></div>
+    </div>
+    <div class="note">The weak link today is the inputs, not the maths. Cartonisation works out cube and pallet positions, but only in a live preview. Orders only save weight, so nothing downstream can use the rest. #387 fixes that.</div>
+  </div>
+`);
+
+// 4 - THREE WAYS
+slides.push(`
+  <div class="glow-orb g" style="bottom:-200px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Choosing how it moves</div>
+    <h2 class="section">Ways a shipment can move</h2>
+    <p class="subtitle">A planner picks one of these for every shipment. Today that choice is all manual. Over time the system should suggest it.</p>
+    <div class="grid g3" style="margin-top:22px;">
+      <div class="glass">
+        <div class="chip" style="margin-bottom:10px;">LTL carrier</div>
+        <h3>Book it LTL</h3>
+        <ul>
+          <li>Rated from the LTL carrier's tariff</li>
+          <li>Usually booked straight off the rate, no tender</li>
+          <li>The carrier consolidates it with other people's freight on their own network</li>
+          <li>Right for small shipments and lanes with nothing to share a truck with</li>
+        </ul>
+      </div>
+      <div class="glass">
+        <div class="chip g" style="margin-bottom:10px;">FTL tender</div>
+        <h3>One order, one truck</h3>
+        <ul>
+          <li>A single FTL order on its own shipment</li>
+          <li>Tendered to truckload carriers, waterfall or broadcast</li>
+          <li>Priced flat or per mile</li>
+          <li>Right when the order fills the truck, or needs it to itself</li>
+        </ul>
+      </div>
+      <div class="glass">
+        <div class="chip m" style="margin-bottom:10px;">Consolidation tender</div>
+        <h3>Several LTL shipments, one truck</h3>
+        <ul>
+          <li>We build the run ourselves (#329, done)</li>
+          <li>Tendered as one load to truckload carriers (#386)</li>
+          <li>The run's rate is split across its shipments by weight</li>
+          <li>Right when the run costs less than the LTL rates added up, and it fits</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">The test for a consolidation is simple to state: the FTL rate for the run is lower than the LTL rates for its shipments added up, by enough to be worth the extra stops, and the freight fits on the truck. #388 automates the first half, #387 the second.</div>
+  </div>
+`);
+
+// 5 - TODAY
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Where we are</div>
+    <h2 class="section">What's built and what's missing</h2>
+    <div class="grid g2" style="margin-top:20px;">
+      <div class="glass ok">
+        <h3 style="color:#86efac;">Built</h3>
+        <ul>
+          <li>Broadcast and waterfall tenders, with timeouts and waterfall progression</li>
+          <li>Carrier portal bidding, and EDI 204 out with 990 replies recorded as bids</li>
+          <li>LTL rating: class, weight breaks, deficit weight, FAK, accessorials, re-weigh</li>
+          <li>Cartonisation of orders into weight, cube, pallet positions and class (preview only)</li>
+          <li>Consolidations: build a run, track it, split its rate across shipments by weight</li>
+          <li>Carrier invoices (210) three-way matched, auto-approved within 2%</li>
+        </ul>
+      </div>
+      <div class="glass gap">
+        <h3 style="color:#fcd34d;">Missing</h3>
+        <ul>
+          <li>A tender can only point at a shipment, so a run can't be tendered</li>
+          <li>The run's carrier and rate are typed in by hand</li>
+          <li>Award sets the carrier but doesn't record the agreed rate as a cost</li>
+          <li>Award runs in a service, not through the command bus, so it emits no events</li>
+          <li>Tender and bid rates are floats, not integer cents</li>
+          <li>Cube and pallet positions aren't saved, and there's no truck capacity to check against</li>
+          <li>No agreed content for a rate confirmation (#151)</li>
+          <li>No suggestions for what should be consolidated</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+`);
+
+// 6 - PROPOSED FLOW
+slides.push(`
+  <div class="glow-orb a" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">The proposal</div>
+    <h2 class="section">How it should work end to end</h2>
+    <div class="legend"><span class="l-built">Built</span><span class="l-new">New or changed</span></div>
+    <div class="flow">
+      <div class="step new" style="--d:.05s"><div class="n">01</div><div class="t">Order cartonised</div><div class="d">Weight, cube, pallet positions, linear feet and class saved on the order, not just previewed.</div><div class="tags"><span class="chip m">#387</span></div></div>
+      <div class="step" style="--d:.12s"><div class="n">02</div><div class="t">Shipments built</div><div class="d">From orders, under the FTL/LTL and one-customer rules we already enforce.</div></div>
+      <div class="step new" style="--d:.19s"><div class="n">03</div><div class="t">Plan</div><div class="d">Book LTL, tender FTL, or put it on a run. The system suggests runs worth building.</div><div class="tags"><span class="chip m">#388</span></div></div>
+      <div class="step new" style="--d:.26s"><div class="n">04</div><div class="t">Check it fits</div><div class="d">The run has an equipment type. Weight, cube and pallets are checked against it, and reefer freight against reefer kit.</div><div class="tags"><span class="chip m">#387</span></div></div>
+      <div class="step new" style="--d:.33s"><div class="n">05</div><div class="t">Tender</div><div class="d">The shipment or the whole run goes out, waterfall or broadcast, by portal and EDI 204.</div><div class="tags"><span class="chip m">#386</span></div></div>
+      <div class="step new" style="--d:.40s"><div class="n">06</div><div class="t">Award</div><div class="d">Carrier and agreed rate set on the shipment or run, as a command. The rate becomes cost, split across a run's shipments.</div><div class="tags"><span class="chip m">#386</span></div></div>
+      <div class="step new" style="--d:.47s"><div class="n">07</div><div class="t">Confirm and run</div><div class="d">Rate confirmation to the carrier, then tracking as we do today for shipments and runs.</div><div class="tags"><span class="chip m">#151</span></div></div>
+      <div class="step" style="--d:.54s"><div class="n">08</div><div class="t">Settle</div><div class="d">Carrier's 210 matched against the awarded rate. Each customer is invoiced for their own shipment.</div></div>
+    </div>
+  </div>
+`);
+
+// 7 - WHAT GOES IN A TENDER
+slides.push(`
+  <div class="glow-orb p" style="bottom:-200px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Tendering a run &middot; #386</div>
+    <h2 class="section">What a carrier gets in a tender for a run</h2>
+    <p class="subtitle">To the carrier a run is one load with several stops. They bid on the truck, not on each customer's shipment.</p>
+    <div class="grid g2" style="margin-top:20px;">
+      <div class="glass hl">
+        <h3>In the tender</h3>
+        <ul>
+          <li>Every stop in run order (pickups, drops and other stops) with addresses and time windows</li>
+          <li>What's collected or dropped at each stop: pieces, pallets and weight</li>
+          <li>Equipment type and the run's totals against it</li>
+          <li>Temperature range and hazmat details where any freight needs them</li>
+          <li>Response deadline and any special instructions</li>
+        </ul>
+      </div>
+      <div class="glass">
+        <h3>Not in the tender</h3>
+        <ul>
+          <li>Which of our customers are on the run, beyond what has to be on a stop</li>
+          <li>What we charge those customers, or our margin</li>
+          <li>Other carriers' bids</li>
+          <li>The target rate, unless we decide to show it (open question)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">The same tender model serves both cases. A tender points at exactly one of a shipment or a consolidation. A shipment that's on a run can't be tendered on its own, because the run is what the truck moves.</div>
+  </div>
+`);
+
+// 8 - STRATEGIES
+slides.push(`
+  <div class="glow-orb a" style="top:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Picking carriers</div>
+    <h2 class="section">Waterfall first, then broadcast</h2>
+    <p class="subtitle">Both strategies exist today. The proposal is about when we use each and what happens when one runs out.</p>
+    <div class="grid g2" style="margin-top:20px;">
+      <div class="glass">
+        <div class="chip g" style="margin-bottom:10px;">Waterfall</div>
+        <h3>Contract carriers in order</h3>
+        <ul>
+          <li>The lane's carriers in priority order, at their contract rate</li>
+          <li>Each has a set time to accept. A decline or a timeout moves on to the next</li>
+          <li>The default for any lane with contract carriers on it</li>
+          <li>For a run, use the lane carriers where the run matches a lane, otherwise a planner-picked list</li>
+        </ul>
+      </div>
+      <div class="glass">
+        <div class="chip k" style="margin-bottom:10px;">Broadcast</div>
+        <h3>Spot market</h3>
+        <ul>
+          <li>Every eligible carrier at once: active, and offering the equipment type</li>
+          <li>Bids compared on rate and transit days</li>
+          <li>The default with no contract carriers on the lane</li>
+          <li>The fallback when a waterfall runs out</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note m">Proposal: when a waterfall runs out with no acceptance, the planner gets a one-click "re-open as broadcast" rather than an automatic switch. We can automate it once we trust it.</div>
+  </div>
+`);
+
+// 9 - AWARD
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Award &middot; #386</div>
+    <h2 class="section">What awarding a tender should do</h2>
+    <p class="subtitle">Today award flips some statuses and sets the shipment's carrier. It should be a proper command, so the rate sticks and everything downstream hears about it.</p>
+    <div class="grid g2" style="margin-top:20px;">
+      <div class="glass hl">
+        <h3>In the transaction</h3>
+        <ul>
+          <li>Winning bid accepted, the rest rejected, outstanding offers cancelled</li>
+          <li>Carrier and agreed rate, in integer cents, set on the shipment or the run</li>
+          <li>For a run, the carrier lands on every shipment on it, as it does today</li>
+        </ul>
+      </div>
+      <div class="glass hl">
+        <h3>After commit</h3>
+        <ul>
+          <li><span class="chip">tender.awarded</span> event</li>
+          <li>Cost charge on the shipment, or the run's rate split by weight across its shipments</li>
+          <li>Rate confirmation generated and sent</li>
+          <li>Losing carriers told their bid wasn't taken, in the portal and by email</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">Rule from the cost split: a share that's already been approved on a shipment doesn't move when the run's rate changes. Award follows the same rule.</div>
+  </div>
+`);
+
+// 10 - RATE CONFIRMATION
+slides.push(`
+  <div class="glow-orb a" style="bottom:-200px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Rate confirmation &middot; #151</div>
+    <h2 class="section">What a rate confirmation contains</h2>
+    <p class="subtitle">#151 has been open for a while. This is a starting point to agree on, so #386 can generate one per award, and one per run for a consolidation.</p>
+    <table class="tbl">
+      <thead><tr><th>Section</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td>References</td><td>Our shipment or run reference, the tender reference, PO and BOL numbers the carrier has to quote</td></tr>
+        <tr><td>Parties</td><td>Our company, the carrier and SCAC, the dispatcher contact for the load</td></tr>
+        <tr><td>Equipment</td><td>Equipment type, temperature range if reefer, hazmat placarding if needed</td></tr>
+        <tr><td>Stops</td><td>Each stop in order: address, time window, appointment reference, pieces and weight on or off</td></tr>
+        <tr><td>Rate</td><td>Linehaul rate, agreed accessorial rates (detention, lumper and so on), currency</td></tr>
+        <tr><td>Terms</td><td>Payment terms, invoice requirements (POD attached, our reference on the 210), cancellation terms</td></tr>
+        <tr><td>Sign-off</td><td>Accepted in the portal, or by the 990 for EDI carriers. Revisions are numbered</td></tr>
+      </tbody>
+    </table>
+  </div>
+`);
+
+// 11 - CHANGES
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Changes</div>
+    <h2 class="section">When the load changes after it's tendered</h2>
+    <p class="subtitle">Runs change. Shipments get added, dropped and re-planned. The carrier has to bid on, and confirm, what they'll actually move.</p>
+    <table class="tbl">
+      <thead><tr><th>What happens</th><th>Proposed behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Run changes while tender is open</td><td>The tender is cancelled and the planner re-tenders. Carriers bid on what they saw, and we don't award against a stale load</td></tr>
+        <tr><td>Run changes after award</td><td>Allowed while the run is draft or ready. It produces a revised rate confirmation for the carrier to accept. A rate change goes through the existing rate update, so approved shares stay put</td></tr>
+        <tr><td>Run goes over capacity</td><td>Warning on the run page, not a block. The planner decides (#387)</td></tr>
+        <tr><td>Carrier drops the load</td><td>Award is reversed, the carrier is cleared from the run and its shipments, and the planner re-tenders</td></tr>
+        <tr><td>Shipment cancelled off a run</td><td>Removed as today. Its cost share goes, and the rest re-split by weight</td></tr>
+      </tbody>
+    </table>
+  </div>
+`);
+
+// 12 - SETTLEMENT
+slides.push(`
+  <div class="glow-orb g" style="bottom:-200px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Settlement</div>
+    <h2 class="section">Paying the carrier and billing the customers</h2>
+    <p class="subtitle">Mostly built. The change is that award writes the cost charges, so the awarded rate becomes what the carrier's invoice is checked against.</p>
+    <div class="grid g3" style="margin-top:22px;">
+      <div class="glass hl"><h3>Carrier invoice</h3><p>The freight audit checks each invoice line against the cost charges on its shipment, and auto-approves within 2%, as now. Once award writes those charges, the expected amount is the awarded rate.</p></div>
+      <div class="glass hl"><h3>Cost on each shipment</h3><p>The run's cost is already split by weight onto each shipment. Re-weigh and re-class adjustments land on the shipment they're about.</p></div>
+      <div class="glass hl"><h3>Customer invoices</h3><p>Unchanged. Each customer is billed for their own shipment and sees their own margin. They never see the run or the other customers.</p></div>
+    </div>
+    <div class="note m">Gap to close in #386: the audit matches invoice lines by shipment. A carrier bills a run as one load, so a 210 for a run needs matching against the run's total, then spreading across its shipments by the same weight split.</div>
+  </div>
+`);
+
+// 13 - RULES
+slides.push(`
+  <div class="glow-orb a" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">Rules</div>
+    <h2 class="section">Rules we hold to</h2>
+    <div class="grid g2" style="margin-top:20px;">
+      <div class="glass"><ul>
+        <li>Every tender, offer and bid is scoped to the org. A cross-tenant id is a 404</li>
+        <li>A tender points at exactly one shipment or one consolidation</li>
+        <li>A shipment on a run is never tendered on its own</li>
+        <li>FTL is one order, and FTL and LTL never share a shipment</li>
+      </ul></div>
+      <div class="glass"><ul>
+        <li>Money is integer cents everywhere, tender and bid rates included</li>
+        <li>Every state change goes through the command bus and emits an event after commit</li>
+        <li>A carrier never sees our customers' commercial details, rates or other bids</li>
+        <li>Capacity problems are warnings. The planner makes the call</li>
+      </ul></div>
+    </div>
+  </div>
+`);
+
+// 14 - OPEN QUESTIONS
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">To decide</div>
+    <h2 class="section">Open questions</h2>
+    <p class="subtitle">Each has a proposed answer. Push back on any of them.</p>
+    <table class="tbl">
+      <thead><tr><th>Question</th><th>Proposed answer</th></tr></thead>
+      <tbody>
+        <tr><td>Do carriers see the target rate?</td><td>Not on broadcast. On waterfall the contract rate is the offer, so it's shown</td></tr>
+        <tr><td>Auto-award?</td><td>A waterfall acceptance at or under the contract rate awards itself. Broadcast always waits for a planner</td></tr>
+        <tr><td>Waterfall runs out</td><td>Planner gets "re-open as broadcast". No automatic switch yet</td></tr>
+        <tr><td>Units for weight and cube</td><td>Store metric (kg, m&sup3;) to match vehicles and lanes. Convert to lbs and ft&sup3; for LTL rating and US carriers</td></tr>
+        <tr><td>Booking LTL carriers by API</td><td>Out of scope for now. LTL bookings stay rate-and-book</td></tr>
+      </tbody>
+    </table>
+  </div>
+`);
+
+// 15 - THE WORK
+slides.push(`
+  <div class="glow-orb p" style="top:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="glow-orb a" style="bottom:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">The work</div>
+    <h2 class="section">Tickets and order</h2>
+    <p class="subtitle">#386 and #387 can go in parallel. #388 needs #387's capacity checks. #151 should be settled before #386 generates rate confirmations.</p>
+    <div class="grid g3" style="margin-top:22px;">
+      <div class="glass hl">
+        <div class="chip m" style="margin-bottom:8px;">#386</div>
+        <h3>Tender a consolidation</h3>
+        <p>Tender points at a shipment or a run. Award becomes a command with cents and events. Portal, 204 and 990 per run. Rate confirmation per award.</p>
+      </div>
+      <div class="glass hl">
+        <div class="chip m" style="margin-bottom:8px;">#387</div>
+        <h3>Check a run fits its truck</h3>
+        <p>Save cartonisation totals on orders and shipments. Equipment types with capacity. Warnings on the run page.</p>
+      </div>
+      <div class="glass hl">
+        <div class="chip m" style="margin-bottom:8px;">#388</div>
+        <h3>Suggest consolidations</h3>
+        <p>A queued job finds LTL shipments that would be cheaper on one truck and fit. One click builds the run.</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:14px;">
+      <div class="glass"><div class="chip" style="margin-bottom:8px;">#151</div><p>Agree the rate confirmation contents (slide 10).</p></div>
+      <div class="glass"><div class="chip" style="margin-bottom:8px;">#276</div><p>Cargo tab missing weight and dimensions. Same data as #387.</p></div>
+    </div>
+    <div style="margin-top:28px;"><div class="logo-badge"><span>github.com/dominicfinn/open_tms</span></div></div>
+  </div>
+`);
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>
