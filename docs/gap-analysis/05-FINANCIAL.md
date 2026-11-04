@@ -2,7 +2,7 @@
 
 ## What's Built
 
-This is one of Open TMS's strongest areas.
+This is one of POLARIS Global's strongest areas.
 
 ### Charges & Rating
 - Charge model (revenue + cost, linked to order or shipment)

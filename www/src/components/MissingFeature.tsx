@@ -23,7 +23,7 @@ export default function MissingFeature() {
               </h2>
 
               <p className="text-surface-300 leading-relaxed max-w-2xl mx-auto mb-3 text-lg">
-                Open TMS is built by the community, for the community. You don't need to be a
+                POLARIS Global is built by the community, for the community. You don't need to be a
                 developer to shape this project  - <strong className="text-white">real-world operations experience
                 is the most valuable contribution there is.</strong>
               </p>
@@ -31,7 +31,7 @@ export default function MissingFeature() {
               <p className="text-surface-400 leading-relaxed max-w-2xl mx-auto mb-8">
                 Every feature request, bug report, and workflow suggestion makes the platform
                 better for everyone. Shared knowledge means shared advantage  - when one team
-                solves a problem, every Open TMS user benefits.
+                solves a problem, every POLARIS Global user benefits.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">

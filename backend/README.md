@@ -1,6 +1,6 @@
 # Backend
 
-Fastify + Prisma API for Open TMS.
+Fastify + Prisma API for POLARIS Global.
 
 - Dev: `npm run dev`
 - Migrate: `npm run prisma:migrate`

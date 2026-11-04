@@ -66,7 +66,7 @@ export class DailyReportService implements IDailyReportService {
     const workbook = new ExcelJS.Workbook();
     // Use org name for workbook creator metadata
     const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
-    workbook.creator = org?.name && org.name !== 'Default Organization' ? org.name : 'Open TMS';
+    workbook.creator = org?.name && org.name !== 'Default Organization' ? org.name : 'POLARIS Global';
     workbook.created = new Date();
 
     // --- Sheet 1: Summary ---

@@ -8,13 +8,9 @@ export default function Footer() {
           {/* Brand */}
           <div className="md:col-span-1">
             <Link to="/" className="flex items-center gap-3 mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
-                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              </div>
+              <img src="/favicon.svg" alt="" aria-hidden="true" className="h-9 w-9" />
               <span className="text-xl font-bold tracking-tight">
-                Open <span className="text-primary-400">TMS</span>
+                POLARIS <span className="text-primary-400">Global</span>
               </span>
             </Link>
             <p className="text-sm text-surface-400 leading-relaxed">
@@ -58,7 +54,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-surface-500">
-            &copy; {new Date().getFullYear()} Open TMS. Released under the MIT License.
+            &copy; {new Date().getFullYear()} POLARIS Global. Released under the MIT License.
           </p>
           <div className="flex items-center gap-4 text-sm text-surface-500">
             <span>Integrates with System Loco IoT hardware</span>

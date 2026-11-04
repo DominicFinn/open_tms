@@ -58,7 +58,7 @@ const differentiators = [
   {
     number: '01',
     title: 'Most TMSs don\'t have this',
-    description: 'Triage and exception management is typically a separate tool you bolt on - if you have it at all. Open TMS builds it in natively, connected directly to your shipment data, sensor telemetry, and carrier performance.',
+    description: 'Triage and exception management is typically a separate tool you bolt on - if you have it at all. POLARIS Global builds it in natively, connected directly to your shipment data, sensor telemetry, and carrier performance.',
   },
   {
     number: '02',
@@ -343,7 +343,7 @@ export default function Triage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mt-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-4">See it in action</h2>
-            <p className="text-surface-400 mb-8 text-lg">Deploy Open TMS and start triaging exceptions in your first session.</p>
+            <p className="text-surface-400 mb-8 text-lg">Deploy POLARIS Global and start triaging exceptions in your first session.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
                 href="https://github.com/dominicfinn/open_tms#-quick-start"

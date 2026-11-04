@@ -454,7 +454,7 @@ export default function Operations() {
         <AnimateIn animation="scale-up">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to take control?</h2>
-            <p className="text-surface-400 mb-8 text-lg">Deploy Open TMS in minutes with Docker. Your operations team will thank you.</p>
+            <p className="text-surface-400 mb-8 text-lg">Deploy POLARIS Global in minutes with Docker. Your operations team will thank you.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
                 href="https://github.com/dominicfinn/open_tms#-quick-start"

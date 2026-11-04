@@ -120,7 +120,7 @@ async function startWorker() {
         user: process.env.SMTP_USER || '',
         password: process.env.SMTP_PASSWORD || '',
         fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@opentms.local',
-        fromName: process.env.EMAIL_FROM_NAME || 'Open TMS',
+        fromName: process.env.EMAIL_FROM_NAME || 'POLARIS Global',
       });
       console.log(`[Worker] Email service: SMTP (${process.env.SMTP_HOST}:${process.env.SMTP_PORT})`);
     } else {

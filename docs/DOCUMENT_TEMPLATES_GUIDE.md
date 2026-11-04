@@ -1,6 +1,6 @@
 # Document Templates, Reports & File Storage Guide
 
-This guide covers the Open TMS document generation system, file storage, and attachments: Bills of Lading, shipping labels, customs forms, daily operations reports, template management, S3-compatible file storage, and file attachments on any entity.
+This guide covers the POLARIS Global document generation system, file storage, and attachments: Bills of Lading, shipping labels, customs forms, daily operations reports, template management, S3-compatible file storage, and file attachments on any entity.
 
 ## Overview
 
@@ -74,7 +74,7 @@ curl "http://localhost:3001/api/v1/reports/daily?date=2026-03-30&format=xlsx" -o
 
 ## File Storage Setup
 
-Open TMS uses an S3-compatible file storage provider for all binary content (generated PDFs, uploaded attachments). When S3 is not configured, it falls back to storing content in the PostgreSQL database.
+POLARIS Global uses an S3-compatible file storage provider for all binary content (generated PDFs, uploaded attachments). When S3 is not configured, it falls back to storing content in the PostgreSQL database.
 
 ### MinIO (Local Development)
 

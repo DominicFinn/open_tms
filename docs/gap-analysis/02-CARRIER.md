@@ -1,6 +1,6 @@
 # Carrier Management & Procurement
 
-## What Open TMS Has (Built)
+## What POLARIS Global Has (Built)
 
 - Carrier CRUD with full model (name, MC#, DOT#, SCAC, contact, address)
 - Validation tier tracking (tier1/tier2/tier3)

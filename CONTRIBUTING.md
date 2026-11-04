@@ -1,6 +1,6 @@
-# Contributing to Open TMS
+# Contributing to POLARIS Global
 
-Thank you for your interest in contributing to Open TMS! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to POLARIS Global! This document provides guidelines and information for contributors.
 
 ## 🤝 How to Contribute
 
@@ -188,11 +188,11 @@ Contributors will be recognized in:
 
 ## 📄 License
 
-By contributing to Open TMS, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
+By contributing to POLARIS Global, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
 
 ## 🙏 Thank You
 
-Thank you for contributing to Open TMS! Your contributions help make this project better for everyone in the community.
+Thank you for contributing to POLARIS Global! Your contributions help make this project better for everyone in the community.
 
 ---
 

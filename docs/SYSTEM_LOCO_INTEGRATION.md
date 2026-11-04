@@ -1,11 +1,11 @@
 # System Loco (LocoAware) IoT Integration
 
-How Open TMS ingests IoT tracking data from System Loco and binds it to shipments.
+How POLARIS Global ingests IoT tracking data from System Loco and binds it to shipments.
 
 ## Overview
 
 System Loco delivers **Device Events** (and Device Reports) to a webhook. Each event
-carries a device, a location, and sensor data. Open TMS resolves the event to a shipment
+carries a device, a location, and sensor data. POLARIS Global resolves the event to a shipment
 via the device assignment, stores telemetry, updates the shipment's live position, and
 feeds geofencing / cold-chain monitoring.
 

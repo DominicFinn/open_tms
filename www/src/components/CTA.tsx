@@ -11,7 +11,7 @@ export default function CTA() {
           <span className="gradient-text">supply chain?</span>
         </h2>
         <p className="text-xl text-surface-300 leading-relaxed max-w-2xl mx-auto mb-10">
-          Deploy Open TMS in minutes with Docker Compose. Full shipment lifecycle,
+          Deploy POLARIS Global in minutes with Docker Compose. Full shipment lifecycle,
           carrier tendering, IoT tracking, and EDI integration  - all free, all open source.
         </p>
 

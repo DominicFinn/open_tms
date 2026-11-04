@@ -1,7 +1,7 @@
 /**
  * EDI 214 Status Code Mapping
  *
- * Maps X12 214 AT7 status codes to internal Open TMS shipment
+ * Maps X12 214 AT7 status codes to internal POLARIS Global shipment
  * and stop statuses. Used by ProcessInbound214Command to
  * translate carrier status updates into domain state changes.
  */

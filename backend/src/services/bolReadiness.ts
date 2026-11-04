@@ -12,7 +12,7 @@ export interface BolReadiness {
 /**
  * A Bill of Lading is a legal shipping document: it must name the shipper and
  * consignee and describe the goods (description, piece count, weight) for every
- * line. Open TMS treats all of that cargo detail as OPTIONAL data throughout the
+ * line. POLARIS Global treats all of that cargo detail as OPTIONAL data throughout the
  * shipment/order lifecycle - a shipment can exist with no orders, and an order
  * can exist with no line-item weights - so a shipment can easily lack enough
  * information to produce a legally-sufficient BOL.

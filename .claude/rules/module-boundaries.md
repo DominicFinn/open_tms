@@ -5,7 +5,7 @@ paths:
 
 # Module Boundaries
 
-Open TMS is becoming two products, FinnTMS and FinnWMS, composed from modules over a shared core.
+POLARIS Global is becoming two products, FinnTMS and FinnWMS, composed from modules over a shared core.
 [ADR 0002](../../docs/adr/0002-modular-monolith-product-composition.md) sets the structure and
 [docs/roadmap/split-finntms-finnwms.md](../../docs/roadmap/split-finntms-finnwms.md) sequences the
 work. This rule is the part you have to obey while writing code.

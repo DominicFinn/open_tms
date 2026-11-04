@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Create a report to help us improve Open TMS
+about: Create a report to help us improve POLARIS Global
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -29,7 +29,7 @@ If applicable, add screenshots to help explain your problem.
 - **OS**: [e.g. Windows 10, macOS 13, Ubuntu 22.04]
 - **Browser**: [e.g. Chrome 120, Firefox 121, Safari 17]
 - **Node.js Version**: [e.g. 20.10.0]
-- **Open TMS Version**: [e.g. 1.0.0, commit hash, or "latest"]
+- **POLARIS Global Version**: [e.g. 1.0.0, commit hash, or "latest"]
 
 ## 📋 Additional Context
 Add any other context about the problem here.

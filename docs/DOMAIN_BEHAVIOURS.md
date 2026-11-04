@@ -1,6 +1,6 @@
-# Domain Behaviours — Open TMS
+# Domain Behaviours — POLARIS Global
 
-Every write operation in Open TMS flows through a **domain command**. Commands execute inside a database transaction, emit domain events, and those events trigger side effects (read model updates, notifications, audit logs, integrations).
+Every write operation in POLARIS Global flows through a **domain command**. Commands execute inside a database transaction, emit domain events, and those events trigger side effects (read model updates, notifications, audit logs, integrations).
 
 This document is the authoritative reference for what happens when state changes.
 
@@ -2119,7 +2119,7 @@ The frontend "Accept & Book" button (visible for broker orgs) triggers this flow
 - `POST /api/v1/documents/generate/bol` (sync) and `/bol/async` (queued) — generate the BOL PDF.
 - `GET /api/v1/documents/bol-readiness/:shipmentId` — readiness check driving the UI.
 
-A Bill of Lading is a legal shipping document that must name the shipper and consignee and describe the goods (description, piece count, weight) for every line. Open TMS treats all of that cargo detail as **optional** throughout the shipment/order lifecycle - a shipment can exist with no orders, and an order line can exist with no weight - so a shipment can easily lack enough information to produce a valid BOL.
+A Bill of Lading is a legal shipping document that must name the shipper and consignee and describe the goods (description, piece count, weight) for every line. POLARIS Global treats all of that cargo detail as **optional** throughout the shipment/order lifecycle - a shipment can exist with no orders, and an order line can exist with no weight - so a shipment can easily lack enough information to produce a valid BOL.
 
 `evaluateBolReadiness` (`backend/src/services/bolReadiness.ts`) is the **single source of truth** for whether a shipment can produce a legally-sufficient BOL. A shipment is BOL-ready only when:
 - the shipment has an origin (shipper) and destination (consignee), and
@@ -3284,7 +3284,7 @@ First-Fit-Decreasing by volume:
 
 ## Customer Portal - Developer Area
 
-The customer portal is a multi-app workspace with an app switcher (Google-style grid) in the top-right. Apps: **Portal** (orders, shipments, returns, invoices, documents, profile) and **Developer**. The Developer app gives customers self-service control over every integration surface that connects their systems to Open TMS.
+The customer portal is a multi-app workspace with an app switcher (Google-style grid) in the top-right. Apps: **Portal** (orders, shipments, returns, invoices, documents, profile) and **Developer**. The Developer app gives customers self-service control over every integration surface that connects their systems to POLARIS Global.
 
 ### Capabilities
 - **API Keys** - create/disable/revoke. Plaintext is returned once on creation and never stored readable again. Keys are scoped to the customer, so a customer API key can only read and write that customer's own data via the public REST API.

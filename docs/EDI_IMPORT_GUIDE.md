@@ -1,6 +1,6 @@
 # EDI Import Guide
 
-Open TMS supports importing orders from EDI X12 850 (Purchase Order) documents. You can upload EDI files manually through the UI, send them via the API, or configure automated SFTP collection from trading partners.
+POLARIS Global supports importing orders from EDI X12 850 (Purchase Order) documents. You can upload EDI files manually through the UI, send them via the API, or configure automated SFTP collection from trading partners.
 
 ## Table of Contents
 

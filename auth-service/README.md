@@ -1,6 +1,6 @@
 # Auth Service
 
-Authentication and authorization service for Open TMS. Manages users, roles, sessions, and JWT tokens.
+Authentication and authorization service for POLARIS Global. Manages users, roles, sessions, and JWT tokens.
 
 ## Architecture
 

@@ -17,11 +17,9 @@ const SIZES = {
 };
 
 /**
- * Canonical Open TMS logo lockup, per marketing/brand-guidelines.html.
+ * Canonical POLARIS Global logo lockup.
  *
- * Replaces the legacy Material Icons `hub` glyph used in vnext-layout.tsx
- * and the old sidebar chrome. The mark is the swap-arrows SVG; the wordmark
- * is "Open TMS" with "TMS" in the primary colour.
+ * The mark is a Polaris star; the wordmark is "POLARIS Global".
  */
 export function Logo({
   variant = 'default',
@@ -47,7 +45,7 @@ export function Logo({
         ? 'text-white'
         : 'text-foreground';
 
-  const tmsColor =
+  const globalColor =
     variant === 'default'
       ? 'text-primary'
       : variant === 'mono-dark'
@@ -67,15 +65,16 @@ export function Logo({
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+            d="M12 2.5 15 9l6.5 3-6.5 3-3 6.5L9 15l-6.5-3L9 9l3-6.5Z"
           />
+          <circle cx="12" cy="12" r="1.25" fill="none" stroke="currentColor" strokeWidth={1.5} />
         </svg>
       </span>
       {showWordmark && (
         <span className={cn(dims.text, wordmarkColor, 'leading-none')}>
           {wordmark ?? (
             <>
-              Open <span className={tmsColor}>TMS</span>
+              POLARIS <span className={globalColor}>Global</span>
             </>
           )}
         </span>

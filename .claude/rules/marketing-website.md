@@ -13,7 +13,7 @@ instead. This applies to all www content: components, blog articles, page copy.
 
 ## Project identity
 
-Open TMS is an **independent open source project** maintained by Dominic Finn and the community.
+POLARIS Global is an **independent open source project** maintained by Dominic Finn and the community.
 It is NOT a System Loco project. System Loco IoT is an integration, not an ownership relationship.
 Never describe the project as "maintained by System Loco" or "the System Loco team."
 

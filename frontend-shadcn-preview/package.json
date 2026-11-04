@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Visual preview of Open TMS rebuilt entirely on shadcn/ui. No bespoke CSS layer.",
+  "description": "Visual preview of POLARIS Global rebuilt entirely on shadcn/ui. No bespoke CSS layer.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

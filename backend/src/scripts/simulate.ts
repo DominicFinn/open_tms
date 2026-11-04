@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Open TMS Simulation: "A Week in Logistics"
+ * POLARIS Global Simulation: "A Week in Logistics"
  *
  * Drives the entire TMS lifecycle through the HTTP API:
  *   Order intake -> Shipment creation -> Carrier tendering -> Bids ->

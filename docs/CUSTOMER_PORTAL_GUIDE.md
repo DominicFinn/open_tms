@@ -1,6 +1,6 @@
 # Customer Portal Guide
 
-This guide describes everything a logged-in customer can see and do inside Open TMS today. It is written for product, support, and onboarding - if you need to explain "what does my customer get?" this is the source of truth.
+This guide describes everything a logged-in customer can see and do inside POLARIS Global today. It is written for product, support, and onboarding - if you need to explain "what does my customer get?" this is the source of truth.
 
 For the headless integration path (API keys + JSON), see [CUSTOMER_API_GUIDE.md](./CUSTOMER_API_GUIDE.md). For the developer sub-app inside the portal (webhooks, EDI setup, integration logs), see the [Developer App](#developer-app) section below.
 
@@ -26,7 +26,7 @@ For the headless integration path (API keys + JSON), see [CUSTOMER_API_GUIDE.md]
 
 ## Overview
 
-The Customer Portal is a self-service web app for the customers (shippers) that Open TMS moves freight for. It sits at `/customer-portal` and is a separate auth realm from internal TMS staff and from carrier portal users - customers cannot see internal operations data, other customers' shipments, or carrier-only tender pricing.
+The Customer Portal is a self-service web app for the customers (shippers) that POLARIS Global moves freight for. It sits at `/customer-portal` and is a separate auth realm from internal TMS staff and from carrier portal users - customers cannot see internal operations data, other customers' shipments, or carrier-only tender pricing.
 
 Three logical surfaces are exposed:
 
@@ -193,7 +193,7 @@ There is no self-service email change today - that goes through internal staff.
 
 Path: `/customer-portal/developer` (sub-app within the same portal session)
 
-The developer sub-app is for customers who want to integrate Open TMS into their own systems. It uses the same customer login and the same scoping rules.
+The developer sub-app is for customers who want to integrate POLARIS Global into their own systems. It uses the same customer login and the same scoping rules.
 
 | Page | Path | What it does |
 |---|---|---|

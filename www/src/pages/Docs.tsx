@@ -59,7 +59,7 @@ export default function Docs() {
         <div className="mb-16">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">Documentation</h1>
           <p className="text-lg text-surface-400 max-w-2xl">
-            Everything you need to deploy, configure, and extend Open TMS.
+            Everything you need to deploy, configure, and extend POLARIS Global.
             Full API documentation is available via Swagger on your running instance.
           </p>
         </div>
@@ -114,7 +114,7 @@ export default function Docs() {
         <div className="mt-12 glass-card rounded-2xl p-8 text-center">
           <h3 className="text-xl font-bold text-white mb-3">Interactive API Documentation</h3>
           <p className="text-surface-400 max-w-xl mx-auto mb-6">
-            Deploy Open TMS and visit <code className="px-2 py-0.5 rounded bg-surface-800 text-primary-300 text-sm font-mono">/docs</code> for
+            Deploy POLARIS Global and visit <code className="px-2 py-0.5 rounded bg-surface-800 text-primary-300 text-sm font-mono">/docs</code> for
             full Swagger/OpenAPI documentation with try-it-now functionality for every endpoint.
           </p>
           <a

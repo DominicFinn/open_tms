@@ -1,6 +1,6 @@
 # Queue-Based Integration System
 
-Open TMS uses a queue-based architecture for all integration processing. This ensures reliable, scalable handling of outbound carrier notifications, tracking platform registrations, and inbound webhook events.
+POLARIS Global uses a queue-based architecture for all integration processing. This ensures reliable, scalable handling of outbound carrier notifications, tracking platform registrations, and inbound webhook events.
 
 ## Table of Contents
 

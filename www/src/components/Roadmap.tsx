@@ -65,7 +65,7 @@ export default function Roadmap() {
             Shipped & <span className="gradient-text">coming soon</span>
           </h2>
           <p className="text-lg text-surface-400 leading-relaxed">
-            Open TMS is under active development with regular releases.
+            POLARIS Global is under active development with regular releases.
             Here's what's already shipped and what's on the horizon.
           </p>
         </div>

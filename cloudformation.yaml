@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Open TMS — One-click deployment to AWS.
+  POLARIS Global — One-click deployment to AWS.
   Provisions ECS Fargate (backend + frontend), RDS PostgreSQL, ALB,
   and a CodeBuild project that builds container images from source.
 
@@ -477,11 +477,11 @@ Resources:
 # ---------------------------------------------------------------------------
 Outputs:
   ApplicationURL:
-    Description: Open TMS frontend URL
+    Description: POLARIS Global frontend URL
     Value: !Sub "http://${ALB.DNSName}"
 
   BackendURL:
-    Description: Open TMS backend API URL
+    Description: POLARIS Global backend API URL
     Value: !Sub "http://${ALB.DNSName}/api/v1"
 
   APIDocsURL:

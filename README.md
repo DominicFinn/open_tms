@@ -1,4 +1,4 @@
-# 🚛 Open TMS
+# 🚛 POLARIS Global
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,7 +14,7 @@ This is in active development without a release version yet! When stable I'll ta
 
 ## Contributing
 
-Open TMS is under active development. We welcome contributions — feature requests, bug reports, code, and documentation improvements are all appreciated.
+POLARIS Global is under active development. We welcome contributions — feature requests, bug reports, code, and documentation improvements are all appreciated.
 
 See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](./roadmap.md) for what's planned.
 
@@ -22,7 +22,7 @@ See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](.
 
 ## Deploy
 
-Deploy your own Open TMS instance with one click:
+Deploy your own POLARIS Global instance with one click:
 
 | Provider | Deploy | What you get |
 |----------|--------|--------------|
@@ -423,7 +423,7 @@ The backend includes a pluggable email service. By default it uses a console pro
 | `SMTP_USER` | — | SMTP authentication username |
 | `SMTP_PASSWORD` | — | SMTP authentication password |
 | `EMAIL_FROM_ADDRESS` | `noreply@opentms.local` | Default sender address |
-| `EMAIL_FROM_NAME` | `Open TMS` | Default sender display name |
+| `EMAIL_FROM_NAME` | `POLARIS Global` | Default sender display name |
 
 Email settings can also be managed per-organization via the Admin UI or the `PUT /api/v1/email/settings` endpoint.
 
@@ -949,7 +949,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Marketing Site
 
-The `www/` directory contains the Open TMS marketing and landing page — a standalone React + Vite + Tailwind CSS site deployable to Firebase Hosting (or any static host).
+The `www/` directory contains the POLARIS Global marketing and landing page — a standalone React + Vite + Tailwind CSS site deployable to Firebase Hosting (or any static host).
 
 ```bash
 cd www

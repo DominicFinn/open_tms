@@ -64,7 +64,7 @@ export default function Login() {
                 systemName
               ) : (
                 <>
-                  Open <GradientText>TMS</GradientText>
+                  POLARIS <GradientText>Global</GradientText>
                 </>
               )}
             </h1>

@@ -1,6 +1,6 @@
 # 04 - Test Runbook (executable)
 
-Follow this top-to-bottom to bring up Open TMS and **walk every workflow end to end**. It is written so you can
+Follow this top-to-bottom to bring up POLARIS Global and **walk every workflow end to end**. It is written so you can
 do each step in the **UI** (preferred - you see what a real user sees) with a **curl** alternative for anything
 that's API-only or that you want to script.
 
@@ -40,7 +40,7 @@ Seed gives you these logins (all internal users password `Password1!`):
 
 Plus **customer portal** users (`Portal123!`) and **carrier portal** users (`Carrier123!`).
 
-- [ ] `./run.sh` prints "Open TMS is running!" and `/docs` loads.
+- [ ] `./run.sh` prints "POLARIS Global is running!" and `/docs` loads.
 - [ ] `npm run seed` finishes and prints the demo credentials.
 
 **Get an API token** (used by every curl below):

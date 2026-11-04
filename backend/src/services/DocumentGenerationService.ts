@@ -72,7 +72,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     });
     const themeConfig = org?.themeConfig as Record<string, string> | null;
     return {
-      orgName: org?.name || 'Open TMS',
+      orgName: org?.name || 'POLARIS Global',
       primaryColor: themeConfig?.['primary'] || '#1976d2',
       logoUrl: org?.logoStorageKey ? '/api/v1/theme/logo' : null,
     };
@@ -454,7 +454,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
   async htmlToPdf(html: string, title: string, orgName?: string): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
     pdfDoc.setTitle(title);
-    pdfDoc.setCreator(orgName && orgName !== 'Default Organization' ? orgName : 'Open TMS');
+    pdfDoc.setCreator(orgName && orgName !== 'Default Organization' ? orgName : 'POLARIS Global');
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

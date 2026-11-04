@@ -8,7 +8,7 @@ describe('EDI855Service', () => {
     poDate: new Date('2026-04-10'),
     ackDate: new Date('2026-04-11'),
     ackType: 'AC',
-    seller: { name: 'Open TMS', id: 'OPENTMS' },
+    seller: { name: 'POLARIS Global', id: 'OPENTMS' },
     buyer: { name: 'Acme Corp', id: 'ACME' },
     lineItems: [
       { lineNumber: 1, quantityOrdered: 10, quantityAcknowledged: 10, unitPrice: 25.00, sku: 'SKU-001', description: 'Widget A', ackStatus: 'IA' },
@@ -33,7 +33,7 @@ describe('EDI855Service', () => {
 
   it('includes N1 seller and buyer segments', () => {
     const result = service.generateEDI855(sampleData);
-    expect(result).toContain('N1*SE*Open TMS');
+    expect(result).toContain('N1*SE*POLARIS Global');
     expect(result).toContain('N1*BY*Acme Corp');
   });
 

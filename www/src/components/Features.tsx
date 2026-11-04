@@ -268,7 +268,7 @@ export default function Features() {
             <span className="gradient-text">move freight</span>
           </h2>
           <p className="text-lg text-surface-400 leading-relaxed">
-            From order ingestion to final delivery, Open TMS covers the entire logistics lifecycle
+            From order ingestion to final delivery, POLARIS Global covers the entire logistics lifecycle
             with enterprise-grade features  - all open source.
           </p>
         </div>

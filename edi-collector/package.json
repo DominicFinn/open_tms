@@ -1,7 +1,7 @@
 {
   "name": "edi-collector",
   "version": "1.0.0",
-  "description": "SFTP collector service for EDI files — polls partner SFTP servers and forwards to Open TMS backend",
+  "description": "SFTP collector service for EDI files — polls partner SFTP servers and forwards to POLARIS Global backend",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {

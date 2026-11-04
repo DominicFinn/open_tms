@@ -72,7 +72,7 @@ async function start() {
   await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {
-      info: { title: 'Open TMS API', version: '0.1.0' },
+      info: { title: 'POLARIS Global API', version: '0.1.0' },
       components: {
         securitySchemes: {
           ApiKeyAuth: {

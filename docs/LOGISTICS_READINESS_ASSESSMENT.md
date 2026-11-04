@@ -1,8 +1,8 @@
-# Open TMS — Logistics Readiness Assessment
+# POLARIS Global — Logistics Readiness Assessment
 
 ## Context
 
-This assessment evaluates Open TMS readiness for three target customer profiles:
+This assessment evaluates POLARIS Global readiness for three target customer profiles:
 1. **Profile A: Global 3PL/4PL Provider** — Warehousing, hub-and-spoke distribution, multi-modal freight, control tower services, white-label logistics-as-a-service
 2. **Profile B: Enterprise Shipper (In-House Control Tower)** — Large manufacturers/brands wanting end-to-end supply chain visibility brought in-house
 3. **Profile C: Control Tower as a Service / Security Visibility Provider** — GPS/BLE tracking, managed monitoring, temperature compliance, multi-customer platform
@@ -29,7 +29,7 @@ This assessment evaluates Open TMS readiness for three target customer profiles:
 | B: Enterprise Shipper | ~35/100 | 5 | 55% |
 | C: Visibility/Security Service | ~32/100 | 5 | 35% |
 
-**Key Finding**: Open TMS has strong transactional foundations (orders, shipments, carriers, EDI, tendering, cold chain, IoT) but lacks the **platform-level capabilities** all three profiles need: multi-client architecture, control tower dashboard, SLA management, and real-time push notifications.
+**Key Finding**: POLARIS Global has strong transactional foundations (orders, shipments, carriers, EDI, tendering, cold chain, IoT) but lacks the **platform-level capabilities** all three profiles need: multi-client architecture, control tower dashboard, SLA management, and real-time push notifications.
 
 ---
 
@@ -351,7 +351,7 @@ Insert three new phases to address the cross-cutting gaps:
 
 ## Part 7: Strategic Positioning Assessment
 
-### What Open TMS Gets Right
+### What POLARIS Global Gets Right
 - **Event-driven CQRS architecture** is the correct foundation for a control tower. Domain events + read models + event export API = the right pattern for real-time visibility and analytics
 - **IoT pipeline** is production-grade and directly applicable to all three profiles
 - **Cold chain compliance** (CFR 21 Part 11) is a genuine differentiator — most open-source TMS products don't have this

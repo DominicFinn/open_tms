@@ -83,7 +83,7 @@ export default function CustomerApiKeys() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">API keys</h1>
-          <p className="text-sm text-muted-foreground">Authenticate programmatic access to Open TMS.</p>
+          <p className="text-sm text-muted-foreground">Authenticate programmatic access to POLARIS Global.</p>
         </div>
         <Button variant="gradient" onClick={() => setShowCreate(v => !v)}>
           <Plus className="h-4 w-4" />

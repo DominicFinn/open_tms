@@ -53,7 +53,7 @@ function wrapInBaseLayout(content: string, branding: OrgBranding): string {
   const headerHtml = branding.emailHeaderHtml || defaultHeaderHtml;
 
   // Footer: use custom HTML if provided, otherwise default
-  const defaultFooterHtml = `Sent by ${branding.orgName} via Open TMS`;
+  const defaultFooterHtml = `Sent by ${branding.orgName} via POLARIS Global`;
   const footerHtml = branding.emailFooterHtml || defaultFooterHtml;
 
   return `<!DOCTYPE html>

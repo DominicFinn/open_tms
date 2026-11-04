@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# GCP Deployment Script for Open TMS
+# GCP Deployment Script for POLARIS Global
 # Usage: ./deploy.sh [PROJECT_ID] [REGION]
 
 set -e
@@ -9,7 +9,7 @@ PROJECT_ID=${1:-"your-project-id"}
 REGION=${2:-"us-central1"}
 SERVICE_NAME="open-tms"
 
-echo "🚀 Deploying Open TMS to GCP..."
+echo "🚀 Deploying POLARIS Global to GCP..."
 echo "Project ID: $PROJECT_ID"
 echo "Region: $REGION"
 

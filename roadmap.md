@@ -1,13 +1,13 @@
-# Open TMS Roadmap
+# POLARIS Global Roadmap
 
-Open TMS is becoming two products over a shared core: **FinnTMS** for transport and **FinnWMS**
+POLARIS Global is becoming two products over a shared core: **FinnTMS** for transport and **FinnWMS**
 for the warehouse, with inventory (FinnIMS) possibly separating later. It stays one modular
 monolith, with each product composed at build time, per
 [ADR 0002](docs/adr/0002-modular-monolith-product-composition.md).
 
 This file is the high-level view and should stay short. The detail lives elsewhere:
 
-- **Work in flight**: the [Open TMS project board](https://github.com/users/DominicFinn/projects/3).
+- **Work in flight**: the [POLARIS Global project board](https://github.com/users/DominicFinn/projects/3).
   Every open issue has a Theme and a Horizon (Now, Next, Later)
 - **Backlog per theme**: [docs/roadmap/backlog.md](docs/roadmap/backlog.md), and
   [docs/roadmap/finnwms.md](docs/roadmap/finnwms.md) for the warehouse

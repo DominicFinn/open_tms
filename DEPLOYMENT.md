@@ -1,6 +1,6 @@
-# Open TMS - GCP Deployment Guide
+# POLARIS Global - GCP Deployment Guide
 
-This guide will help you deploy the Open TMS application to Google Cloud Platform using Cloud Run and Cloud SQL.
+This guide will help you deploy the POLARIS Global application to Google Cloud Platform using Cloud Run and Cloud SQL.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ This guide will help you deploy the Open TMS application to Google Cloud Platfor
 
 ```bash
 # Create a new project
-gcloud projects create your-project-id --name="Open TMS"
+gcloud projects create your-project-id --name="POLARIS Global"
 
 # Set the project
 gcloud config set project your-project-id
@@ -164,7 +164,7 @@ In your GitHub repository, go to Settings > Secrets and variables > Actions, and
 ```bash
 # Create service account
 gcloud iam service-accounts create open-tms-deploy \
-  --display-name="Open TMS Deploy Service Account"
+  --display-name="POLARIS Global Deploy Service Account"
 
 # Grant necessary permissions
 gcloud projects add-iam-policy-binding your-project-id \

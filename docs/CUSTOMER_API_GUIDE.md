@@ -1,6 +1,6 @@
 # Customer API Integration Guide
 
-This guide explains how to integrate with the Open TMS Customer API to programmatically create and track orders.
+This guide explains how to integrate with the POLARIS Global Customer API to programmatically create and track orders.
 
 ## Overview
 

@@ -9,7 +9,7 @@
 
 ## Context
 
-Open TMS is about 233k lines of TypeScript: a Fastify, Prisma and PostgreSQL backend and a React
+POLARIS Global is about 233k lines of TypeScript: a Fastify, Prisma and PostgreSQL backend and a React
 SPA, maintained by one person with heavy AI-assisted development. ADR 0002 split it into modules
 (`core`, `finance`, `inventory`, `quality`, `tms`, `wms`) with a lint-enforced DAG, and the split
 programme has since cut most of the hard links between TMS and WMS.

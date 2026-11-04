@@ -1,6 +1,6 @@
 # CSV Order Import Guide
 
-This guide explains how to import orders into Open TMS using CSV files.
+This guide explains how to import orders into POLARIS Global using CSV files.
 
 ## Overview
 

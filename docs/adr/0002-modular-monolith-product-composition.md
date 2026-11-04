@@ -8,7 +8,7 @@
 
 ## Context
 
-Open TMS is splitting into distinct products: **FinnTMS** (transport) and **FinnWMS** (warehouse),
+POLARIS Global is splitting into distinct products: **FinnTMS** (transport) and **FinnWMS** (warehouse),
 with a possible **FinnIMS** (inventory) later. At least one real prospect wants only
 WMS + Inventory + Issues, so standalone WMS installs must be possible. The codebase is a single
 Fastify/Prisma backend (~150 models, one schema) and a single React SPA, maintained by one person

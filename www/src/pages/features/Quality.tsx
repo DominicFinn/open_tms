@@ -108,7 +108,7 @@ export default function Quality() {
 
               <AnimateIn animation="fade-up" delay={200}>
                 <p className="text-lg text-surface-300 leading-relaxed mb-8">
-                  Most TMS platforms stop at tracking shipments. Open TMS goes further with a full
+                  Most TMS platforms stop at tracking shipments. POLARIS Global goes further with a full
                   Quality Centre  - CAPA investigations, cold chain compliance, root cause analysis,
                   and audit-ready records. All connected to your live operational data.
                 </p>

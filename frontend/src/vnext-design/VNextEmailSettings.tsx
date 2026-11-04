@@ -273,7 +273,7 @@ export default function VNextEmailSettings() {
               </div>
               <div className="space-y-2">
                 <Label>From name</Label>
-                <Input value={settings.emailFromName} onChange={e => handleChange('emailFromName', e.target.value)} placeholder="Open TMS" />
+                <Input value={settings.emailFromName} onChange={e => handleChange('emailFromName', e.target.value)} placeholder="POLARIS Global" />
               </div>
             </CardContent>
           </Card>

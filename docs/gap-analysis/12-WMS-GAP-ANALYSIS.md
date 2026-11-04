@@ -1,6 +1,6 @@
 # WMS Gap Analysis - April 2026
 
-A comparison of the proposed Open TMS WMS specification (`WMS_SPECIFICATION.md`) against modern tier-1 Warehouse Management Systems: Manhattan Active WM, Blue Yonder WMS, Körber (HighJump), SAP EWM, Oracle WMS Cloud, Softeon, Infor WMS, Deposco, Made4net SCExpert, 3PL Central / Extensiv, Generix, and Mecalux Easy WMS.
+A comparison of the proposed POLARIS Global WMS specification (`WMS_SPECIFICATION.md`) against modern tier-1 Warehouse Management Systems: Manhattan Active WM, Blue Yonder WMS, Körber (HighJump), SAP EWM, Oracle WMS Cloud, Softeon, Infor WMS, Deposco, Made4net SCExpert, 3PL Central / Extensiv, Generix, and Mecalux Easy WMS.
 
 The goal of this document is not to criticize the spec (it is a strong foundation) but to identify what a serious open-source WMS needs to add to be credible against commercial tier-1 products, and what can safely be deferred.
 
@@ -408,11 +408,11 @@ To cross into "world class" - meaning genuinely competitive with Manhattan, Blue
 3. **Allocation engine + wave planner + ATP** (GAP-12, GAP-13). The brain of the warehouse.
 4. **Yard + appointment portal** (GAP-15, GAP-16). Universally needed, commonly absent.
 5. **Automation-ready interfaces** (GAP-23). Without this you are locked out of any customer >50k orders/day.
-6. **Indoor positioning heatmap, RTLS, digital twin visualization** (GAP-34). This is where Open TMS can *lead* rather than catch up, and it plays to your unique strengths.
+6. **Indoor positioning heatmap, RTLS, digital twin visualization** (GAP-34). This is where POLARIS Global can *lead* rather than catch up, and it plays to your unique strengths.
 7. **Returns** (GAP-22). E-commerce makes this non-optional.
 8. **Cartonization + rate-shop + GS1 labels** (GAP-18, GAP-19, GAP-20). Parcel maturity.
 
-If all eight ship, combined with the strong spec that is already drafted, Open TMS + WMS would be a credible alternative to commercial tier-1 for mid-market shippers and small-to-mid 3PLs. That is a very defensible market position.
+If all eight ship, combined with the strong spec that is already drafted, POLARIS Global + WMS would be a credible alternative to commercial tier-1 for mid-market shippers and small-to-mid 3PLs. That is a very defensible market position.
 
 ---
 
@@ -433,7 +433,7 @@ Suggest updating `roadmap.md` with a new "WMS" section structured as:
 
 Abbreviated feature coverage comparison (rough, based on 2024-2026 vendor materials; a `✓` means shipped as core, `+` means available as paid add-on, blank means not supported).
 
-| Feature | Manhattan Active | Blue Yonder | Körber | SAP EWM | Oracle WMS | Softeon | Deposco | Open TMS + spec |
+| Feature | Manhattan Active | Blue Yonder | Körber | SAP EWM | Oracle WMS | Softeon | Deposco | POLARIS Global + spec |
 |---------|:----------------:|:-----------:|:------:|:-------:|:----------:|:-------:|:-------:|:---------------:|
 | Receiving + ASN | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Directed putaway | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -458,4 +458,4 @@ Abbreviated feature coverage comparison (rough, based on 2024-2026 vendor materi
 | Event-sourced audit log |   |   |   | ✓ |   |   |   | ✓ |
 | Open source |   |   |   |   |   |   |   | ✓ |
 
-The last three rows are the credible differentiators for Open TMS.
+The last three rows are the credible differentiators for POLARIS Global.

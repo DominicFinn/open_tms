@@ -1,6 +1,6 @@
 # Carrier Integrations
 
-How Open TMS integrates with carriers for **shipment tracking**, the carrier landscape,
+How POLARIS Global integrates with carriers for **shipment tracking**, the carrier landscape,
 and how to choose which to add. Testing (sandboxes + ngrok) is in
 [`CARRIER_TESTING.md`](./CARRIER_TESTING.md).
 

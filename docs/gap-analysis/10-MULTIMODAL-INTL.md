@@ -40,7 +40,7 @@
 
 ## International - What's Missing
 
-This is the weakest area. Open TMS is currently domestic-only.
+This is the weakest area. POLARIS Global is currently domestic-only.
 
 | Feature | Commercial Standard | Impact |
 |---------|-------------------|--------|

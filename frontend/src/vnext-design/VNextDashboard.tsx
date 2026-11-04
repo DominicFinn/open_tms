@@ -304,7 +304,7 @@ export default function VNextDashboard() {
               </div>
               <h2 className="text-xl font-semibold">Awaiting data this week</h2>
               <p className="text-sm text-muted-foreground">
-                Nothing has moved through Open TMS since {fmtDay(weekStart)}. As shipments,
+                Nothing has moved through POLARIS Global since {fmtDay(weekStart)}. As shipments,
                 orders, and exceptions are created this week, your live metrics will appear
                 here automatically.
               </p>

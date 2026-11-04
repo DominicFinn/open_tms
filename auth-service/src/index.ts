@@ -17,7 +17,7 @@ async function start() {
   await server.register(cors, { origin: true });
   await server.register(swagger, {
     openapi: {
-      info: { title: 'Open TMS Auth Service', version: '0.1.0' },
+      info: { title: 'POLARIS Global Auth Service', version: '0.1.0' },
       components: {
         securitySchemes: {
           BearerAuth: {

@@ -249,7 +249,7 @@ export async function edi210Routes(server: FastifyInstance) {
       paymentTermsDays: invoice.paymentTermsDays,
       currency: invoice.currency,
       seller: {
-        name: 'Open TMS', // Could be pulled from Organization
+        name: 'POLARIS Global', // Could be pulled from Organization
         id: body.senderId,
       },
       buyer: {

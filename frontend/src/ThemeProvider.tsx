@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   hasLogo: false,
   logoUrl: null,
   themeUpdatedAt: null,
-  systemName: 'Open TMS',
+  systemName: 'POLARIS Global',
   reloadTheme: () => {},
 });
 
@@ -31,7 +31,7 @@ interface CachedTheme {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [hasLogo, setHasLogo] = useState(false);
   const [themeUpdatedAt, setThemeUpdatedAt] = useState<string | null>(null);
-  const [systemName, setSystemName] = useState('Open TMS');
+  const [systemName, setSystemName] = useState('POLARIS Global');
 
   const applyTheme = useCallback((config: Record<string, string> | null) => {
     const root = document.documentElement;
@@ -60,7 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             applyTheme(parsed.themeConfig);
             setHasLogo(parsed.hasLogo);
             setThemeUpdatedAt(parsed.themeUpdatedAt);
-            setSystemName(parsed.systemName || 'Open TMS');
+            setSystemName(parsed.systemName || 'POLARIS Global');
             return;
           }
         }
@@ -68,14 +68,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         applyTheme(themeConfig);
         setHasLogo(logo);
         setThemeUpdatedAt(updatedAt);
-        setSystemName(name || 'Open TMS');
+        setSystemName(name || 'POLARIS Global');
 
         // Cache for session
         sessionStorage.setItem(THEME_CACHE_KEY, JSON.stringify({
           themeConfig,
           themeUpdatedAt: updatedAt,
           hasLogo: logo,
-          systemName: name || 'Open TMS',
+          systemName: name || 'POLARIS Global',
         }));
       }
     } catch {

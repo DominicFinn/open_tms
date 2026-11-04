@@ -44,7 +44,7 @@ export default function ForShippers() {
               <span className="gradient-text">logistics operation</span>
             </h2>
             <p className="text-lg text-surface-400 leading-relaxed mb-12">
-              From a single order to thousands of daily shipments, Open TMS scales with your operation.
+              From a single order to thousands of daily shipments, POLARIS Global scales with your operation.
               Multi-app architecture means dispatchers, warehouse staff, and admins each get a purpose-built interface.
             </p>
 
@@ -70,7 +70,7 @@ export default function ForShippers() {
                   <div className="h-3 w-3 rounded-full bg-red-500/60" />
                   <div className="h-3 w-3 rounded-full bg-yellow-500/60" />
                   <div className="h-3 w-3 rounded-full bg-green-500/60" />
-                  <span className="ml-3 text-xs text-surface-500 font-mono">Open TMS - Shipment Dashboard</span>
+                  <span className="ml-3 text-xs text-surface-500 font-mono">POLARIS Global - Shipment Dashboard</span>
                 </div>
                 <div className="p-6 space-y-4 font-mono text-sm">
                   <div className="flex items-center justify-between text-surface-300">

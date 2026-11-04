@@ -1,4 +1,4 @@
-# WMS Feature Specification for Open TMS
+# WMS Feature Specification for POLARIS Global
 
 > **Revision April 2026.** Updated in light of the tier-1 WMS gap analysis (`docs/gap-analysis/12-WMS-GAP-ANALYSIS.md`). v1 scope now includes UOM conversions, 3PL ownership on inventory, an explicit allocation engine, wave templates, cartonization, returns/RMA, a warehouse operations dashboard, an indoor RTLS heatmap UI, and WMS EDI 940/945. Larger items (3PL billing, labour management, slotting optimization, yard management, WCS/automation, hazmat engine, serial tracking) are called out as v2+ and tracked in the gap analysis.
 

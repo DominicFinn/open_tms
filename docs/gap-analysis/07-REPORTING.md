@@ -47,7 +47,7 @@ This is the biggest functional gap relative to commercial TMS platforms. Every c
 
 ## Recommendation
 
-Reporting is where Open TMS loses the most ground to commercial alternatives. The financial reports are solid, but operational reporting is almost entirely absent. Priority order:
+Reporting is where POLARIS Global loses the most ground to commercial alternatives. The financial reports are solid, but operational reporting is almost entirely absent. Priority order:
 
 1. **On-time % dashboard** - single most important operational KPI
 2. **Carrier scorecard** - feeds into procurement decisions

@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Open TMS
+about: Suggest an idea for POLARIS Global
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

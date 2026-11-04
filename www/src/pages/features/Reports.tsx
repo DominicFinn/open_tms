@@ -13,7 +13,7 @@ const problems = [
   {
     problem: 'Your reporting data lives in three different systems and none of them agree',
     solution: 'Single source of truth',
-    description: 'Every event in Open TMS flows through a CQRS event architecture with dedicated read model projections for reporting. Shipment metrics, carrier performance, lane analysis, and exception counts all draw from the same immutable event store  - no reconciliation needed.',
+    description: 'Every event in POLARIS Global flows through a CQRS event architecture with dedicated read model projections for reporting. Shipment metrics, carrier performance, lane analysis, and exception counts all draw from the same immutable event store  - no reconciliation needed.',
     stripe: '#22c55e',
   },
   {
@@ -89,7 +89,7 @@ export default function Reports() {
 
               <AnimateIn animation="fade-up" delay={200}>
                 <p className="text-xl text-surface-300 leading-relaxed">
-                  Stop building reports manually. Open TMS auto-generates compliance documentation,
+                  Stop building reports manually. POLARIS Global auto-generates compliance documentation,
                   tracks carrier performance in real time, and exposes a queryable event stream for
                   your analytics stack.
                 </p>

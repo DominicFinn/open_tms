@@ -225,7 +225,7 @@ export class DistanceService {
     try {
       const params = new URLSearchParams({ q: parts, format: 'json', limit: '1' });
       const response = await fetch(`${this.NOMINATIM_API_URL}?${params}`, {
-        headers: { 'User-Agent': 'OpenTMS/0.1.0' },
+        headers: { 'User-Agent': 'POLARISGlobal/0.1.0' },
       });
 
       if (!response.ok) return null;

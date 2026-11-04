@@ -109,7 +109,7 @@ export class CarrierAuthService implements ICarrierAuthService {
     // Archived or deleted carriers can no longer access the portal.
     const carrierState = (user as any).carrier as { archived?: boolean; deletedAt?: Date | null } | undefined;
     if (carrierState?.deletedAt || carrierState?.archived) {
-      throw new Error('This carrier account is no longer active. Please contact your Open TMS administrator.');
+      throw new Error('This carrier account is no longer active. Please contact your POLARIS Global administrator.');
     }
 
     if (!user.active) throw new Error('Account is deactivated');

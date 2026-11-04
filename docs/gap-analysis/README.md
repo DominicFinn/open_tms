@@ -1,6 +1,6 @@
-# Open TMS Gap Analysis - April 2026
+# POLARIS Global Gap Analysis - April 2026
 
-A comprehensive comparison of Open TMS against the commercial TMS market (Oracle TMS, SAP TM, MercuryGate, Blue Yonder, Trimble/TMW, McLeod, Descartes, Manhattan Associates, e2open, 3Gtms, project44, FourKites).
+A comprehensive comparison of POLARIS Global against the commercial TMS market (Oracle TMS, SAP TM, MercuryGate, Blue Yonder, Trimble/TMW, McLeod, Descartes, Manhattan Associates, e2open, 3Gtms, project44, FourKites).
 
 ## Methodology
 

@@ -50,7 +50,7 @@ describe('ThemeProvider', () => {
       );
     });
 
-    expect(screen.getByTestId('system-name')).toHaveTextContent('Open TMS');
+    expect(screen.getByTestId('system-name')).toHaveTextContent('POLARIS Global');
     expect(screen.getByTestId('has-logo')).toHaveTextContent('false');
     expect(screen.getByTestId('logo-url')).toHaveTextContent('none');
   });
@@ -94,7 +94,7 @@ describe('ThemeProvider', () => {
     });
 
     // Should still render with defaults
-    expect(screen.getByTestId('system-name')).toHaveTextContent('Open TMS');
+    expect(screen.getByTestId('system-name')).toHaveTextContent('POLARIS Global');
   });
 
   it('caches theme in sessionStorage', async () => {

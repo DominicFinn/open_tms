@@ -200,7 +200,7 @@ export class UPSTrackingProvider implements ICarrierTrackingProvider {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json',
             'transId': transId,
-            'transactionSrc': 'OpenTMS',
+            'transactionSrc': 'POLARISGlobal',
           },
         },
       );

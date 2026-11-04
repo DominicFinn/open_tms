@@ -350,7 +350,7 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
   - LoadPlan model with reverse load-sequence (lines ordered by stop sequence)
   - BOL auto-generated on `load_plan.completed` via DocumentGenerationService
   - Seal capture + dock door assignment on load plan create/complete
-  - BOL readiness gate (#78): a BOL is legally required cargo data, but Open TMS treats that data as optional, so generation is blocked (sync + async endpoints) and the manual "Generate BOL" button greys out until the shipment has a shipper/consignee, attached orders, and every order line item carries a goods description, quantity, and weight. `evaluateBolReadiness` (single source of truth) drives both the API guards and the button state; missing requirements are surfaced inline on the shipment Documents tab
+  - BOL readiness gate (#78): a BOL is legally required cargo data, but POLARIS Global treats that data as optional, so generation is blocked (sync + async endpoints) and the manual "Generate BOL" button greys out until the shipment has a shipper/consignee, attached orders, and every order line item carries a goods description, quantity, and weight. `evaluateBolReadiness` (single source of truth) drives both the API guards and the button state; missing requirements are surfaced inline on the shipment Documents tab
   - 4 command handler tests + 6 BOL readiness tests
 - **Cross-dock** DONE
   - When ReceivingTask has crossDock=true, CompleteReceiving skips putaway and sorts directly to staging bins

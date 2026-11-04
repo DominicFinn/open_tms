@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Cloud SQL Database Setup Script for Open TMS
+# Cloud SQL Database Setup Script for POLARIS Global
 # Usage: ./setup-database.sh [PROJECT_ID] [REGION] [INSTANCE_NAME]
 
 set -e

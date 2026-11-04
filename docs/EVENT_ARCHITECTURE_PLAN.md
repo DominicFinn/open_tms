@@ -1,4 +1,4 @@
-# Event-Driven Architecture Plan for Open TMS
+# Event-Driven Architecture Plan for POLARIS Global
 
 ## Overview
 

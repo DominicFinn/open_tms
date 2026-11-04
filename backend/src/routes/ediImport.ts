@@ -144,7 +144,7 @@ export async function ediImportRoutes(server: FastifyInstance) {
       poDate: order.orderDate || order.createdAt,
       ackDate: new Date(),
       ackType: body.ackType,
-      seller: { name: 'Open TMS', id: body.senderId },
+      seller: { name: 'POLARIS Global', id: body.senderId },
       buyer: { name: order.customer.name, id: order.customer.id },
       lineItems,
     };

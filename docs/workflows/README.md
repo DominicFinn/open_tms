@@ -1,6 +1,6 @@
-# Open TMS - Workflows, Tasks & Activities
+# POLARIS Global - Workflows, Tasks & Activities
 
-> **Purpose.** This folder defines *how Open TMS is operated*, not just what features exist. It answers the
+> **Purpose.** This folder defines *how POLARIS Global is operated*, not just what features exist. It answers the
 > process questions: what happens first, who sets what up, who creates customers, how lanes get created, how
 > carriers are onboarded, what tasks carriers and customers do on the platform, what is deliberately **out of
 > scope**, and what reporting the operation needs.
@@ -20,7 +20,7 @@
 
 ## The three operating models
 
-Open TMS is one platform configured for three different operating models. The model is set by
+POLARIS Global is one platform configured for three different operating models. The model is set by
 `organizationType` on the Organization (`shipper` | `broker` | `3pl` | `carrier`), via
 `PUT /api/v1/organization/settings`. The model changes **who owns each step** - especially who creates
 customers and who books freight - but the underlying entities are the same.

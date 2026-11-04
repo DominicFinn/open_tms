@@ -67,7 +67,7 @@ export default function OpenSource() {
             Why <span className="gradient-text">open source</span> logistics?
           </h2>
           <p className="text-lg text-surface-400 leading-relaxed">
-            Enterprise TMS software costs tens of thousands per year. Open TMS gives you the same
+            Enterprise TMS software costs tens of thousands per year. POLARIS Global gives you the same
             capabilities  - CQRS architecture, EDI integration, IoT tracking, cold chain compliance  -
             without the license fees.
           </p>
@@ -99,7 +99,7 @@ export default function OpenSource() {
             Stop paying per-seat for logistics software
           </h3>
           <p className="text-surface-400 max-w-2xl mx-auto mb-8">
-            Commercial TMS platforms charge $500-$5,000+ per user per month. Open TMS gives you
+            Commercial TMS platforms charge $500-$5,000+ per user per month. POLARIS Global gives you
             the same order management, carrier tendering, EDI, IoT tracking, and compliance tools  - free.
             Invest the savings in your actual operations.
           </p>

@@ -1,6 +1,6 @@
 /**
  * CarrierArchivalNotificationHandler — when a carrier is archived or deleted on
- * Open TMS, its portal users are notified that the account is being wound down.
+ * POLARIS Global, its portal users are notified that the account is being wound down.
  *
  * The email delivery itself is intentionally STUBBED (see dispatchEmail below) —
  * wiring a real email provider is future work. What IS implemented is the
@@ -81,7 +81,7 @@ export class CarrierArchivalNotificationHandler implements IEventHandler {
     // TODO(email): send via the configured email provider.
     console.info(
       `[CarrierArchivalNotification] (stub) would email ${name} <${to}>: ` +
-      `carrier "${carrierName}" is being ${reason} on Open TMS.`
+      `carrier "${carrierName}" is being ${reason} on POLARIS Global.`
     );
   }
 }

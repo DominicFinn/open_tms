@@ -47,7 +47,7 @@ export function Logo({
   return (
     <span className={cn('inline-flex items-center gap-3 font-bold tracking-tight', className)}>
       <span className={markClasses} aria-hidden>
-        {/* Canonical Open TMS swap-arrows mark */}
+        {/* Canonical POLARIS Global swap-arrows mark */}
         <svg
           className={dims.icon}
           fill="none"

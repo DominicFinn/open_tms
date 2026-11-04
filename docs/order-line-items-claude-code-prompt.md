@@ -4,7 +4,7 @@ Copy everything below the line into Claude Code.
 
 ---
 
-Implement Phase 1 of the Order Line Items & Cartonization feature in this repo (Open TMS).
+Implement Phase 1 of the Order Line Items & Cartonization feature in this repo (POLARIS Global).
 
 **Read first, in order:**
 1. `docs/ORDER_LINE_ITEM_DESIGN.md` — the design decisions. This is the source of truth for scope and rationale.

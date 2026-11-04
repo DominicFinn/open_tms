@@ -102,7 +102,7 @@ export default function AiAgents() {
 
             <AnimateIn animation="fade-up" delay={200}>
               <p className="text-xl text-surface-300 leading-relaxed mb-10 max-w-3xl">
-                Open TMS agents subscribe to your event stream and use Claude to triage exceptions
+                POLARIS Global agents subscribe to your event stream and use Claude to triage exceptions
                 in real time. Every decision is logged with full reasoning for compliance. Proven
                 patterns get promoted into deterministic automations - no AI needed.
               </p>
@@ -131,7 +131,7 @@ export default function AiAgents() {
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">AI with guardrails.</h3>
                   <p className="text-surface-300 text-base leading-relaxed">
-                    Most AI integrations in logistics are black boxes. Open TMS logs every reasoning step,
+                    Most AI integrations in logistics are black boxes. POLARIS Global logs every reasoning step,
                     tracks every token, and lets humans review every decision. This is AI you can explain
                     to your compliance team.
                   </p>
@@ -402,7 +402,7 @@ export default function AiAgents() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mt-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-4">See it in action</h2>
-            <p className="text-surface-400 mb-8 text-lg">Deploy Open TMS, add your Anthropic API key, and the triage agent starts working immediately.</p>
+            <p className="text-surface-400 mb-8 text-lg">Deploy POLARIS Global, add your Anthropic API key, and the triage agent starts working immediately.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
                 href="https://github.com/dominicfinn/open_tms#-quick-start"

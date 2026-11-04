@@ -1,7 +1,7 @@
 {
   "name": "@open-tms/auth-service",
   "version": "0.1.0",
-  "description": "Authentication and authorization service for Open TMS — manages users, roles, sessions, and JWT tokens",
+  "description": "Authentication and authorization service for POLARIS Global — manages users, roles, sessions, and JWT tokens",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

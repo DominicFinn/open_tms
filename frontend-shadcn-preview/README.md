@@ -1,6 +1,6 @@
-# Open TMS - shadcn/ui preview
+# POLARIS Global - shadcn/ui preview
 
-A standalone Vite app that shows what Open TMS looks like rebuilt entirely on **shadcn/ui** with the brand applied per `marketing/brand-guidelines.html`.
+A standalone Vite app that shows what POLARIS Global looks like rebuilt entirely on **shadcn/ui** with the brand applied per `marketing/brand-guidelines.html`.
 
 The point of this directory is to evaluate the visual direction before committing to a full migration. It is **not** wired to the backend - data is hardcoded.
 

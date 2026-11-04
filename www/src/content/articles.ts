@@ -12,7 +12,7 @@ export interface Article {
 export const articles: Article[] = [
   {
     slug: 'open-tms-is-changing',
-    title: 'Open TMS is Changing',
+    title: 'POLARIS Global is Changing',
     excerpt: 'The project is splitting into two: FinnTMS and FinnWMS, with an IMS possibly following later. Here is why one repo stopped making sense, and what that means for anyone running this.',
     date: '2026-08-12',
     author: 'Dominic Finn',
@@ -23,7 +23,7 @@ export const articles: Article[] = [
 
 I have been circling this for months. Two earlier articles on this blog talk about the name and about scope creep, and both of them end with some version of "not yet, but it is coming". It is here now.
 
-Open TMS is splitting into separate open source projects:
+POLARIS Global is splitting into separate open source projects:
 
 - **FinnTMS** - transport management. Orders, shipments, carriers, tendering, EDI, tracking, financials.
 - **FinnWMS** - warehouse management. Receiving, put-away, picking, packing, inventory, the warehouse PWA.
@@ -57,7 +57,7 @@ Open source projects get adopted when the thing you download is the thing you as
 
 ## Why the Name Changes
 
-I wrote a whole article arguing for keeping "Open TMS" and it holds up right until the moment the project stops being one thing. Once there are two systems, "Open TMS" cannot be the name of both, and it definitely cannot be the name of the warehouse one.
+I wrote a whole article arguing for keeping "POLARIS Global" and it holds up right until the moment the project stops being one thing. Once there are two systems, "POLARIS Global" cannot be the name of both, and it definitely cannot be the name of the warehouse one.
 
 I also flirted with "Open Logistics" as the umbrella. I have gone off it. The Open Logistics Foundation exists, it is a real industry body, and picking a name that invites confusion with it is a problem I would rather not create. The other candidates all had a version of the same issue: generic enough to collide with something, specific enough to box the project in later.
 
@@ -107,7 +107,7 @@ This adds work. It delays features. It means a rename, two repos, a migration pa
 
 It is still the right call. The single-repo version was already costing me on every change, and it was costing anyone evaluating this project far more than that: a clone full of things they did not ask for and could not easily remove. Two focused projects that each do one job well are worth more than one project that does two jobs and asks you to take both.
 
-If you are running Open TMS today, or thinking about it, open an issue on GitHub. Particularly if you run both halves - your migration is the one I most need to not get wrong.
+If you are running POLARIS Global today, or thinking about it, open an issue on GitHub. Particularly if you run both halves - your migration is the one I most need to not get wrong.
     `,
   },
   {
@@ -121,7 +121,7 @@ If you are running Open TMS today, or thinking about it, open an issue on GitHub
     content: `
 ## The Honest Starting Point
 
-I work on Open TMS as a side project. A few hours here, a few hours there, in between everything else. I will be the first to admit I have meandered. The scope has grown well beyond what I originally set out to build, and at this point the project includes:
+I work on POLARIS Global as a side project. A few hours here, a few hours there, in between everything else. I will be the first to admit I have meandered. The scope has grown well beyond what I originally set out to build, and at this point the project includes:
 
 - A TMS
 - A WMS
@@ -138,7 +138,7 @@ So this article is about where the project actually is, what I think the name sh
 
 ## "Open Logistics" Keeps Coming Back
 
-I wrote a separate article about whether the project should keep the name "Open TMS". Short answer: for now, yes. Long answer: the moment the WMS features mature and the platform genuinely spans transportation and warehousing, "TMS" stops describing what this is.
+I wrote a separate article about whether the project should keep the name "POLARIS Global". Short answer: for now, yes. Long answer: the moment the WMS features mature and the platform genuinely spans transportation and warehousing, "TMS" stops describing what this is.
 
 The functionality already in the repo points at something broader. Once you have WMS, exception handling, IoT visibility, financial reporting, quality and CAPA workflows, and carrier and customer portals all under one roof, you are not really running a TMS. You are running a logistics platform.
 
@@ -172,11 +172,11 @@ Honestly, part of the appeal is that Elixir has been on my "languages I want to 
 
 ## The Real Question
 
-Underneath all of this is a question I keep circling. What is Open TMS actually trying to be?
+Underneath all of this is a question I keep circling. What is POLARIS Global actually trying to be?
 
 The most honest answer I have is: an open source platform that does the boring, expensive, vendor-locked parts of logistics software well, and gives them away. TMS, WMS, visibility, financial reporting, carrier and customer portals, exception and quality management. The stuff that costs hundreds of thousands a year in commercial licenses.
 
-If the platform keeps growing in that direction  - and I think it will  - the name will have to grow too. "Open TMS" describes the entry point. "Open Logistics" describes the destination. I am not in a hurry to make that change, but I am not pretending it is not coming either.
+If the platform keeps growing in that direction  - and I think it will  - the name will have to grow too. "POLARIS Global" describes the entry point. "Open Logistics" describes the destination. I am not in a hurry to make that change, but I am not pretending it is not coming either.
 
 For now: less new functionality, more testing, more reliability. The roadmap is mostly about not getting distracted.
     `,
@@ -226,7 +226,7 @@ Docker Compose brings up PostgreSQL, the backend starts with migrations applied,
   {
     slug: 'cqrs-event-architecture-logistics',
     title: 'CQRS & Event Sourcing in Logistics Software',
-    excerpt: 'How we designed Open TMS with Command/Query Responsibility Segregation and immutable domain events  - and why it matters for supply chain operations.',
+    excerpt: 'How we designed POLARIS Global with Command/Query Responsibility Segregation and immutable domain events  - and why it matters for supply chain operations.',
     date: '2026-04-08',
     author: 'Dominic Finn',
     category: 'engineering',
@@ -240,7 +240,7 @@ Traditional CRUD applications lose this history. They store the current state bu
 
 ## Our Architecture
 
-Open TMS uses a CQRS pattern with event sourcing (lite):
+POLARIS Global uses a CQRS pattern with event sourcing (lite):
 
 ### Write Side (Commands)
 
@@ -293,7 +293,7 @@ See the [Domain Behaviours documentation](https://github.com/dominicfinn/open_tm
   },
   {
     slug: 'cold-chain-compliance-open-tms',
-    title: 'Cold Chain Compliance with Open TMS',
+    title: 'Cold Chain Compliance with POLARIS Global',
     excerpt: 'Cold chain compliance in most TMS platforms is either a paid add-on or doesn\'t exist. We built it in from day one.',
     date: '2026-04-05',
     author: 'Dominic Finn',
@@ -304,7 +304,7 @@ See the [Domain Behaviours documentation](https://github.com/dominicfinn/open_tm
 
 If you're shipping pharmaceuticals or temperature-sensitive food products, you're dealing with CFR 21 Part 11. That means your electronic records need to be tamper-evident, attributed to specific people, and kept with full audit trails. It's not optional and getting it wrong is expensive.
 
-Most TMS platforms either don't handle this at all, or they charge you extra for a bolt-on module. Open TMS includes cold chain compliance as a core feature. It's not an add-on. It's just there.
+Most TMS platforms either don't handle this at all, or they charge you extra for a bolt-on module. POLARIS Global includes cold chain compliance as a core feature. It's not an add-on. It's just there.
 
 ## Temperature Ranges
 
@@ -361,7 +361,7 @@ No premium license. No per-feature pricing. It's just part of the platform.
 
 "Shipment X is at Location Y." Great. But which of the 24 pallets on that truck are for which customer? Did the right pallets get unloaded at stop 3? Is pallet 17 still at the correct temperature?
 
-Most TMS platforms can't answer those questions because they track trucks, not cargo. Open TMS tracks at the unit level - pallets, totes, boxes, whatever your operation uses.
+Most TMS platforms can't answer those questions because they track trucks, not cargo. POLARIS Global tracks at the unit level - pallets, totes, boxes, whatever your operation uses.
 
 ## How It Actually Works
 
@@ -391,7 +391,7 @@ We're building a dedicated digital twin app for unit-level visibility. Real-time
   {
     slug: 'carrier-tendering-guide',
     title: 'Carrier Tendering: Broadcast vs Waterfall',
-    excerpt: 'You\'ve got a load that needs covering. Do you blast it to every carrier at once, or work down your preferred list? Here\'s how both strategies work in Open TMS.',
+    excerpt: 'You\'ve got a load that needs covering. Do you blast it to every carrier at once, or work down your preferred list? Here\'s how both strategies work in POLARIS Global.',
     date: '2026-03-28',
     author: 'Dominic Finn',
     category: 'guides',
@@ -405,7 +405,7 @@ You've got a shipment that needs a carrier. There are basically two ways to hand
 
 **Waterfall** - work down a priority list. Your first-choice carrier gets the offer. If they decline or don't respond before the timeout, it automatically falls to the next one, then the next. This is your contract lane play - when you've got a relationship hierarchy and you want to honour it, but you don't want to waste time chasing people on the phone.
 
-Both strategies are built into Open TMS. You choose which one when you create the tender.
+Both strategies are built into POLARIS Global. You choose which one when you create the tender.
 
 ## How a Tender Actually Flows
 
@@ -421,7 +421,7 @@ No phone calls. No email threads where someone said they'd take it but actually 
 
 ## EDI 204/990
 
-For carriers that do EDI, they don't even need to log into the portal. Open TMS generates an EDI 204 (Load Tender), the carrier responds with an EDI 990 (accept or decline with their rate), and that response automatically shows up as a bid in the tender. They participate using their existing EDI setup without changing anything on their end.
+For carriers that do EDI, they don't even need to log into the portal. POLARIS Global generates an EDI 204 (Load Tender), the carrier responds with an EDI 990 (accept or decline with their rate), and that response automatically shows up as a bid in the tender. They participate using their existing EDI setup without changing anything on their end.
 
 This is important because a lot of carriers - especially larger ones - don't want another portal to log into. They want EDI. So they get EDI.
     `,
@@ -456,7 +456,7 @@ Most open source logistics projects fail because:
 
 ## What Actually Works
 
-At this stage of Open TMS, the project has a single active contributor acting as both product manager and developer. That's not a limitation  - it's the strategy.
+At this stage of POLARIS Global, the project has a single active contributor acting as both product manager and developer. That's not a limitation  - it's the strategy.
 
 Here's what that looks like in practice:
 
@@ -476,7 +476,7 @@ This isn't "vibe coding." It's product management with an AI development partner
 
 ### Moving Fast, Documenting As We Go
 
-Open TMS ships features fast. The event architecture, the carrier tendering system, the Quality Centre with CAPA investigations, the EDI suite, the IoT integration, the warehouse launch app  - these were all built in a matter of weeks, not months.
+POLARIS Global ships features fast. The event architecture, the carrier tendering system, the Quality Centre with CAPA investigations, the EDI suite, the IoT integration, the warehouse launch app  - these were all built in a matter of weeks, not months.
 
 But speed without documentation is tech debt. Every feature ships with:
 - Updated domain behaviour docs
@@ -524,7 +524,7 @@ The code will follow. It always does, when you know what to build.
   {
     slug: 'training-content',
     title: 'Training Content: What\'s Coming and Why It\'s Not Here Yet',
-    excerpt: 'Open TMS doesn\'t have training videos yet. That\'s deliberate. Here\'s the plan for when it will, and why rushing it would be a waste of everyone\'s time.',
+    excerpt: 'POLARIS Global doesn\'t have training videos yet. That\'s deliberate. Here\'s the plan for when it will, and why rushing it would be a waste of everyone\'s time.',
     date: '2026-04-12',
     author: 'Dominic Finn',
     category: 'announcements',
@@ -532,7 +532,7 @@ The code will follow. It always does, when you know what to build.
     content: `
 ## Let's Be Honest
 
-There's no training content for Open TMS right now. No video walkthroughs, no how-to guides with screenshots, no onboarding course. If you're looking at this project and thinking "I'd love to try it but I don't know where to start" - that's a fair reaction, and I know it's a gap.
+There's no training content for POLARIS Global right now. No video walkthroughs, no how-to guides with screenshots, no onboarding course. If you're looking at this project and thinking "I'd love to try it but I don't know where to start" - that's a fair reaction, and I know it's a gap.
 
 But here's the thing: creating training content for software that's still changing rapidly is a waste of time. You record a 20-minute walkthrough of the shipment creation flow, then two weeks later the UI gets redesigned and the video is wrong. Now you've got training content that actively misleads people. That's worse than having nothing.
 
@@ -570,7 +570,7 @@ Both matter. The written docs come first because they're faster to update when t
 
 ## In the Meantime
 
-If you want to get started with Open TMS today:
+If you want to get started with POLARIS Global today:
 
 - **Deploy it.** \`docker compose up\` and poke around. The UI is designed to be explorable - you shouldn't need a manual to figure out the basics.
 - **Read the domain behaviours doc.** It explains what every command does, what events it emits, and what side effects happen. That's the closest thing to a comprehensive guide right now.
@@ -642,7 +642,7 @@ So you make different choices for different parts of the system:
   - Notification delivery
 \`\`\`
 
-This is why Open TMS uses CQRS - Command Query Responsibility Segregation. The write side (commands) is strongly consistent. When you award a tender, that happens inside a database transaction. It either works or it doesn't. No half-states.
+This is why POLARIS Global uses CQRS - Command Query Responsibility Segregation. The write side (commands) is strongly consistent. When you award a tender, that happens inside a database transaction. It either works or it doesn't. No half-states.
 
 The read side (dashboards, lists, reports) is eventually consistent. There's a brief lag - maybe a second or two - between a command executing and the read models updating. For a logistics dashboard that people refresh every few minutes, that's completely fine.
 
@@ -697,7 +697,7 @@ The IoT data dominates by volume, but the carrier webhooks and ETA recalculation
 
 This is where it gets really interesting - and where the architecture decisions we're making now will matter most.
 
-AI agents are coming to logistics operations. Not as a vague future concept - this is on the Open TMS roadmap. Agents that can:
+AI agents are coming to logistics operations. Not as a vague future concept - this is on the POLARIS Global roadmap. Agents that can:
 
 - Automatically respond to carrier tender offers based on rate history and lane performance
 - Triage exceptions and assign them based on severity, carrier history, and team workload
@@ -721,7 +721,7 @@ This isn't theoretical. It's the reason we built it this way from the start.
 
 You can't just INSERT each one into a PostgreSQL table synchronously and hope for the best. The database will choke long before you hit those numbers.
 
-## How Open TMS Handles This
+## How POLARIS Global Handles This
 
 ### Service Workers
 
@@ -757,7 +757,7 @@ If the worker falls behind, the queue grows, but the API keeps accepting data. N
 
 Not all data is equally urgent. A shipment that's 12 hours from delivery doesn't need minute-by-minute ETA checks. A shipment that's 30 minutes out does.
 
-Open TMS uses adaptive polling for ETA monitoring:
+POLARIS Global uses adaptive polling for ETA monitoring:
 
 \`\`\`
   Time to delivery     Check interval
@@ -783,7 +783,7 @@ You don't need sub-second GPS resolution from six months ago. At scale, you need
   > 180 days       Summary only      Archive
 \`\`\`
 
-Open TMS currently keeps everything in PostgreSQL, which works fine up to a few hundred devices. For larger deployments, a tiered storage approach is on the roadmap.
+POLARIS Global currently keeps everything in PostgreSQL, which works fine up to a few hundred devices. For larger deployments, a tiered storage approach is on the roadmap.
 
 ## The Network Reality
 
@@ -811,7 +811,7 @@ The technical decisions behind all of this exist so that you don't have to think
   },
   {
     slug: 'the-name-open-tms',
-    title: 'The Name: Open TMS',
+    title: 'The Name: POLARIS Global',
     excerpt: 'There were other projects called OpenTMS before this one. None of them are what you\'d call active. So do we keep the name, or does this project need a different one?',
     date: '2026-04-12',
     author: 'Dominic Finn',
@@ -840,11 +840,11 @@ That said, the names exist. The repos are still up on GitHub. It's worth being h
 
 I'm genuinely undecided on this. Here's my thinking:
 
-**Arguments for keeping "Open TMS":**
+**Arguments for keeping "POLARIS Global":**
 
 - It describes exactly what this is. Open source. TMS. Done.
 - The previous projects are inactive and have been for a long time. Nobody is going to confuse a project with 87 database models and a full EDI suite with an empty repo that has a README and not much else.
-- Name recognition matters, and "Open TMS" is intuitive. If someone searches for an open source TMS, they should find this.
+- Name recognition matters, and "POLARIS Global" is intuitive. If someone searches for an open source TMS, they should find this.
 - Renaming a project is disruptive - new URLs, new repos, new documentation, confused users.
 
 **Arguments for changing it:**
@@ -855,13 +855,13 @@ I'm genuinely undecided on this. Here's my thinking:
 
 ## The WMS Question
 
-This is actually the bigger factor in the naming discussion. Right now, Open TMS is a transportation management system. But the warehouse launch app is already blurring that line - it's managing shipment preparation workflows on the warehouse floor. And the roadmap includes proper WMS features: inventory management, pick/pack workflows, receiving, put-away.
+This is actually the bigger factor in the naming discussion. Right now, POLARIS Global is a transportation management system. But the warehouse launch app is already blurring that line - it's managing shipment preparation workflows on the warehouse floor. And the roadmap includes proper WMS features: inventory management, pick/pack workflows, receiving, put-away.
 
 At that point, calling it a "TMS" is underselling it. You're running a logistics platform that handles both transportation and warehousing. "TMS" becomes limiting.
 
 Some options I've been thinking about:
 
-- **Open TMS** - keep it, accept that it'll outgrow the name, deal with it later
+- **POLARIS Global** - keep it, accept that it'll outgrow the name, deal with it later
 - **Open Logistics** - broader, but maybe too generic. Also, the Open Logistics Foundation already exists as an industry body in Germany, which could cause confusion
 - **OpenFreight** - specific to the domain, not taken by any active project that I can find
 - **Something entirely different** - start fresh with a name that doesn't describe the category at all
@@ -870,7 +870,7 @@ Some options I've been thinking about:
 
 Honestly? I'm keeping the name for now. The project is still early. Renaming before there's a significant user base is easier than renaming after, but renaming before there's a reason to is just procrastination.
 
-When WMS features land and the platform genuinely spans both domains, that's probably the right time to have this conversation properly. Until then, Open TMS describes what the project does today, and today is what matters.
+When WMS features land and the platform genuinely spans both domains, that's probably the right time to have this conversation properly. Until then, POLARIS Global describes what the project does today, and today is what matters.
 
 If you've got strong feelings about this - or a name suggestion that's better than anything I've come up with - open an issue on GitHub. I'm genuinely interested in what people think.
     `,
@@ -878,7 +878,7 @@ If you've got strong feelings about this - or a name suggestion that's better th
   {
     slug: 'language-support',
     title: 'Language Support: It\'s Coming, But Not Yet',
-    excerpt: 'Open TMS is English-only right now. That needs to change. Here\'s the plan for internationalisation and why it\'s not at the top of the list yet.',
+    excerpt: 'POLARIS Global is English-only right now. That needs to change. Here\'s the plan for internationalisation and why it\'s not at the top of the list yet.',
     date: '2026-04-12',
     author: 'Dominic Finn',
     category: 'product',
@@ -886,7 +886,7 @@ If you've got strong feelings about this - or a name suggestion that's better th
     content: `
 ## The Current State
 
-Open TMS is English-only. Every label, every button, every error message, every status name. If you don't read English, you can't use it. That's obviously not acceptable long term for a platform that's supposed to serve the global logistics industry.
+POLARIS Global is English-only. Every label, every button, every error message, every status name. If you don't read English, you can't use it. That's obviously not acceptable long term for a platform that's supposed to serve the global logistics industry.
 
 I'm being upfront about this because I think it's better to say "we know, it's on the roadmap, here's how we'll do it" than to pretend the problem doesn't exist.
 
@@ -966,7 +966,7 @@ If you want to be involved when this happens, open a GitHub issue or just keep a
     content: `
 ## How It Works Today
 
-Open TMS already has the concept of an organisation. Every shipment, every order, every carrier, every user - it all belongs to an \`orgId\`. That's how data is segregated. If you're running a single logistics operation, this is fine. One installation, one org, done.
+POLARIS Global already has the concept of an organisation. Every shipment, every order, every carrier, every user - it all belongs to an \`orgId\`. That's how data is segregated. If you're running a single logistics operation, this is fine. One installation, one org, done.
 
 But what if you're running multiple organisations? Maybe you're a 3PL operating different brands. Maybe you're a logistics consultancy managing operations for several clients. Maybe you're an enterprise with regional divisions that each need their own TMS instance with separate customers, carriers, and billing.
 

@@ -1,7 +1,7 @@
 # 01 - Actors, Roles, Scope & Reporting
 
 This defines **who acts on the platform**, what each actor is allowed to do, the **explicit scope boundary**
-(what Open TMS does and deliberately does not do), and the **reporting suite** the operation needs.
+(what POLARIS Global does and deliberately does not do), and the **reporting suite** the operation needs.
 
 ---
 
@@ -139,7 +139,7 @@ automation rules & skills.
 
 ### 3.2 Out of scope - and why
 
-These are deliberate boundaries. Where money or another system of record is involved, Open TMS **records and
+These are deliberate boundaries. Where money or another system of record is involved, POLARIS Global **records and
 hands off** rather than executing. Each is a candidate "integration point", not a build gap.
 
 | Out of scope | What the platform does instead | Belongs to |
@@ -161,7 +161,7 @@ hands off** rather than executing. Each is a candidate "integration point", not 
 > **The payments example, made explicit (because it was the user's example):** an invoice can be created,
 > approved, sent, and a payment *recorded against it* (full/partial), and it can be voided. What does **not**
 > happen is the actual movement of money - no gateway charges a card, no ACH file is generated, no bank
-> reconciliation occurs. Payment *capture* and the GL live in an external finance system; Open TMS is the
+> reconciliation occurs. Payment *capture* and the GL live in an external finance system; POLARIS Global is the
 > billing system of record and the export source.
 
 ---

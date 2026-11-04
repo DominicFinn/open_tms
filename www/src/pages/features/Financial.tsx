@@ -439,7 +439,7 @@ export default function Financial() {
         <AnimateIn animation="scale-up">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to streamline your financials?</h2>
-            <p className="text-surface-400 mb-8 text-lg">Deploy Open TMS and get invoicing, freight audit, and financial reporting out of the box.</p>
+            <p className="text-surface-400 mb-8 text-lg">Deploy POLARIS Global and get invoicing, freight audit, and financial reporting out of the box.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
                 href="https://github.com/dominicfinn/open_tms#-quick-start"

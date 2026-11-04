@@ -57,7 +57,7 @@ export default function VNextStyleGuide() {
           <GradientText>Style guide</GradientText>
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Reference page for shadcn/ui primitives in the Open TMS frontend.
+          Reference page for shadcn/ui primitives in the POLARIS Global frontend.
         </p>
       </div>
 

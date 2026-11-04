@@ -1,6 +1,6 @@
 # Authentication & Authorization Guide
 
-This guide covers the Open TMS auth-service: user management, JWT-based authentication, role-based access control (RBAC), and OAuth integration with Google and Microsoft.
+This guide covers the POLARIS Global auth-service: user management, JWT-based authentication, role-based access control (RBAC), and OAuth integration with Google and Microsoft.
 
 ## Overview
 
@@ -617,7 +617,7 @@ For local development:
 - Google: `http://localhost:3002/api/v1/oauth/google/callback`
 - Microsoft: `http://localhost:3002/api/v1/oauth/microsoft/callback`
 
-**3. Configure the provider** in Open TMS:
+**3. Configure the provider** in POLARIS Global:
 
 ```bash
 # Get the provider ID

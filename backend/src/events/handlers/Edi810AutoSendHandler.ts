@@ -88,7 +88,7 @@ export class Edi810AutoSendHandler implements IEventHandler {
         dueDate: invoice.dueDate,
         paymentTermsDays: invoice.paymentTermsDays,
         currency: invoice.currency,
-        seller: { name: 'Open TMS' },
+        seller: { name: 'POLARIS Global' },
         buyer: { name: invoice.customer.name, id: invoice.customer.id },
         lineItems: invoice.lineItems.map((li, idx) => ({
           lineNumber: idx + 1,

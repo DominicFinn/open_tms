@@ -1,6 +1,6 @@
-# Self-hosting Open TMS
+# Self-hosting POLARIS Global
 
-How to run Open TMS on a single server you control, with no managed services. If you would rather
+How to run POLARIS Global on a single server you control, with no managed services. If you would rather
 use a cloud platform, the Deploy table in the [README](../README.md) has one-click options for
 DigitalOcean, Azure, Google Cloud and AWS.
 
@@ -132,7 +132,7 @@ Run the API under systemd so it restarts on failure and starts at boot.
 
 ```ini
 [Unit]
-Description=Open TMS API
+Description=POLARIS Global API
 After=network-online.target postgresql.service
 Requires=postgresql.service
 

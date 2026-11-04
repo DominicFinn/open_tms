@@ -4,7 +4,7 @@ The open work behind each theme in [roadmap.md](../../roadmap.md), for everythin
 which has its own file ([finnwms.md](finnwms.md)). Shipped work is in [completed.md](completed.md).
 
 Items here are candidates, not commitments. When a theme is picked up, its items become GitHub
-issues on the [Open TMS board](https://github.com/users/DominicFinn/projects/3) and
+issues on the [POLARIS Global board](https://github.com/users/DominicFinn/projects/3) and
 come off this list. Where an issue already exists it's linked.
 
 ## Split programme

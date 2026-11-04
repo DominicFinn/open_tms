@@ -1,4 +1,4 @@
-# CLAUDE.md — Project Conventions for Open TMS
+# CLAUDE.md — Project Conventions for POLARIS Global
 
 Detailed conventions are split into `.claude/rules/`. Rules with a `paths:` header load
 automatically when Claude reads a matching file; the rest load every session. This file holds only

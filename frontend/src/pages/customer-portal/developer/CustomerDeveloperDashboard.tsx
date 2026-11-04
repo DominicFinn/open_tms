@@ -54,7 +54,7 @@ export default function CustomerDeveloperDashboard() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Developer</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage the credentials, webhooks, and EDI configuration that connect your systems to Open TMS.
+          Manage the credentials, webhooks, and EDI configuration that connect your systems to POLARIS Global.
         </p>
       </div>
 

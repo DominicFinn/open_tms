@@ -116,7 +116,7 @@ export async function nominatimSearch(query: string): Promise<GeocodingResult[]>
 export async function nominatimReverse(lat: number, lng: number): Promise<GeocodingResult | null> {
   const url = `${NOMINATIM_BASE}/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`;
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'OpenTMS/1.0' },
+    headers: { 'User-Agent': 'POLARISGlobal/1.0' },
   });
   const data: NominatimResult = await res.json();
   if (!data.lat) {

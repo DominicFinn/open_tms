@@ -8,7 +8,7 @@ const topProblems = [
   {
     problem: 'We juggle a TMS and a WMS and they never agree on the truth',
     solution: 'One system, one source of truth',
-    description: 'Open TMS includes the full WMS in the box. Receiving, putaway, inventory, waves, picking, packing, loading, and returns all share the same shipments, orders, and customers you already have. No master-data sync, no licence stack, no handoff gaps.',
+    description: 'POLARIS Global includes the full WMS in the box. Receiving, putaway, inventory, waves, picking, packing, loading, and returns all share the same shipments, orders, and customers you already have. No master-data sync, no licence stack, no handoff gaps.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
@@ -184,7 +184,7 @@ export default function Warehouse() {
 
           <AnimateIn animation="fade-up" delay={200}>
             <p className="text-xl text-surface-300 leading-relaxed max-w-3xl mx-auto mb-12">
-              Open TMS ships with a full WMS in the box. Receiving, putaway, inventory, wave-based picking, packing, load planning, and returns all run against the same shipments, orders, and customers you already manage. No separate licence. No master-data sync.
+              POLARIS Global ships with a full WMS in the box. Receiving, putaway, inventory, wave-based picking, packing, load planning, and returns all run against the same shipments, orders, and customers you already manage. No separate licence. No master-data sync.
             </p>
           </AnimateIn>
 

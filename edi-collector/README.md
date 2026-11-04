@@ -1,6 +1,6 @@
 # EDI Collector Service
 
-A lightweight standalone service that automatically polls partner SFTP servers for EDI files and forwards them to the Open TMS backend for processing.
+A lightweight standalone service that automatically polls partner SFTP servers for EDI files and forwards them to the POLARIS Global backend for processing.
 
 ## Overview
 
@@ -39,7 +39,7 @@ All configuration is via environment variables:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `BACKEND_URL` | Yes | — | URL of the Open TMS backend (e.g., `http://localhost:3001`) |
+| `BACKEND_URL` | Yes | — | URL of the POLARIS Global backend (e.g., `http://localhost:3001`) |
 | `API_KEY` | Yes | — | Backend API key for authentication (`sk_live_*` format) |
 | `POLL_CONFIG_INTERVAL` | No | `300` | How often (seconds) to refresh partner configs from the backend |
 | `LOG_LEVEL` | No | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
@@ -48,7 +48,7 @@ All configuration is via environment variables:
 
 The collector authenticates to the backend using an API key passed via the `x-api-key` header.
 
-1. In the Open TMS UI, go to **API Keys**
+1. In the POLARIS Global UI, go to **API Keys**
 2. Create a new key (no customer scope needed — this is a service key)
 3. Copy the generated `sk_live_*` key
 4. Set it as the `API_KEY` environment variable

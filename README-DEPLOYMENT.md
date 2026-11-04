@@ -1,6 +1,6 @@
-# 🚀 Open TMS - GCP Deployment
+# 🚀 POLARIS Global - GCP Deployment
 
-Complete deployment setup for Open TMS on Google Cloud Platform using Cloud Run and Cloud SQL.
+Complete deployment setup for POLARIS Global on Google Cloud Platform using Cloud Run and Cloud SQL.
 
 ## 📋 Quick Start
 

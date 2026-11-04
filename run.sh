@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Open TMS Local Development Run Script
+# POLARIS Global Local Development Run Script
 # Starts database in Docker, applies migrations, and runs backend/frontend from code
 
 set -e
@@ -250,7 +250,7 @@ fi
 # Success message
 echo ""
 success "=========================================="
-success "Open TMS is running!"
+success "POLARIS Global is running!"
 success "=========================================="
 echo ""
 info "Backend API:  http://localhost:${BACKEND_PORT}"

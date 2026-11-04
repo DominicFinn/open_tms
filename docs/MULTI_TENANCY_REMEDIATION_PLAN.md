@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Open TMS has **structural multi-tenancy gaps**. The `Organization` model exists, JWTs carry `organizationId`, and 22+ tables (read models, financials, issues, agent infra) have an `orgId` column that's enforced. But **7 core entities have no `orgId` column at all** — `Customer`, `Carrier`, `Shipment`, `TradingPartner`, `ApiKey`, `Order`, `Rma` — and several routes either don't filter on `orgId` even when the column exists, or fall back to `prisma.organization.findFirst()` instead of using the JWT.
+POLARIS Global has **structural multi-tenancy gaps**. The `Organization` model exists, JWTs carry `organizationId`, and 22+ tables (read models, financials, issues, agent infra) have an `orgId` column that's enforced. But **7 core entities have no `orgId` column at all** — `Customer`, `Carrier`, `Shipment`, `TradingPartner`, `ApiKey`, `Order`, `Rma` — and several routes either don't filter on `orgId` even when the column exists, or fall back to `prisma.organization.findFirst()` instead of using the JWT.
 
 The result is a system that's **mid-migration to multi-tenancy**, with real cross-tenant data leaks today. This document inventories the gaps and proposes a phased fix.
 

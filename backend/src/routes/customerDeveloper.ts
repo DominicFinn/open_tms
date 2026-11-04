@@ -421,7 +421,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       webhook: hook,
       eventType: body.eventType || 'webhook.test',
       payload: {
-        message: 'This is a test delivery from Open TMS.',
+        message: 'This is a test delivery from POLARIS Global.',
         sentAt: new Date().toISOString(),
       },
     });

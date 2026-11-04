@@ -31,7 +31,7 @@ export class SendEmailSkill implements ISkill {
 
       const result = await this.emailService.send({
         to: recipients,
-        subject: String(params.fields.subject || 'Open TMS Notification'),
+        subject: String(params.fields.subject || 'POLARIS Global Notification'),
         html: String(params.fields.body || ''),
       });
 

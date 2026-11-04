@@ -1,10 +1,10 @@
 # DigitalOcean One-Click Deployment
 
-Deploy Open TMS to DigitalOcean App Platform with a single click!
+Deploy POLARIS Global to DigitalOcean App Platform with a single click!
 
 ## Quick Deploy
 
-Click the button below to deploy Open TMS to DigitalOcean:
+Click the button below to deploy POLARIS Global to DigitalOcean:
 
 [![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/Jrez2010/open_tms-digitalcloud/tree/fix/digitalocean-template)
 
@@ -121,7 +121,7 @@ After successful deployment:
 For deployment issues:
 - Check [DigitalOcean App Platform documentation](https://docs.digitalocean.com/products/app-platform/)
 - Review app logs in the DigitalOcean console
-- Visit the [Open TMS repository](https://github.com/DominicFinn/open_tms) for additional support
+- Visit the [POLARIS Global repository](https://github.com/DominicFinn/open_tms) for additional support
 - Check deployment status in the DigitalOcean dashboard
 
 ## Updates

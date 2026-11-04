@@ -2,11 +2,11 @@
 
 ## Context
 
-Open TMS currently supports road freight (FTL + LTL) with GPS-based tracking (System Loco IoT), carrier API polling (FedEx/UPS/DHL), and EDI 214 status messages. The roadmap (Phase 12) calls for multimodal transport support - shipment legs across road, ocean, air, and rail - but no work has been done yet. This report researches what's available for tracking across those modes, both open/free and paid, to inform the implementation approach.
+POLARIS Global currently supports road freight (FTL + LTL) with GPS-based tracking (System Loco IoT), carrier API polling (FedEx/UPS/DHL), and EDI 214 status messages. The roadmap (Phase 12) calls for multimodal transport support - shipment legs across road, ocean, air, and rail - but no work has been done yet. This report researches what's available for tracking across those modes, both open/free and paid, to inform the implementation approach.
 
 ---
 
-## Part 1: Current State in Open TMS
+## Part 1: Current State in POLARIS Global
 
 ### What Exists Today
 
@@ -112,20 +112,20 @@ No Class I railroad (BNSF, UP, CSX, NS, CPKC) offers a public REST API. Tracking
 
 | Provider | Type | Pricing | Tracks | Best For |
 |----------|------|---------|--------|----------|
-| **EDI 214 from railroads** | Free (infra cost) | Already built in Open TMS | Rail shipment milestones | **Primary method** - push-based from carrier |
+| **EDI 214 from railroads** | Free (infra cost) | Already built in POLARIS Global | Rail shipment milestones | **Primary method** - push-based from carrier |
 | **project44 / FourKites** | Enterprise | $50K+/year contracts | Rail + all modes | Enterprise users with existing subscriptions |
 
 **No standalone rail tracking API exists.** The options are EDI 214 (already supported), manual milestone entry, or unified visibility platforms.
 
 ### Unified Visibility Platforms
 
-| Platform | Coverage | Pricing | Suitable for Open TMS? |
+| Platform | Coverage | Pricing | Suitable for POLARIS Global? |
 |----------|----------|---------|----------------------|
 | **project44** | All modes, 100s of carriers | Enterprise: ~$2-10/shipment, $50K+/year min | Only for large deployments that already subscribe |
 | **FourKites** | All modes, strong road | Enterprise: similar to project44 | Same - enterprise only |
 | **Shippeo** | European focus, all modes | Enterprise SaaS | European enterprise deployments |
 
-**No open-source visibility platform exists.** This is actually a differentiating opportunity for Open TMS.
+**No open-source visibility platform exists.** This is actually a differentiating opportunity for POLARIS Global.
 
 ---
 
@@ -227,7 +227,7 @@ IMultimodalTrackingProvider (extends/mirrors ICarrierTrackingProvider)
 
 1. **Carrier APIs alone are NOT sufficient for full multimodal tracking.** Ocean carriers are getting there (DCSA), but airlines and railroads lag behind. We need a mix of carrier APIs + third-party tracking providers + EDI.
 
-2. **There is NO open-source multimodal tracking platform.** This is a genuine differentiator for Open TMS if we build it well.
+2. **There is NO open-source multimodal tracking platform.** This is a genuine differentiator for POLARIS Global if we build it well.
 
 3. **The existing provider-agnostic pattern is excellent.** `ICarrierTrackingProvider` + `ProviderRegistry` + `CarrierTrackingIntegration` give us the blueprint. We extend, not reinvent.
 

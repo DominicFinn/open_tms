@@ -1,4 +1,4 @@
-# Open TMS - GCP Infrastructure as Code
+# POLARIS Global - GCP Infrastructure as Code
 # This Terraform configuration creates all necessary GCP resources
 
 terraform {

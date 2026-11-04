@@ -46,7 +46,7 @@ This mirrors the existing ETA monitor pattern: the ETA monitoring service also u
 
 ### Recommendation: PostGIS as Default
 
-PostGIS is the pragmatic choice for Open TMS because:
+PostGIS is the pragmatic choice for POLARIS Global because:
 
 1. **No new infrastructure** — it's a PostgreSQL extension, added to the existing database with `CREATE EXTENSION postgis`. No additional Docker containers or data synchronisation.
 2. **Proven at scale** — `ST_DWithin` with a GiST spatial index handles thousands of geofences efficiently.
@@ -115,29 +115,29 @@ interface GeofenceMatch {
 }
 ```
 
-This is consistent with the existing provider pattern in Open TMS:
+This is consistent with the existing provider pattern in POLARIS Global:
 - `IRoutingProvider` abstracts TomTom/HERE/Valhalla
 - `IBinaryStorageProvider` abstracts S3/database
 - `IEmailService` abstracts SMTP/SendGrid/SES/console
 
 ---
 
-## Decision 4: Open TMS Does Not Depend on Specific IoT Providers
+## Decision 4: POLARIS Global Does Not Depend on Specific IoT Providers
 
-Open TMS is an open-source project and must not be tied to any specific IoT platform. However, it's worth noting that commercial IoT providers often have superior geofencing capabilities:
+POLARIS Global is an open-source project and must not be tied to any specific IoT platform. However, it's worth noting that commercial IoT providers often have superior geofencing capabilities:
 
 ### Commercial Alternatives for Implementers
 
 | Provider | What They Offer | Consideration |
 |----------|----------------|---------------|
 | **System Loco** | IoT platform with built-in geofencing, device management, and event webhooks. Already integrated for sensor telemetry. | Ties deployment to System Loco. Acceptable for commercial implementers who already use the platform, but not for the open-source default. |
-| **Shippeo** | Supply chain visibility platform with ETA prediction, geofencing, and carrier integrations. | Enterprise-grade; replaces much of the ETA/tracking pipeline. Could feed events into Open TMS via webhooks. |
-| **project44** | Multi-modal visibility with carrier tracking, ETA, and exception management. | Similar to Shippeo; broader carrier network. Would require an adapter to map p44 events to Open TMS domain events. |
+| **Shippeo** | Supply chain visibility platform with ETA prediction, geofencing, and carrier integrations. | Enterprise-grade; replaces much of the ETA/tracking pipeline. Could feed events into POLARIS Global via webhooks. |
+| **project44** | Multi-modal visibility with carrier tracking, ETA, and exception management. | Similar to Shippeo; broader carrier network. Would require an adapter to map p44 events to POLARIS Global domain events. |
 | **FourKites** | Real-time supply chain visibility with predictive ETAs and geofencing. | Enterprise logistics focus; strong carrier integration. |
 
-**Recommendation for implementers**: If you're using an IoT provider like System Loco that already does geofencing well, consider having that provider push geofence events into Open TMS via the existing webhook/telemetry API, and skip the built-in spatial evaluation entirely. The SLA system will still track the evaluations — it just won't need to compute the geofence check itself.
+**Recommendation for implementers**: If you're using an IoT provider like System Loco that already does geofencing well, consider having that provider push geofence events into POLARIS Global via the existing webhook/telemetry API, and skip the built-in spatial evaluation entirely. The SLA system will still track the evaluations — it just won't need to compute the geofence check itself.
 
-This is configured by setting the `light_event` and `seal_event` SLA rules to be "externally evaluated" — the external provider raises the event, and Open TMS just tracks the SLA against it.
+This is configured by setting the `light_event` and `seal_event` SLA rules to be "externally evaluated" — the external provider raises the event, and POLARIS Global just tracks the SLA against it.
 
 ---
 

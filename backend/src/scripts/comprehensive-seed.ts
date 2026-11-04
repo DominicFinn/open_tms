@@ -1,5 +1,5 @@
 /**
- * Comprehensive seed script for Open TMS.
+ * Comprehensive seed script for POLARIS Global.
  *
  * Builds a realistic, interconnected dataset modelled on a global 3PL:
  * diverse customers (frozen foods, pharma, chemicals, electronics, grocery,
@@ -2775,7 +2775,7 @@ async function backfillReadModels(orgId: string) {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('🚚 Open TMS Comprehensive Seed');
+  console.log('🚚 POLARIS Global Comprehensive Seed');
   console.log('================================\n');
 
   if (!NO_WIPE) {

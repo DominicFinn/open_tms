@@ -1,10 +1,10 @@
 # Top Priorities - What to Build Next
 
-Ranked by impact on making Open TMS a credible alternative to commercial systems. Considers: how many prospective users would walk away without this feature, implementation complexity, and dependencies.
+Ranked by impact on making POLARIS Global a credible alternative to commercial systems. Considers: how many prospective users would walk away without this feature, implementation complexity, and dependencies.
 
 ## Tier 1 - Table Stakes (Blockers for Adoption)
 
-These are features that most TMS buyers consider non-negotiable. Without them, Open TMS cannot compete in an RFP or demo.
+These are features that most TMS buyers consider non-negotiable. Without them, POLARIS Global cannot compete in an RFP or demo.
 
 ### 1. Customer Self-Service Portal
 **Gap**: 22% coverage. No customer-facing portal exists beyond the carrier portal.
