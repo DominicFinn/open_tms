@@ -11,7 +11,7 @@
  * When criteria are met, updates shipment stop and order delivery status.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Geofence } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { IOrderDeliveryService } from './OrderDeliveryService.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -20,6 +20,7 @@ import { RECORD_GEOFENCE_DEPARTURE } from '../commands/tracking/RecordGeofenceDe
 import { RECORD_JOURNEY_CHECKPOINT } from '../commands/tracking/RecordJourneyCheckpointCommand.js';
 import { locateOnRoute, checkpointIndexForFraction, passedCheckpoints, fractionOfSpan } from './routing/RouteProgressService.js';
 import { JourneyStop, actionableStops, findDestinationStop, findOriginStop } from './tracking/journeyStops.js';
+import { IGeofenceRepository, RadialGeometry, PolygonGeometry } from '../repositories/GeofenceRepository.js';
 
 export interface DeviceEventContext {
   orgId: string;
@@ -160,11 +161,13 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     private prisma: PrismaClient,
     private deliveryService: IOrderDeliveryService,
     private commandBus: ICommandBus,
+    private geofenceRepo: IGeofenceRepository,
   ) {}
 
   async evaluateAndUpdateOrders(ctx: DeviceEventContext): Promise<ArrivalCriteriaMatch[]> {
     const shipment = await this.loadShipment(ctx);
     if (!shipment) return [];
+    await this.applyDrawnGeofences(shipment);
 
     const originStop = findOriginStop(shipment.stops, shipment.originId);
     const eventTime = ctx.eventTime ?? new Date().toISOString();
@@ -213,6 +216,28 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     }
 
     return matches;
+  }
+
+  /**
+   * BUSINESS RULE: a location's drawn geofence (#347) is the source of truth for geofence matching.
+   * It replaces the location's geofence-type arrival criteria, so redrawing the circle takes effect
+   * on the next ping and a location with only a drawn geofence still gets arrivals. WiFi and BLE
+   * criteria are unaffected. A location with no drawn geofence keeps its geofence criteria.
+   */
+  private async applyDrawnGeofences(shipment: NonNullable<Awaited<ReturnType<ArrivalCriteriaEvaluationService['loadShipment']>>>) {
+    const locations = [
+      ...shipment.stops.map((s) => ({ id: s.locationId, location: s.location })),
+      ...(shipment.destinationId && shipment.destination ? [{ id: shipment.destinationId, location: shipment.destination }] : []),
+    ];
+    const geofences = await this.geofenceRepo.findByEntities('location', [...new Set(locations.map((l) => l.id))], shipment.orgId);
+    const byLocation = new Map(geofences.map((g) => [g.entityId, g]));
+    for (const { id, location } of locations) {
+      const drawn = byLocation.get(id);
+      if (!drawn) continue;
+      const criterion = drawnGeofenceCriterion(drawn);
+      if (!criterion) continue;
+      location.arrivalCriteria = [criterion as any, ...location.arrivalCriteria.filter((c) => c.criteriaType !== 'geofence')];
+    }
   }
 
   private async loadShipment(ctx: DeviceEventContext) {
@@ -410,6 +435,9 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     entry: { locationLat?: number; locationLng?: number },
   ): string | null {
     if (!ctx.lat || !ctx.lng) return null;
+    if (criteria.polygon) {
+      return pointInPolygon(ctx.lat, ctx.lng, criteria.polygon) ? 'Geofence: inside drawn polygon' : null;
+    }
     const radius = criteria.radiusMeters;
     if (!radius) return null;
 
@@ -502,6 +530,43 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
 /** The largest active geofence radius among a location's criteria, or 0 when it has none. */
 function geofenceRadius(criteria: any[]): number {
   return criteria
-    .filter((c) => c.criteriaType === 'geofence' && typeof c.radiusMeters === 'number')
-    .reduce((max, c) => Math.max(max, c.radiusMeters), 0);
+    .filter((c) => c.criteriaType === 'geofence')
+    .map((c) => c.radiusMeters ?? c.extentMeters)
+    .filter((r): r is number => typeof r === 'number')
+    .reduce((max, r) => Math.max(max, r), 0);
+}
+
+/**
+ * A drawn geofence in the shape of a geofence arrival criterion. A polygon carries its points, plus
+ * an extent (furthest vertex from its centroid) that stands in for a radius when checkpoints are
+ * measured between the origin and destination geofence edges.
+ */
+function drawnGeofenceCriterion(geofence: Geofence): Record<string, unknown> | null {
+  const base = { id: geofence.id, criteriaType: 'geofence', active: true, name: geofence.name };
+  if (geofence.shapeType === 'radial') {
+    const g = geofence.geometry as unknown as RadialGeometry;
+    if (typeof g?.radiusMeters !== 'number') return null;
+    return { ...base, lat: g.centerLat, lng: g.centerLng, radiusMeters: g.radiusMeters };
+  }
+  const points = (geofence.geometry as unknown as PolygonGeometry)?.points;
+  if (!Array.isArray(points) || points.length < 3) return null;
+  const centroid = {
+    lat: points.reduce((sum, p) => sum + p.lat, 0) / points.length,
+    lng: points.reduce((sum, p) => sum + p.lng, 0) / points.length,
+  };
+  const extentMeters = Math.max(...points.map((p) => haversineMeters(centroid.lat, centroid.lng, p.lat, p.lng)));
+  return { ...base, polygon: points, extentMeters };
+}
+
+/** Ray-casting point-in-polygon test; fine at geofence scale, where lat/lng is effectively planar. */
+function pointInPolygon(lat: number, lng: number, points: Array<{ lat: number; lng: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i];
+    const b = points[j];
+    if ((a.lat > lat) !== (b.lat > lat) && lng < ((b.lng - a.lng) * (lat - a.lat)) / (b.lat - a.lat) + a.lng) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
