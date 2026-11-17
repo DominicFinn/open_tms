@@ -45,9 +45,9 @@ and automating 204 and 990. Aggregators and direct APIs come after that.
 implementation, replacing the Quality Centre page), operational reports and scheduled reports.
 This is the biggest gap when demoing.
 
-**Developer experience and deployment.** A clean first install (#292, #110, #293), jest exiting
-properly (#298), retiring `vnext` from the frontend (#124), and the observability and operations
-docs a self-hoster needs.
+**Developer experience and deployment.** A proper bootstrap command for the first user, jest
+exiting properly (#298), retiring `vnext` from the frontend (#124), and the observability and
+operations docs a self-hoster needs.
 
 ## Later
 

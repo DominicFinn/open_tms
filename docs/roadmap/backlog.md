@@ -112,10 +112,10 @@ The executive dashboard exists. Background in
 ## Developer experience and deployment
 
 - #298: jest never exits cleanly
-- #292: compose, README and CloudFormation build from the old Docker context (#114 and #146 are
-  the user reports)
-- #110: the DigitalOcean deploy button looks for a template that doesn't exist
-- #293: README describes a demo deployment and rate limiting that don't exist (#111 asks for a demo)
+- #111: a hosted demo people can try
+- #402: `Session` and `AuthProvider` tables have no reader, and the forgot-password stub logs the
+  email
+- #403: internal user routes need `users:*`
 - #124: retire `vnext` from the frontend
 - #115: architecture site for the ADRs
 - Observability: Prometheus format and Grafana dashboards on `/metrics`, OpenTelemetry, queue

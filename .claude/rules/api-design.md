@@ -1,7 +1,6 @@
 ---
 paths:
   - "backend/src/routes/**"
-  - "auth-service/**/*.ts"
 ---
 
 # API Design (STRICT)

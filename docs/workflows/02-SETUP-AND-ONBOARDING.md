@@ -14,7 +14,7 @@ first).**
 | # | Step | Who | How | Notes |
 |---|------|-----|-----|-------|
 | A1 | Deploy + database migrated | IT/admin | `run.sh` (local) or a cloud template | Backend :3001, Frontend :5173, Postgres :55432 |
-| A2 | Create the **first admin user + Organization** | First admin | Bootstrap (see runbook). In the `run.sh` stack this is done by `npm run seed`, which also creates demo data; in a clean production deploy, `auth-service`'s `POST /api/v1/auth/setup` | Setup only works when **no users exist** |
+| A2 | Create the **first admin user + Organization** | First admin | Bootstrap (see runbook). In the `run.sh` stack this is done by `npm run seed`, which also creates demo data; in a clean production deploy, run the seed script against the database (see "First login" in `docs/SELF_HOSTING.md`) | There is no setup endpoint and no self-registration |
 | A3 | Log in | Admin | `POST /api/v1/auth/login` → JWT | Use the JWT as `Authorization: Bearer <token>` for all internal API calls |
 
 ---

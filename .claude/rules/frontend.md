@@ -1,7 +1,6 @@
 ---
 paths:
   - "frontend/src/**/*.{ts,tsx,css}"
-  - "frontend-shadcn-preview/**/*.{ts,tsx,css}"
 ---
 
 # Frontend Conventions

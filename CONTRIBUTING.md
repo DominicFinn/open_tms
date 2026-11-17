@@ -149,7 +149,6 @@ open_tms/
 ├── backend/          # Fastify API server
 ├── frontend/         # React application
 ├── packages/         # Shared TypeScript types
-├── terraform/        # Infrastructure as Code
 ├── .github/          # CI/CD workflows
 └── docs/            # Documentation
 ```
@@ -176,7 +175,7 @@ When creating an issue, please include:
 
 - **GitHub Discussions**: [Ask questions](https://github.com/DominicFinn/open_tms/discussions)
 - **GitHub Issues**: [Report bugs](https://github.com/DominicFinn/open_tms/issues)
-- **Documentation**: Check the [README](./README.md) and [deployment guide](./DEPLOYMENT.md)
+- **Documentation**: Check the [README](./README.md) and [self-hosting guide](docs/SELF_HOSTING.md)
 
 ## 🎉 Recognition
 

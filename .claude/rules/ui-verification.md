@@ -1,7 +1,6 @@
 ---
 paths:
   - "frontend/src/**/*.{ts,tsx}"
-  - "frontend-shadcn-preview/**/*.{ts,tsx}"
 ---
 
 # UI Completion Verification — CRITICAL
