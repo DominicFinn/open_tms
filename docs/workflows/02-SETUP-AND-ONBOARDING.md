@@ -30,7 +30,7 @@ shapes everything after.
 | B2 | Brokerage identity | `mcNumber`, `bondAmountCents`, `bondExpirationDate`, `operatingAuthorityStatus`, `minMarginPercent`, `marginAlertEnabled` | **[Broker]** (and brokering 3PLs) |
 | B3 | Units of measure | `weightUnit`, `dimUnit`, `temperatureUnit`, `distanceUnit` | All |
 | B4 | Tracking unit model | `trackingMode` (`group`/`item`), `trackableUnitType` (`pallet`/`tote`/`box`/`stillage`/`custom`), `customUnitName` | All |
-| B5 | Operational toggles | `autoTenderEnabled`, `defaultGeofenceRadiusMeters`, `autoDeliverShipmentDocs`, `magicLinksEnabled`, `warehouseScanMode` | All |
+| B5 | Operational toggles | `autoTenderEnabled`, `defaultGeofenceRadiusMeters`, `autoDeliverShipmentDocs` | All |
 | B6 | Email delivery | `emailProvider` (`console`/`smtp`/`sendgrid`/`ses`), `emailEnabled`, `emailFrom*`, SMTP creds | All (keep `console` for testing) |
 | B7 | Maps key (route planning + deviation) | `googleMapsApiKey` | Needed for lane planned-routes & deviation alerts |
 | B8 | LLM key (AI triage) | `llmProvider`, `llmApiKey`, `llmModel`, `llmEnabled` | Optional; enables the triage agent |

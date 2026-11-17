@@ -1,7 +1,8 @@
 # ADR 0004: Port to C#, starting with FinnWMS
 
-- **Status:** Accepted. The "Database and the handover from Prisma" section is superseded by
-  [ADR 0005](0005-wms-table-handover-in-one-move.md)
+- **Status:** Superseded by [ADR 0007](0007-tms-only-in-typescript.md). The backend stays on TypeScript and the .NET
+  service has been removed. The "Database and the handover from Prisma" section was earlier
+  superseded by [ADR 0005](0005-wms-table-handover-in-one-move.md)
 - **Date:** 2026-10-21
 - **Partly supersedes:** [ADR 0002](0002-modular-monolith-product-composition.md), the rejection of
   separate services "now" (alternative 3) and the TypeScript-only assumption behind it

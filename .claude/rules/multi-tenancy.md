@@ -66,7 +66,7 @@ way: fix the code, or record a considered decision in `policy.ts` with its reaso
 A query that genuinely must not name the org carries a marker on the line directly above it:
 
 ```ts
-// tenancy-exempt: the magic link token hash is the credential that establishes the tenant
+// tenancy-exempt: the API key hash is the credential that establishes the tenant
 ```
 
 Only four reasons qualify: a lookup by a secret or token hash that establishes the tenant, the
@@ -83,13 +83,14 @@ to it. Those are still on you and the reviewer.
 `req.orgId` is `undefined`, and **Prisma reads `where: { orgId: undefined }` as no filter at all**,
 so the query returns every tenant's rows while the source looks correct.
 
-That is not hypothetical. No WMS route registered the org scope until #238, so ten repositories,
-21 command-handler fixes and a whole `scopedWhere` helper were all filtering on `undefined`. It
-passed typecheck, ~1980 unit tests and CI, and leaked across tenants against a real database. The
-cargo tracking routes (#295) had the same bug.
+That is not hypothetical. A whole family of routes (the warehouse ones, since removed) registered
+no org scope until #238, so ten repositories, 21 command-handler fixes and a `scopedWhere` helper
+were all filtering on `undefined`. It passed typecheck, ~1980 unit tests and CI, and leaked across
+tenants against a real database. The cargo tracking routes (#295) had the same bug.
 
 **Two things follow.** Register the scope where it cannot be forgotten, which is why the
-authenticated block now does it for every route and `registerWmsGuard` does it for WMS. And when you
+authenticated block now does it for every route and `registerReadWriteGuard` does it for the plugins
+that use it. And when you
 change anything tenancy-related, **start the server, seed a second organization, and call the
 endpoint.** Unit tests mock Prisma, so they never see this class of bug.
 
@@ -100,13 +101,12 @@ endpoint.** Unit tests mock Prisma, so they never see this class of bug.
 | Admin app | `authenticateJWT` | `registerOrgScope(server)` |
 | Customer portal | `authenticateCustomerJWT` + `req.customerUser` | `attachOrgScopeFromCustomerUserHook(server.prisma)` — walks `customerUser.customerId → Customer.orgId` |
 | Carrier portal | `authenticateCarrierJWT` + `req.carrierUser` | `attachOrgScopeFromCarrierUserHook(server.prisma)` — walks `carrierUser.carrierId → Carrier.orgId` |
-| Warehouse PWA | `authenticateJWT` (same JWT shape as admin login, plus `scope: 'warehouse'` which restricts the token to warehouse/WMS task routes) | `registerOrgScope(server)` |
 | EDI | `authenticateJWT` (admin UI) or `x-api-key` (EDI collector) | `await registerOrgScopeForEdi(server)` |
 
-**Warehouse PWA:** the magic-link validate and password login endpoints both return a session JWT
-alongside the user payload. Every operational route requires the JWT via a plugin-level preHandler
-that skips the three login endpoints. `req.user.organizationId` then drives `req.orgId` through the
-standard `registerOrgScope` chain — no warehouse-specific scope helper needed.
+**Scoped tokens are refused.** The removed warehouse and inventory apps minted internal tokens
+with a `scope` claim that restricted them to their own routes. `verifyJWT` rejects any token that
+carries one, so a leftover session cannot act as an admin session. Don't reintroduce a scope claim
+without also deciding, route by route, what it may reach.
 
 **EDI routes** (`tradingPartners.ts` and every `edi*.ts`) are called by the admin UI with a JWT and
 by the EDI collector with an API key. `registerOrgScopeForEdi` takes the org from whichever

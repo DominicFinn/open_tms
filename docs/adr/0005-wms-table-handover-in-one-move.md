@@ -1,6 +1,6 @@
 # ADR 0005: Hand the WMS tables over from Prisma in one move
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0007](0007-tms-only-in-typescript.md). The tables were dropped, not handed over
 - **Date:** 2026-10-21
 - **Supersedes:** the "Database and the handover from Prisma" section of
   [ADR 0004](0004-port-to-csharp-starting-with-finnwms.md)

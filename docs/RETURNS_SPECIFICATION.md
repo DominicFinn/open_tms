@@ -1,37 +1,42 @@
 # Returns & RMA Specification
 
-> A comprehensive specification for the returns workflow in Open TMS. Covers the RMA (Return Merchandise Authorization) model, disposition types, physical handling, refund calculation, customer portal integration, and the downstream distinctions between customer-initiated returns and customer-refused deliveries.
+> A specification for the returns workflow in Open TMS. Covers the RMA (Return Merchandise Authorization) model, disposition types, receipt and inspection, refund calculation, customer portal integration, and the downstream distinctions between customer-initiated returns and customer-refused deliveries.
 
-**Status**: v1 design, pre-implementation.
-**Related roadmap item**: WMS v1 Returns / RMA (shipped, see `docs/roadmap/completed.md`). Open
-returns work is in `docs/roadmap/finnwms.md`.
+**Status**: shipped (see `docs/roadmap/completed.md`).
+
+**Scope**: Open TMS is a transport management system. It authorises a return, arranges the return
+leg, records what came back and what was decided about it, and closes the refund. It holds no stock
+and runs no warehouse, so it does not track where a returned item is put or put anything back into
+inventory. The warehouse tasks, bins and stock movements this specification once described were
+removed with the warehouse module, and the removed code stays in git history under the tag
+`last-with-wms`.
 
 ---
 
 ## 1. Context and Problem
 
-Every warehouse deals with returns. A customer bought something, it's coming back, and we need to:
+A customer bought something, it's coming back, and we need to:
 
 1. Authorize and track the return (financial and legal record)
-2. Receive the physical goods back into the building
-3. Inspect them and decide what to do with them (disposition)
-4. Route them to the right physical place based on that decision
+2. Get the goods back, with a return label and a carrier pickup where needed
+3. Record what was received
+4. Record the inspection and what was decided about each item (disposition)
 5. Refund the customer
 6. Close the loop with reporting and analytics
 
 Returns are **not** just "receiving in reverse". They have their own lifecycle, their own reason codes, their own financial implications, and often their own compliance requirements (you cannot just restock returned pharma products, for example).
 
-This spec defines the full workflow from customer request through physical handling to financial closure.
+This spec defines the workflow from customer request through receipt and inspection to financial closure.
 
 ---
 
 ## 2. The Seven Dispositions
 
-When a returned item arrives and is inspected, the warehouse must decide what physically happens to it. We support seven dispositions. Each has different downstream physical and financial effects.
+When a returned item arrives and is inspected, someone decides what happens to it. We support seven dispositions. Open TMS records the decision and its financial effect. Carrying it out physically happens wherever the goods are handled, outside Open TMS.
 
 | Disposition | What happens physically | Financial effect | Typical reason |
 |-------------|------------------------|------------------|----------------|
-| **restock** | Item inspected, confirmed saleable, put back into inventory at its normal bin | Full refund to customer, inventory value restored | "Wrong size", "didn't need it", unopened, undamaged |
+| **restock** | Item inspected, confirmed saleable, goes back on sale | Full refund to customer, inventory value restored | "Wrong size", "didn't need it", unopened, undamaged |
 | **refurb** | Item sent to refurb zone, cleaned/repaired/repackaged, then restocked (often at a lower grade like "refurbished" or "open box") | Refund to customer, refurb cost absorbed, inventory restored at lower grade | Opened but functional, minor cosmetic damage, needs new packaging |
 | **scrap** | Item destroyed. Goes to waste stream. No recovery. | Refund to customer, full write-off | Beyond saving, destroying cheaper than refurbing, safety/contamination risk |
 | **recycle** | Item sent for material recovery via recycling stream. Different from scrap because the material has value. Required in some jurisdictions (WEEE in EU/UK for electronics, batteries, packaging) | Refund to customer, write-off (may have small material recovery credit) | Electronics that can't be refurbed, packaging, batteries |
@@ -45,11 +50,7 @@ When a returned item arrives and is inspected, the warehouse must decide what ph
 - **refurb** is essential for any electronics, apparel, or goods that can be reconditioned.
 - **rtv** unlocks the supplier return-credit flow, which is a real revenue recovery tool.
 - **customer_keeps** is critical for low-margin e-commerce where return shipping economics don't work.
-- **recycle** and **donate** are differentiators: they show ESG compliance, meet WEEE/regulatory requirements, and open up tax benefits. They also match real operational flows that many WMS systems ignore.
-
-### Lower grade restock
-
-When a refurbed item goes back to inventory, it is often at a lower grade. The `TrackableUnit.qualityStatus` field can express this (`available` vs `refurb_grade_b`, for example). A future enhancement would be a richer `Grade` model (pattern borrowed from the Stocs Artoo review), but for v1 we use `qualityStatus` as the grading signal.
+- **recycle** and **donate** show ESG compliance, meet WEEE/regulatory requirements, and open up tax benefits. They also match real operational flows that many systems ignore.
 
 ---
 
@@ -87,15 +88,14 @@ When a refurbed item goes back to inventory, it is often at a lower grade. The `
 | orderLineItemId | FK OrderLineItem | Original line being returned |
 | sku | string | Denormalized for reporting |
 | requestedQuantity | int | How many customer wants to return |
-| receivedQuantity | int | How many physically arrived (may be less) |
+| receivedQuantity | int | How many arrived (may be less) |
 | disposition | string | `pending` initially, then one of the seven dispositions |
 | requestedDisposition | string? | What customer/CSR initially chose |
 | inspectionStatus | string | `pending`, `pass`, `fail`, `partial_damage` |
 | inspectionNotes | string? | Inspector's comments |
 | conditionPhotos | Json? | Array of photo storage keys |
 | refundAmountCents | int | Per-line refund amount |
-| trackableUnitId | FK TrackableUnit? | If physically tracked |
-| currentBinId | FK WarehouseBin? | Where item is in warehouse right now |
+| trackableUnitId | string? | The unit that came back, if it is tracked |
 | inspectedByUserId | string? | Who made the disposition decision |
 | inspectedAt | DateTime? | |
 
@@ -134,45 +134,40 @@ CSR authorizes (status=authorized), RMA number issued, customer notified
   ↓
 Customer ships item back
   ↓
-Physical receipt at dock (status=in_transit → received)
+Receipt recorded (status=authorized or in_transit → received)
 ```
 
 ### 4.2 CSR-initiated flow (admin)
 
 ```
-CSR speaks with customer (phone/email) or receives unexpected return at dock
+CSR speaks with customer (phone/email), or an unexpected return turns up
   ↓
 CSR creates Rma on behalf of customer, pre-authorized (status=authorized immediately)
   ↓
-Physical receipt at dock (status=in_transit → received)
+Receipt recorded (status=authorized or in_transit → received)
 ```
 
-### 4.3 Physical receiving flow (warehouse)
+### 4.3 Recording receipt
 
 ```
-Unit arrives at dock
+Goods arrive back
   ↓
-Worker opens warehouse app, taps "Return Receiving"
+A user with returns:write opens the RMA in the admin app (/returns/:id)
   ↓
-Scans RMA number (from label or paperwork)
-  ↓
-System shows expected lines on this RMA
-  ↓
-Worker scans each item, matches to RmaLine
-  ↓
-Records receivedQuantity (may differ from requested)
-  ↓
-Units placed in quarantine/QA zone (NOT put away to regular storage)
+For each line, records receivedQuantity (may be less than requested)
+  and, optionally, the trackable unit that came back
   ↓
 Rma status → received
-```
-
-### 4.4 Inspection and disposition flow
-
-```
-QA worker or supervisor opens inspection task queue
   ↓
-Takes an RmaLine in quarantine, inspects physically
+Once every line is fully received, rma.goods_received is emitted
+```
+
+`POST /api/v1/rma-lines/:id/receive` takes `receivedQuantity` and an optional `trackableUnitId`.
+
+### 4.4 Inspection and disposition
+
+```
+The same page lists each received line that still has disposition = pending
   ↓
 Records inspectionStatus (pass/fail/partial_damage)
   ↓
@@ -180,15 +175,12 @@ Sets final disposition (may override customer's requested disposition)
   ↓
 Adds inspection notes and/or photos
   ↓
-System routes based on disposition:
-  - restock → create PutawayTask (to regular storage)
-  - refurb → move to refurb zone, flag for rework
-  - scrap → move to scrap staging area
-  - recycle → move to recycling staging area
-  - donate → move to donation staging area
-  - rtv → create outbound shipment back to vendor
-  - customer_keeps → mark as no-movement, remove from physical inventory
+Rma status → inspecting, then → dispositioning once every line has a disposition
 ```
+
+`POST /api/v1/rma-lines/:id/inspect` takes `inspectionStatus`, `disposition`, and optional
+`inspectionNotes` and `conditionPhotos`. The disposition is a record of the decision. Open TMS does
+not create a task or move anything as a result.
 
 ### 4.5 Financial closure
 
@@ -216,13 +208,12 @@ Refund issued via payment processor (existing financial system)
 
 ## 5. Design Decisions
 
-### 5.1 Quarantine flow (mandatory)
+### 5.1 Inspect before deciding
 
-Returned items DO NOT go straight back to regular inventory. They always land in a quarantine/QA zone first.
+A line cannot be given a disposition until it has been received, and an RMA cannot be completed
+while any line is still `pending`.
 
-**Why:** Returned items are an unknown quantity. Cold chain may be broken, items may be tampered with, packaging may be compromised. Putting them back in regular inventory before inspection creates contamination risk and breaks cold chain audit trails. Pharma, food, cosmetics, electronics with batteries - all have regulatory reasons to inspect before restocking.
-
-**Implementation:** Add a `quarantine_returns` zone type option. The return receiving flow assigns to a bin in this zone by default. Only after inspection does a PutawayTask get generated for the `restock` disposition.
+**Why:** Returned items are an unknown quantity. Cold chain may be broken, items may be tampered with, packaging may be compromised. Pharma, food, cosmetics, electronics with batteries - all have regulatory reasons to inspect before anything goes back on sale. Keeping returned goods apart until then is the job of whoever handles them physically.
 
 ### 5.2 Partial returns
 
@@ -238,7 +229,7 @@ A customer who bought 5 units can return 2. The RMA line `requestedQuantity` may
 - Damaged return receiving less than full refund
 - Promotional credit or goodwill uplift
 
-**Review queue:** Every completed RMA appears in the Finance Refund Review Queue before the refund is actually processed. Finance team approves or adjusts, then the CreditNote and payment processor refund are triggered.
+**Review queue:** Every RMA in `dispositioning` appears in the Finance Refund Review Queue before it is completed. Finance team approves or adjusts, then the CreditNote and payment processor refund are triggered.
 
 ### 5.4 Inspector overrides customer disposition
 
@@ -252,11 +243,10 @@ An RMA can have lines with different dispositions. Customer returns 3 items: one
 
 ### 5.6 Relationship to existing domain
 
-- **Shipments**: The return inbound shipment (item coming back) is a shipment with a special type flag (`shipmentType: 'return'`). This lets the existing tracking, carrier integration, and delivery systems handle it.
-- **Receiving**: Return receiving is a `ReceivingTask` variant (`receivingType: 'return'`). Reuses the receiving UI and infrastructure.
-- **Inventory**: `InventoryTransaction` gets a new reasonCode `return`. Transaction type remains `receive` for restocked items.
-- **Credit notes**: Use the existing `CreditNote` model. Add a `rmaId` field linking it back.
-- **Issues**: A return with inspection failure (tampering, contamination) automatically creates an Issue in the Triage Centre.
+- **Return leg**: the label and pickup for the item coming back are held on the RMA itself (section 10). A return leg is not modelled as a shipment.
+- **Trackable units**: an RMA line can name the `TrackableUnit` that came back. Nothing about the unit changes as a result.
+- **Credit notes**: the RMA carries `creditNoteId`, linking it to a `CreditNote` in the existing financial model.
+- **Customer webhooks**: every `rma.*` event is offered to the customer's webhooks.
 
 ---
 
@@ -264,32 +254,28 @@ An RMA can have lines with different dispositions. Customer returns 3 items: one
 
 ### 6.1 Admin (main app)
 
-**Returns list** (`/wms/returns`)
+**Returns list** (`/returns`)
 - Table of all RMAs with filters: status, date range, customer, pending disposition, pending refund
 - Bulk actions: export, bulk authorize
 - KPI header: total returns this month, refund value, top return reasons
 
-**Create RMA** (`/wms/returns/create`)
+**Create RMA** (`/returns/create`)
 - Step 1: Search/select customer and order
 - Step 2: Select line items and quantities to return
 - Step 3: Choose return reason, customer notes, suggested disposition per line
 - Step 4: Review and save (status = authorized since CSR-initiated)
 
-**RMA detail** (`/wms/returns/:id`)
+**RMA detail** (`/returns/:id`)
 - Header: RMA number, status, customer, order reference
 - Lines table: SKU, requested qty, received qty, disposition, inspection status, refund amount
 - Activity timeline: requested → authorized → received → inspected → completed
 - Linked documents: return label (v2), credit note
 - Actions based on status: authorize, record receipt, set disposition, complete
 
-**Inspection / disposition screen** (`/wms/returns/:id/inspect`)
-- Per-line inspection form: status, notes, photo upload, final disposition selector
-- Bulk apply (set same disposition on multiple lines)
-- Physical movement guidance based on disposition selected
-- Confirm button completes the disposition step for that line
+Receipt and inspection happen inline on the detail page: a Receive action per line that is short of its requested quantity, and an Inspect action per received line that still has a pending disposition.
 
-**Refund review queue** (`/wms/returns/refunds/review`)
-- List of completed RMAs awaiting refund approval
+**Refund review queue** (`/returns/refund-review`)
+- List of RMAs in `dispositioning`, awaiting refund approval
 - Filters: amount threshold, customer, disposition mix
 - Per-RMA: suggested vs actual, override field with reason, approve/reject
 - Bulk approve for small-value straightforward refunds
@@ -314,26 +300,6 @@ An RMA can have lines with different dispositions. Customer returns 3 items: one
 - Tracking number of return shipment (v2)
 - Refund status (pending review, processed, amount)
 
-### 6.3 Warehouse mobile app (v1 active)
-
-Both flows appear as first-class tasks in the warehouse mobile tasks list, sitting alongside Picking and Putaway under a dedicated "Returns" tab. The list view pulls from `GET /api/v1/warehouse/rmas?stage=any` which enriches each RMA with `linesToReceive` and `linesToInspect` counts, so finished RMAs fall off the list automatically.
-
-**Return receiving task** (`/warehouse/tasks/return-receive/:id`)
-- Summary card: RMA number, return reason, customer-supplied tracking number, customer notes
-- One tap per line to open the quantity input (pre-populated with remaining count)
-- Per-line counter showing `receivedQuantity / requestedQuantity`
-- Check mark when a line is fully received
-- When all lines are received, a single "Start Inspection" button routes to the inspection task
-
-**Inspection / disposition task** (`/warehouse/tasks/return-inspect/:id`)
-- Only lines with `receivedQuantity > 0 && disposition === 'pending'` need action
-- Per-line form: condition (pass / fail / partial damage), disposition (7 options displayed as two-column grid with hint text), optional notes
-- Customer-preferred disposition is shown next to the SKU and pre-selected when opening the form
-- Submit dispatches `INSPECT_RMA_LINE`, which auto-moves the RMA through `inspecting` → `dispositioning` when all lines are complete
-
-**Backend endpoint:**
-- `GET /api/v1/warehouse/rmas?stage=receive|inspect|any&rmaNumber=RMA-xxx` - enriched list scoped to the org; supports exact `rmaNumber` lookup for scanned labels
-
 ---
 
 ## 7. Events
@@ -342,8 +308,8 @@ Both flows appear as first-class tasks in the warehouse mobile tasks list, sitti
 |-------|--------------|-----------|
 | `rma.requested` | Customer portal submission | Notification to CSR queue |
 | `rma.authorized` | CSR approves OR CSR-initiated creation | Customer notification, label generation (v2) |
-| `rma.goods_received` | Return receiving task completed | QA queue notification |
-| `rma.line_inspected` | Inspector sets disposition on a line | Physical routing tasks (putaway/refurb/scrap) |
+| `rma.goods_received` | Every line fully received | Customer webhooks |
+| `rma.line_inspected` | Inspector sets disposition on a line | Customer webhooks |
 | `rma.disposition_set` | All lines on an RMA have dispositions | Finance review queue |
 | `rma.completed` | RMA closed, credit note issued | Customer notification, reporting |
 | `rma.rejected` | CSR rejects requested return | Customer notification |
@@ -361,7 +327,7 @@ This specification is focused on customer-initiated returns. A separate but rela
 - Item never entered customer's inventory
 - Rejection reasons are compliance-specific: late (OTIF breach), temperature excursion, damaged in transit, wrong paperwork, wrong quantity, wrong product
 - Financial implications extend beyond refund: OTIF chargebacks, freight claims against carrier, CAPA triggers
-- Physical handling is identical to RMA once goods arrive back
+- Receipt and inspection are identical to an RMA once goods arrive back
 
 ### Planned implementation (v2)
 
@@ -373,7 +339,7 @@ A `DeliveryRejection` model that:
 5. Links to carrier for freight claims
 6. Triggers CAPA in the Quality Centre for root cause analysis
 
-**This spans TMS (return trip planning), WMS (goods handling), Finance (chargebacks/claims), and Quality (CAPA).** It's therefore scheduled as a v2 feature that builds on this v1 RMA foundation.
+**This spans transport (return trip planning), Finance (chargebacks/claims), and Quality (CAPA).** It's therefore scheduled as a v2 feature that builds on this v1 RMA foundation.
 
 ---
 
@@ -386,7 +352,7 @@ RMAs can originate from five different channels, all converging on the same `CRE
 A CSR or operations user creates an RMA on behalf of a customer in the main admin app. Typical use cases:
 - Customer calls the support line
 - Customer emails a return request
-- Warehouse receives an unexpected return at the dock and reconciles it after the fact
+- An unexpected return turns up and is reconciled after the fact
 
 **`initiatedVia`**: `admin`
 
@@ -396,7 +362,7 @@ The customer logs into the customer portal (JWT auth) and self-services the retu
 - `GET /customer-portal/returns` - list my returns with status filter and summary line (tracking number, refund, status)
 - `GET /customer-portal/returns/new` - multi-step form: pick a delivered order, check line items with per-line quantity and preferred disposition, pick a return reason, add notes, submit
 - `GET /customer-portal/returns/:id` - status-explainer detail page with refund summary, return shipping panel (download label + pickup details), and a table of items
-- Return label download is available from the detail page once the warehouse/admin has generated it - same file stored by the admin side, served through the portal's JWT-scoped endpoint
+- Return label download is available from the detail page once an admin has generated it - same file stored by the admin side, served through the portal's JWT-scoped endpoint
 
 Backend endpoints (all `preHandler: authenticateCustomerJWT`, scoped to `req.customerUser.customerId`):
 - `GET /api/v1/customer-portal/rmas` - list
@@ -437,7 +403,7 @@ The X12 EDI standard transaction for returns. Used by enterprise customers (Walm
 **Outbound flow** (authorization response):
 - CSR authorizes the RMA in the admin UI
 - Admin or automation calls `POST /api/v1/edi/180/generate` with the RMA ID
-- `EDI180Service` builds X12 180 with BGN*11 (response purpose), echoes customer's RMA number in REF, generates N1 ST/SF with warehouse and customer addresses, LX + SLN per authorized line
+- `EDI180Service` builds X12 180 with BGN*11 (response purpose), echoes customer's RMA number in REF, generates N1 ST/SF with the return-to and customer addresses, LX + SLN per authorized line
 - Content returned ready for SFTP/HTTP delivery via existing `OutboundEdiDeliveryService`
 
 **GS functional identifier**: `RZ` (Return Merchandise Authorization).
@@ -460,7 +426,7 @@ Deferred to v2. The `Rma.initiatedVia` field already supports this value.
 
 ## 10. Return Shipping (Labels and Pickups)
 
-The warehouse often needs to produce a prepaid return label for the customer and optionally schedule a carrier pickup. The system models this through a provider-agnostic interface so the same UI and commands work for manual, FedEx, UPS, and DHL.
+A return often needs a prepaid label for the customer and, optionally, a carrier pickup. The system models this through a provider-agnostic interface so the same UI and commands work for manual, FedEx, UPS, and DHL.
 
 ### Provider Interface
 
@@ -518,7 +484,7 @@ Provider selection resolves in this order: explicit `providerOverride` on the co
 
 ### UI
 
-The RMA detail page (`VNextWmsReturnDetail.tsx`) exposes a **Return Shipping** panel with:
+The RMA detail page (`VNextReturnDetail.tsx`) exposes a **Return Shipping** panel with:
 
 - Summary row showing provider, service level, tracking number, label issued timestamp
 - Pickup row showing scheduled time, window, confirmation number, cancellation status
@@ -544,7 +510,7 @@ The v1 default of a "manual" provider means every customer can use this feature 
 - **Live FedEx/UPS/DHL label generation** - Real carrier API integration for prepaid return labels (v2+, interface already exists)
 - **Grading system** - Richer quality grading with functional, cosmetic, data-wipe fields (v2+)
 - **Restocking fee configuration** - Customer-specific restock fee rules (v2)
-- **Dropshipped returns** - Customer returns direct to supplier without warehouse receipt (v2+)
+- **Dropshipped returns** - Customer returns direct to supplier, with no receipt recorded here (v2+)
 - **Exchange workflow** - Return + replacement shipment in one flow (v2)
 - **Returns analytics dashboard** - Return rate by SKU/customer/reason, cost analysis (v2)
 
@@ -553,9 +519,8 @@ The v1 default of a "manual" provider means every customer can use this feature 
 ## 12. Glossary
 
 - **RMA** - Return Merchandise Authorization. The authorization record for a return.
-- **Disposition** - What happens physically to a returned item.
+- **Disposition** - What is decided about a returned item.
 - **RTV** - Return to Vendor. Sending the item back to the original supplier.
 - **OTIF** - On Time In Full. A customer compliance metric that triggers chargebacks when breached.
 - **CAPA** - Corrective and Preventive Action. A quality management workflow to address root causes.
 - **WEEE** - Waste Electrical and Electronic Equipment. EU/UK regulation requiring electronics recycling.
-- **Quarantine zone** - A physical area in the warehouse where returned goods await inspection before any other action.

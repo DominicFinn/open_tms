@@ -34,11 +34,11 @@ Four distinct principals, each with its own guard. **Do not cross the wires.**
 - Validate the issuer, not just the signature. A carrier token must not authenticate an admin route.
 - Password rules where passwords exist: 8+ chars with upper, lower and a number; **account lockout
   after 5 failed attempts for 15 minutes**.
-- Magic links (warehouse PWA) are single-use and time-limited. Every operational route behind the
-  login endpoints requires the session JWT.
+- An internal token carrying a `scope` claim is refused. Those were restricted sessions for the
+  removed warehouse and inventory apps, and honouring one now would make it a full admin session.
 - API keys are customer-scoped credentials — treat them as passwords: hash at rest, show once on
   creation, support revocation.
-- Never log a token, key, OTP or magic-link value. Not even truncated, in production.
+- Never log a token, key or OTP value. Not even truncated, in production.
 
 ## Authorization
 
@@ -76,7 +76,7 @@ Every deployment must rate limit, and these are the tiers to apply:
 | Surface | Guidance |
 |---|---|
 | General authenticated API | Per-user/per-key ceiling |
-| **Auth endpoints** (all four logins, magic-link request, password reset) | Aggressive, keyed by IP, with exponential backoff on repeated failure |
+| **Auth endpoints** (all four logins, password reset) | Aggressive, keyed by IP, with exponential backoff on repeated failure |
 | Public webhook ingest (carrier callbacks, EDI inbound) | Per-source ceiling — these are unauthenticated by design |
 | Report/export endpoints | Tight — they are expensive by definition |
 

@@ -151,7 +151,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
   server.get('/api/v1/cutoff-monitor/evaluate/:shipmentId', {
     schema: {
       tags: ['Cutoff Monitoring'],
-      summary: 'Manually evaluate a single shipment (does not fire notifications)',
+      summary: 'Evaluate a single shipment now. Records and publishes exactly as the scheduled scan does',
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };

@@ -318,9 +318,8 @@ export async function documentRoutes(server: FastifyInstance) {
     // attached, and every line item describing the goods with a piece count and
     // weight). The BOL metadata is captured immutably at generation time, so
     // generating before this data exists produces a permanently incomplete
-    // document. The intended trigger is `POST /load-plans/:id/complete`, which
-    // fires automatically after picking and loading. `evaluateBolReadiness` is
-    // the single source of truth shared with the frontend button.
+    // document. `evaluateBolReadiness` is the single source of truth shared
+    // with the frontend button.
     const readiness = await evaluateBolReadiness(prisma, req.orgId!, parsed.data.shipmentId);
     if (!readiness) {
       reply.code(404);

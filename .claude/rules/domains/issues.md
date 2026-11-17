@@ -19,11 +19,11 @@ Architecture, models, lifecycle and file map: `docs/ISSUE_ENGINE.md`
 Issue creation is **deterministic and LLM-independent**, and no longer shipment-only (#133).
 `IssueEngineHandler` maps trigger/recovery events onto issues via the code-defined Issue Type
 registry at `backend/src/services/issues/issueTypeRegistry.ts`. Each type declares its own
-`sourceEntityType` ('shipment', 'pack_task', ...) and `entityIdField` (the payload key holding the
-source entity id) — the engine assumes nothing about the domain.
+`sourceEntityType` and `entityIdField` (the payload key holding the source entity id). The engine
+assumes nothing about the domain, so a type may raise against any entity, including ones that are
+not shipments.
 
-- **Adding a new issue type (TMS or WMS) = add a registry entry.** Nothing else. The WMS
-  `pack_audit_variance` entry is the canonical non-shipment example.
+- **Adding a new issue type = add a registry entry.** Nothing else.
 - All issue writes go through the command bus (`CREATE_ISSUE` / `UPDATE_ISSUE`).
 - **Do NOT add bespoke `prisma.issue.create` writes.** Extend the registry instead. (Known legacy
   direct writers still to convert: `MarginAlertHandler`, `SlaEvaluationService`,

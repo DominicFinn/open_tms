@@ -27,7 +27,6 @@ const completed = [
   'EDI 210, 810, 820 Financial Transactions',
   'AR Aging & Financial Reports',
   'CSV Exports for Accounting',
-  'Container Intelligence with Hazmat Segregation',
   'Pallet Types & Palletization Planner',
   'Cutoff-at-Risk Monitor with Auto-Triage',
   'Returns / RMA with Carrier Labels & Refund Review',

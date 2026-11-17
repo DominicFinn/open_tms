@@ -23,7 +23,6 @@ Internal roles are defined in `backend/src/auth/permissions.ts`. A user has one 
 | **broker_admin** | Brokerage owner/manager | Everything operational **and** financial **and** EDI/integrations/automation/users/settings (everything except role *creation*) | Edit system role definitions |
 | **broker_agent** | Brokerage sales/ops rep | Quote customers, manage load board, assign carriers, view margin, run credit checks, generate rate confirmations; write shipments/orders/issues/tenders; full quotes | Manage users or settings, write invoices/charges |
 | **finance** | AR/AP / accounts | Full quotes, charges, invoices, carrier invoices, financial reports; run credit checks; generate documents | Write operational shipment/order data, manage users/settings |
-| **warehouse** | Warehouse / dock operator | Read+write shipments at their location, read orders, read+write devices, read documents | Anything financial, carriers, customers, settings |
 | **readonly** | Management / auditors | Read everything operational and financial | Any write |
 
 **Who does the initial setup?** The **admin** (or **broker_admin**) created during bootstrap. Settings,
@@ -147,7 +146,7 @@ hands off** rather than executing. Each is a candidate "integration point", not 
 | **Payment execution / money movement** | Records invoices and payments; no card/ACH/wire processing | 🔌 Payment processor / bank |
 | **General ledger & accounting** | Exports CSV (invoice register, payment ledger, charge detail) | 🔌 QuickBooks / NetSuite / SAP / Xero |
 | **Tax calculation** | Stores `taxId`/VAT; no rate determination | 🔌 Avalara / tax engine |
-| **Full WMS (inventory, pick/pack, slotting, WCS)** | Has location ops, dock, trackable units; WMS v1/v2 is a separate track | 🔌 / 🟡 External WMS or WMS track |
+| **Full WMS (inventory, pick/pack, slotting, WCS)** | Out of scope. Has location ops and trackable units, and exchanges EDI 940 / 945 with an external WMS | 🔌 External WMS |
 | **Multi-modal ocean / air / rail legs** | Road-only schema (TL/LTL) | ❌ Deferred |
 | **International customs / duty / denied-party screening** | Generates customs *documents* only | ❌ Not built |
 | **Route / load optimisation (TSP/VRP)** | Manual lane/stop sequencing; planned route via Google Maps | ❌ Not built |

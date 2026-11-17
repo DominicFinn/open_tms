@@ -1,5 +1,10 @@
 # Multi-Tenancy Remediation Plan
 
+> **Update, November 2026.** This is a record of remediation work that has finished. It mentions the
+> warehouse PWA, `WarehouseService`, `routes/warehouse.ts` and magic-link login, all of which have
+> since been removed along with the warehouse and inventory modules. Read those parts as history.
+> The current tenancy rules are in `.claude/rules/multi-tenancy.md`.
+
 ## TL;DR
 
 Open TMS has **structural multi-tenancy gaps**. The `Organization` model exists, JWTs carry `organizationId`, and 22+ tables (read models, financials, issues, agent infra) have an `orgId` column that's enforced. But **7 core entities have no `orgId` column at all** — `Customer`, `Carrier`, `Shipment`, `TradingPartner`, `ApiKey`, `Order`, `Rma` — and several routes either don't filter on `orgId` even when the column exists, or fall back to `prisma.organization.findFirst()` instead of using the JWT.

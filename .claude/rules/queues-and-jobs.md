@@ -19,7 +19,6 @@ If it takes more than a couple of seconds, or it talks to a third party, it goes
 - Webhook processing (inbound and outbound delivery)
 - EDI inbound processing and outbound delivery
 - Carrier tracking polls and ETA monitoring
-- Stock / inventory sync processing
 - Daily digest and scheduled reports
 - Analytics and reporting aggregation
 - Document and PDF generation (closure reports, invoices)

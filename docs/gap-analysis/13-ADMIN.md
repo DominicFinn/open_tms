@@ -6,11 +6,9 @@
 - Theme/white-labeling: CSS custom properties, logo upload, color pickers, live preview
 - Custom fields (versioned, any entity, 7 field types, server-side validation)
 - Units of measure (org defaults + user overrides: weight, dimensions, temperature, distance)
-- RBAC with 5 roles (admin, dispatcher, warehouse, readonly, customer) and fine-grained permissions
+- RBAC with system roles (admin, dispatcher, broker_admin, broker_agent, finance, readonly) and fine-grained permissions
 - OAuth 2.0 SSO (Google and Microsoft) with domain restrictions
-- Magic link/QR code login for warehouse
 - Account lockout (5 attempts, 15 min cooldown)
-- Login audit log
 - Email settings (provider selection, SMTP config, branding)
 - Email templates with Handlebars (per-org, per-event-type)
 - Event subscriptions (configurable notification routing)
