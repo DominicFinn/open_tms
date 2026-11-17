@@ -15,7 +15,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
 
   server.get('/api/v1/packaging-types', {
     schema: {
-      tags: ['WMS - Packaging Types'],
+      tags: ['Packaging Types'],
       summary: 'List packaging types for this org',
       querystring: {
         type: 'object',
@@ -38,13 +38,13 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/packaging-types/standards', {
-    schema: { tags: ['WMS - Packaging Types'], summary: 'Available seed data for standard packaging types' },
+    schema: { tags: ['Packaging Types'], summary: 'Available seed data for standard packaging types' },
   }, async () => {
     return { data: STANDARD_PACKAGING_TYPES, error: null };
   });
 
   server.get('/api/v1/packaging-types/:id', {
-    schema: { tags: ['WMS - Packaging Types'], summary: 'Packaging type detail' },
+    schema: { tags: ['Packaging Types'], summary: 'Packaging type detail' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const row = await prisma.packagingType.findFirst({ where: { id, orgId: req.orgId! } });
@@ -73,7 +73,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/packaging-types', {
     schema: {
-      tags: ['WMS - Packaging Types'],
+      tags: ['Packaging Types'],
       summary: 'Create a packaging type',
       body: { type: 'object' },
     },
@@ -90,7 +90,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/packaging-types/:id', {
-    schema: { tags: ['WMS - Packaging Types'], summary: 'Update a packaging type' },
+    schema: { tags: ['Packaging Types'], summary: 'Update a packaging type' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = PackagingBody.partial().parse((req as any).body);
@@ -101,7 +101,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/packaging-types/:id', {
-    schema: { tags: ['WMS - Packaging Types'], summary: 'Delete (or deactivate) a packaging type' },
+    schema: { tags: ['Packaging Types'], summary: 'Delete (or deactivate) a packaging type' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const existing = await prisma.packagingType.findFirst({
@@ -119,7 +119,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/packaging-types/seed-standards', {
     schema: {
-      tags: ['WMS - Packaging Types'],
+      tags: ['Packaging Types'],
       summary: 'Bulk-seed the standard packaging types (skips rows whose code already exists)',
     },
   }, async (req: FastifyRequest) => {
@@ -145,7 +145,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/packaging-types/:id/plan', {
     schema: {
-      tags: ['WMS - Packaging Types'],
+      tags: ['Packaging Types'],
       summary: 'Estimate how a carton fits on this pallet (kind=pallet only)',
       body: {
         type: 'object',
@@ -173,7 +173,7 @@ export async function packagingTypesRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/packaging-types/recommend', {
     schema: {
-      tags: ['WMS - Packaging Types'],
+      tags: ['Packaging Types'],
       summary: 'Recommend the best pallet for a carton across all active pallets',
       body: {
         type: 'object',

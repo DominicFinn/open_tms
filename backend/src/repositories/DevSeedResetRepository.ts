@@ -6,7 +6,7 @@
  * one of those five roots goes stale every time the schema grows a new
  * dependent table — that's exactly what caused the original bug
  * (`Load_shipmentId_fkey` violation): the list only covered 6 tables while
- * dozens more across tms/finance/quality/wms reference the same roots.
+ * dozens more across tms/finance/quality reference the same roots.
  *
  * This walks the dependency graph from Prisma's own schema metadata (DMMF)
  * at runtime, so a newly added table is picked up automatically with no list
@@ -57,30 +57,10 @@ const ROOT_MODELS = ['Customer', 'Carrier', 'Location', 'Shipment', 'Order'];
  * - `ImmutableTemperatureLog`: tamper-evident regulatory record (SHA-256
  *   integrity hashes) — mutating or deleting rows here to "tidy up" would
  *   defeat the entire point of the table.
- * - Every WMS model (`PutawayRule`, `WaveOrder`, `PickTask`, `PickLine`,
- *   `PackTask`, `CartonCatalogue`, `StagingAssignment`, `LoadPlan`,
- *   `LoadPlanLine`, `CycleCount`, `ReplenishmentRule`,
- *   `WmsFulfilmentOrder`): the module-boundaries rule mandates that no FK
- *   ever crosses the tms/wms line — "references there are soft string ids"
- *   is the architecture, not a gap. A tms-owned seed route reaching across
- *   that boundary to clean up wms rows would violate the same rule this
- *   reset otherwise respects.
  */
 const SOFT_REF_EXCLUDED_MODELS = new Set([
   'EdiTransactionLog',
   'ImmutableTemperatureLog',
-  'PutawayRule',
-  'WaveOrder',
-  'PickTask',
-  'PickLine',
-  'PackTask',
-  'CartonCatalogue',
-  'StagingAssignment',
-  'LoadPlan',
-  'LoadPlanLine',
-  'CycleCount',
-  'ReplenishmentRule',
-  'WmsFulfilmentOrder',
 ]);
 
 export class DevSeedResetRepository implements IDevSeedResetRepository {

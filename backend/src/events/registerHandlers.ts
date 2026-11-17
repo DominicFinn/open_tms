@@ -42,10 +42,6 @@ import { TradingPartnerRepository } from '../repositories/TradingPartnerReposito
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
 import { QualityIssueSummaryProjection } from './projections/QualityIssueSummaryProjection.js';
-import { WmsFulfilmentOrderProjection } from './projections/WmsFulfilmentOrderProjection.js';
-import { HandlingUnitProjection } from './projections/HandlingUnitProjection.js';
-import { TrackableUnitHandlingSource } from '../services/fulfilment/TrackableUnitHandlingSource.js';
-import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
 import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
 import { ILlmProvider } from '../services/llm/ILlmProvider.js';
@@ -58,20 +54,11 @@ import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNotificationHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
-import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
-import { HandlingUnitReturnsHandler } from './handlers/HandlingUnitReturnsHandler.js';
-import { WarehouseReturnsStockHandler } from './handlers/WarehouseReturnsStockHandler.js';
-import { PackAuditLinkHandler } from './handlers/PackAuditLinkHandler.js';
-import { LoadPlanBolLinkHandler } from './handlers/LoadPlanBolLinkHandler.js';
-import { OpenIssueLookup } from '../services/issues/OpenIssueLookup.js';
-import { BolGenerationHandler } from './handlers/BolGenerationHandler.js';
-import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
 import { ShipmentRoutePlanningHandler } from './handlers/ShipmentRoutePlanningHandler.js';
 import { ShipmentRoutePlanner } from '../services/routing/ShipmentRoutePlanner.js';
 import { ShipmentRouteRepository } from '../repositories/ShipmentRouteRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { GoogleMapsDirectionsService } from '../services/routing/GoogleMapsDirectionsService.js';
-import { WarehouseQueries } from '../services/warehouse/WarehouseQueries.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -95,7 +82,6 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.quality_issue_summary': () => envInt('PROJECTION_CONCURRENCY', 2),
-  'projection.wms_fulfilment_order': () => envInt('PROJECTION_CONCURRENCY', 3),
   'document.bol_generation': () => envInt('DOCUMENT_CONCURRENCY', 2),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
   'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
@@ -110,7 +96,6 @@ export async function registerEventHandlers(
   llmProvider?: ILlmProvider,
   commandBus?: ICommandBus,
   skillRegistry?: SkillRegistry,
-  documentService?: IDocumentGenerationService,
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -127,11 +112,6 @@ export async function registerEventHandlers(
     new IssueProjection(prisma),
     new AgentDecisionProjection(prisma),
     new QualityIssueSummaryProjection(prisma),
-    // Warehouse demand. Reads TMS orders through the port so the projection itself stays
-    // inside WMS. See .claude/rules/module-boundaries.md.
-    new WmsFulfilmentOrderProjection(prisma, new OrderFulfilmentDemandSource(prisma)),
-    // The warehouse's copy of each TMS unit (#357), read through the port in the same way.
-    new HandlingUnitProjection(prisma, new TrackableUnitHandlingSource(prisma)),
   ];
 
   // Add email handler if email service is available
@@ -140,12 +120,6 @@ export async function registerEventHandlers(
   }
 
   // Add cold chain compliance handler if storage provider is available
-  // The transport side of the load-plan seam. Without it a load still completes and seals; it
-  // just produces no BOL, which is exactly what a standalone FinnWMS wants.
-  if (documentService) {
-    handlers.push(new BolGenerationHandler(prisma, documentService, eventBus));
-
-  }
 
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
@@ -203,21 +177,11 @@ export async function registerEventHandlers(
   // Brokerage: margin alert - creates issues when margin drops below threshold
   handlers.push(new MarginAlertHandler(prisma));
 
-  // WMS: auto-replenishment - reacts to pick line completion / inventory adjustments and fires CHECK_REPLENISHMENT
   if (commandBus) {
     handlers.push(shipmentRoutePlanningHandler(prisma, commandBus));
-    handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
-    handlers.push(new HandlingUnitReturnsHandler(commandBus));
-    handlers.push(new WarehouseReturnsStockHandler(commandBus));
     handlers.push(new ConsolidationProgressHandler(new ConsolidationRepository(prisma), commandBus));
   }
 
-  // WMS: the issue engine raises pack-audit issues from the registry entry
-  // (pack_audit_variance); this handler only maintains the PackAudit.issueId
-  // back-link the admin list uses for jump-to-issue
-  handlers.push(new PackAuditLinkHandler(prisma, new OpenIssueLookup(prisma)));
-  // WMS records the BOL transport generated for a load plan (#359)
-  handlers.push(new LoadPlanBolLinkHandler(prisma));
 
   // Deterministic Issue Engine: maps shipment-exception trigger/recovery events
   // onto issues via the Issue Type registry (create/escalate/auto-resolve). This
@@ -238,7 +202,7 @@ export async function registerEventHandlers(
   // Add triage agent handler — automation rules run first in its pipeline,
   // LLM is only called when no deterministic rule matched
   if (llmProvider && commandBus) {
-    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus, automationRuleHandler, new WarehouseQueries(prisma)));
+    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus, automationRuleHandler));
     console.log('[EventBus] Triage agent enabled (LLM provider configured)');
   }
 

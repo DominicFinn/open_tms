@@ -3,9 +3,6 @@
  * pallet positions, linear feet, and rolled-up unit class from raw line + pack
  * input. Customers never enter density or linear feet; they enter pieces +
  * packaging + dims, and we compute the rest.
- *
- * Distinct from the WMS-side CartonizationService (which picks the smallest
- * shipping carton from a CartonCatalog). This one is rating-focused.
  */
 
 import { LtlRatingService } from '../LtlRatingService.js';

@@ -2,7 +2,6 @@ import { PrismaClient, Shipment, CarrierCutoff } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { createEvent } from '../../events/createEvent.js';
-import type { IFulfilmentProgress } from '../../ports/warehouseQueries.js';
 
 export type CutoffSeverity = 'minor' | 'warning' | 'critical';
 
@@ -13,20 +12,12 @@ export interface EvaluationResult {
   projectedReadyAt: Date | null;
   bufferMinutes: number | null;
   severity: CutoffSeverity | null;
-  blockingStage: string | null;
-  pendingPickTasks: number;
-  pendingPackTasks: number;
-  pendingLoadPlan: boolean;
   notified: boolean;
 }
 
 export interface CutoffMonitorConfig {
-  /** Minutes a pending pick task adds to projected ready time. Default 45. */
-  minutesPerPendingPick: number;
-  /** Minutes a pending pack task adds. Default 15. */
-  minutesPerPendingPack: number;
-  /** Minutes added when no load plan is created yet. Default 30. */
-  minutesNoLoadPlan: number;
+  /** Minutes a shipment that has not left yet needs before it can be handed over. Default 30. */
+  minutesToReady: number;
   /** Threshold for "warning" severity in minutes. |buffer| < this = warning. Default 30. */
   warningBufferMinutes: number;
   /** Threshold for "critical" severity. |buffer| < this OR already past = critical. Default 10. */
@@ -36,9 +27,7 @@ export interface CutoffMonitorConfig {
 }
 
 const DEFAULT_CONFIG: CutoffMonitorConfig = {
-  minutesPerPendingPick: 45,
-  minutesPerPendingPack: 15,
-  minutesNoLoadPlan: 30,
+  minutesToReady: 30,
   warningBufferMinutes: 30,
   criticalBufferMinutes: 10,
   dedupWindowMinutes: 30,
@@ -123,8 +112,6 @@ export class ShipmentCutoffMonitorService {
   constructor(
     private prisma: PrismaClient,
     private eventBus: PgBossEventBus,
-    /** Open warehouse work, asked of WMS rather than read from its tables (#359). */
-    private fulfilment: IFulfilmentProgress,
     config: Partial<CutoffMonitorConfig> = {},
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -143,21 +130,18 @@ export class ShipmentCutoffMonitorService {
         archived: false,
         carrierId: { not: null },
       },
-      include: {
-        orderShipments: { select: { orderId: true } },
-      },
     });
 
     const results: EvaluationResult[] = [];
     for (const s of shipments) {
-      const result = await this.evaluateShipment(s as Shipment & { orderShipments: { orderId: string }[] }, now, s.orgId);
+      const result = await this.evaluateShipment(s, now, s.orgId);
       results.push(result);
     }
     return results;
   }
 
   async evaluateShipment(
-    shipment: Shipment & { orderShipments: { orderId: string }[] },
+    shipment: Shipment,
     now: Date,
     orgId: string,
   ): Promise<EvaluationResult> {
@@ -168,10 +152,6 @@ export class ShipmentCutoffMonitorService {
       projectedReadyAt: null,
       bufferMinutes: null,
       severity: null,
-      blockingStage: null,
-      pendingPickTasks: 0,
-      pendingPackTasks: 0,
-      pendingLoadPlan: false,
       notified: false,
     };
 
@@ -184,36 +164,9 @@ export class ShipmentCutoffMonitorService {
     if (!resolved) return base; // carrier has no cutoff for today
     base.cutoffAt = resolved.cutoffAt;
 
-    // Already past cutoff: flag critical immediately
-    const orderIds = shipment.orderShipments.map(o => o.orderId);
-    const progress = orderIds.length > 0
-      ? await this.fulfilment.forShipment(orgId, shipment.id, orderIds)
-      : { pendingPickTasks: 0, pendingPackTasks: 0, openLoadPlans: 0 };
-    const pickCount = progress.pendingPickTasks;
-    const packCount = progress.pendingPackTasks;
-    const loadPlanCount = progress.openLoadPlans;
-
-    base.pendingPickTasks = pickCount;
-    base.pendingPackTasks = packCount;
-    base.pendingLoadPlan = loadPlanCount === 0;
-
-    const extraMinutes =
-      pickCount * this.config.minutesPerPendingPick +
-      packCount * this.config.minutesPerPendingPack +
-      (base.pendingLoadPlan ? this.config.minutesNoLoadPlan : 0);
-
-    base.projectedReadyAt = new Date(now.getTime() + extraMinutes * 60_000);
-    base.blockingStage = pickCount > 0 ? 'picking'
-                        : packCount > 0 ? 'packing'
-                        : base.pendingLoadPlan ? 'load_planning'
-                        : 'ready';
-
-    // If everything is already complete, no risk. If it was previously flagged,
-    // announce recovery so the Issue Engine auto-resolves the open cutoff issue.
-    if (extraMinutes === 0 && shipment.status === 'booked') {
-      await this.maybeEmitCutoffCleared(shipment, now, orgId);
-      return base;
-    }
+    // BUSINESS RULE: a shipment that has not left yet needs a fixed handling allowance before it
+    // can be handed to the carrier. It is at risk when that allowance runs past today's cutoff.
+    base.projectedReadyAt = new Date(now.getTime() + this.config.minutesToReady * 60_000);
 
     const bufferMs = resolved.cutoffAt.getTime() - base.projectedReadyAt.getTime();
     const bufferMinutes = Math.round(bufferMs / 60_000);
@@ -301,10 +254,6 @@ export class ShipmentCutoffMonitorService {
         projectedReadyAt: result.projectedReadyAt?.toISOString(),
         bufferMinutes: result.bufferMinutes,
         severity: result.severity,
-        blockingStage: result.blockingStage,
-        pendingPickTasks: result.pendingPickTasks,
-        pendingPackTasks: result.pendingPackTasks,
-        pendingLoadPlan: result.pendingLoadPlan,
       },
     });
     await this.eventBus.publish(event);

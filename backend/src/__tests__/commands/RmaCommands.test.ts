@@ -237,7 +237,7 @@ describe('RejectRmaCommand', () => {
 });
 
 describe('ReceiveRmaLineCommand', () => {
-  it('records physical receipt and moves unit to quarantine', async () => {
+  it('records physical receipt and links the returned unit', async () => {
     const mockLine = {
       id: 'line-1',
       rmaId: 'rma-1',
@@ -252,7 +252,6 @@ describe('ReceiveRmaLineCommand', () => {
         findMany: jest.fn().mockResolvedValue([{ ...mockLine, receivedQuantity: 3 }]),
       },
       rma: { update: jest.fn().mockResolvedValue({}) },
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ zoneId: 'zone-q' }) },
       trackableUnit: {
         findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
         update: jest.fn().mockResolvedValue({}),
@@ -270,7 +269,6 @@ describe('ReceiveRmaLineCommand', () => {
       createTestCommand(RECEIVE_RMA_LINE, {
         rmaLineId: 'line-1',
         receivedQuantity: 3,
-        quarantineBinId: 'bin-q',
         trackableUnitId: 'unit-1',
       })
     );
@@ -281,12 +279,12 @@ describe('ReceiveRmaLineCommand', () => {
     expect(tx.rmaLine.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'line-1', rma: { orgId: 'test-org' } } })
     );
-    // Returns no longer write the unit's bin and quality: the warehouse owns them, and hears by event (#357)
+    // Receipt records the link to the unit and nothing else about it
     expect(tx.trackableUnit.update).not.toHaveBeenCalled();
-    expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toEqual({
-      rmaId: expect.any(String), unitId: 'unit-1', binId: 'bin-q', qualityStatus: 'quarantine',
+    expect(tx.rmaLine.update).toHaveBeenCalledWith({
+      where: { id: 'line-1', rma: { orgId: 'test-org' } },
+      data: { receivedQuantity: 3, trackableUnitId: 'unit-1' },
     });
-    expect(tx.warehouseBin.findUnique).not.toHaveBeenCalled();
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_GOODS_RECEIVED)).toBe(true);
   });
 
@@ -299,7 +297,6 @@ describe('ReceiveRmaLineCommand', () => {
         update: jest.fn(),
       },
       trackableUnit: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
-      warehouseBin: { findUnique: jest.fn() },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -313,7 +310,6 @@ describe('ReceiveRmaLineCommand', () => {
       createTestCommand(RECEIVE_RMA_LINE, {
         rmaLineId: 'line-1',
         receivedQuantity: 3,
-        quarantineBinId: 'bin-q',
         trackableUnitId: 'foreign-unit',
       })
     );
@@ -368,7 +364,6 @@ describe('InspectRmaLineCommand', () => {
         findMany: jest.fn().mockResolvedValue([{ id: 'line-1', disposition: 'pending' }]),
       },
       rma: { update: jest.fn().mockResolvedValue({}) },
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ zoneId: 'zone-a' }) },
       trackableUnit: { update: jest.fn().mockResolvedValue({}) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -384,7 +379,6 @@ describe('InspectRmaLineCommand', () => {
         rmaLineId: 'line-1',
         inspectionStatus: 'pass',
         disposition: 'restock',
-        routeToBinId: 'bin-bulk',
       })
     );
 
@@ -392,10 +386,6 @@ describe('InspectRmaLineCommand', () => {
     expect(result.data?.disposition).toBe('restock');
     expect(result.data?.allLinesDispositioned).toBe(true);
     expect(tx.trackableUnit.update).not.toHaveBeenCalled();
-    expect(result.events.find(e => e.type === EVENT_TYPES.RMA_UNIT_MOVED)?.payload).toMatchObject({
-      binId: 'bin-bulk', qualityStatus: 'available',
-    });
-    expect(tx.warehouseBin.findUnique).not.toHaveBeenCalled();
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_LINE_INSPECTED)).toBe(true);
     expect(result.events.some(e => e.type === EVENT_TYPES.RMA_DISPOSITION_SET)).toBe(true);
   });
@@ -454,14 +444,14 @@ describe('InspectRmaLineCommand', () => {
 });
 
 describe('CompleteRmaCommand', () => {
-  it('completes RMA and announces each restock line for the warehouse, without touching stock (#359)', async () => {
+  it('completes an RMA with a restock line, using the suggested refund', async () => {
     const restockLine = {
       id: 'line-1', sku: 'SKU-A', disposition: 'restock',
-      receivedQuantity: 2, currentBinId: 'bin-restock', trackableUnitId: 'unit-1',
+      receivedQuantity: 2, trackableUnitId: 'unit-1',
     };
     const scrapLine = {
       id: 'line-2', sku: 'SKU-B', disposition: 'scrap',
-      receivedQuantity: 1, currentBinId: null, trackableUnitId: null,
+      receivedQuantity: 1, trackableUnitId: null,
     };
     const mockRma = {
       id: 'rma-1', rmaNumber: 'RMA-001', status: 'dispositioning',
@@ -488,15 +478,16 @@ describe('CompleteRmaCommand', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.data?.restockTasksCreated).toBe(1);
     expect(result.data?.actualRefundCents).toBe(5000);  // uses suggested
-    const restocks = result.events.filter(e => e.type === EVENT_TYPES.RMA_RESTOCK_REQUESTED);
-    expect(restocks).toHaveLength(1);
-    expect(restocks[0]).toMatchObject({
-      entityId: 'line-1',
-      payload: { rmaId: 'rma-1', rmaLineId: 'line-1', sku: 'SKU-A', quantity: 2, binId: 'bin-restock', unitId: 'unit-1' },
+    const completed = result.events.find(e => e.type === EVENT_TYPES.RMA_COMPLETED);
+    expect(completed?.payload).toMatchObject({
+      rmaNumber: 'RMA-001',
+      actualRefundCents: 5000,
+      dispositions: [
+        { sku: 'SKU-A', disposition: 'restock', qty: 2 },
+        { sku: 'SKU-B', disposition: 'scrap', qty: 1 },
+      ],
     });
-    expect(result.events.some(e => e.type === EVENT_TYPES.RMA_COMPLETED)).toBe(true);
   });
 
   it('emits refund adjustment event when finance overrides suggested amount', async () => {
@@ -504,14 +495,13 @@ describe('CompleteRmaCommand', () => {
       id: 'rma-1', rmaNumber: 'RMA-001', status: 'dispositioning',
       suggestedRefundCents: 5000,
       lines: [
-        { id: 'line-1', sku: 'SKU-A', disposition: 'scrap', receivedQuantity: 1, currentBinId: null },
+        { id: 'line-1', sku: 'SKU-A', disposition: 'scrap', receivedQuantity: 1 },
       ],
     };
     const tx = {
       rma: { findUnique: jest.fn().mockResolvedValue(mockRma), update: jest.fn() },
       inventoryRecord: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       inventoryTransaction: { create: jest.fn() },
-      warehouseBin: { findUnique: jest.fn() },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {

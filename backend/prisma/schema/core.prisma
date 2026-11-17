@@ -54,9 +54,6 @@ model Customer {
   customFieldVersionId String? // Version of custom field definitions used
   customFieldValues    Json? // { "fieldKey": value, ... }
 
-  // WMS relations
-  ownedTrackableUnits TrackableUnit[]   @relation("OwnedUnits")
-
   // Customer Portal
   customerUsers CustomerUser[]
 
@@ -131,14 +128,6 @@ model Location {
   customFieldVersionId String?
   customFieldValues    Json?
 
-  // Warehouse app preferences
-  preferredLocationId String? // Favourite origin location for warehouse app
-
-  // Warehouse rows reference a Location by a soft string id rather than a foreign key (#280), so
-  // there are no back-relations to them here: a schema without those tables still resolves, which
-  // is what a standalone FinnWMS needs. Inventory and manifest ingest keep theirs, because both
-  // are still keyed on Location until inventory carries a facility.
-
   consolidationStops ConsolidationStop[]
   @@index([orgId])
 }
@@ -187,9 +176,6 @@ model Organization {
   // Cold Chain & Compliance
   autoDeliverShipmentDocs Boolean @default(false) // Auto-deliver compliance docs to customers on shipment complete
 
-  // Warehouse App
-  magicLinksEnabled Boolean @default(true) // Allow QR code / magic link login
-  warehouseScanMode String  @default("hid") // "hid" (built-in scanner) or "camera"
 
   // Maps & Geocoding.
   // Two keys, because one cannot do both jobs. The browser key is served to the client for the
@@ -436,9 +422,6 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
 
-  // Warehouse app preferences
-  preferredLocationId String? // Favourite origin location for warehouse app
-
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -447,8 +430,6 @@ model User {
   roles          UserRole[]
   sessions       Session[]
   auditLogs      AuditLog[]      @relation("AuditUser")
-  magicLinks     MagicLink[]
-  loginAuditLogs LoginAuditLog[]
   commissions    Commission[]
 
   @@unique([authProvider, authProviderId])
@@ -890,16 +871,6 @@ model ProjectionCheckpoint {
   updatedAt      DateTime @updatedAt
 }
 
-/// Where the event bridge relay has read up to in an outbox on the other stack (ADR 0006).
-/// One row per outbox. txId is the xid8 of the last relayed row, held as text.
-model EventBridgeCursor {
-  name         String   @id
-  txId         String
-  position     BigInt
-  relayedCount Int      @default(0)
-  updatedAt    DateTime @updatedAt
-}
-
 model IssueReadModel {
   id               String       @id
   organization     Organization @relation(fields: [orgId], references: [id])
@@ -957,43 +928,6 @@ model IssueReadModel {
   @@index([orgId, isNoise, status])
   @@index([orgId, slaBreach])
   @@index([orgId, slaDeadline])
-}
-
-// ─── Warehouse App: Magic Links ─────────────────────────────────────────────
-
-model MagicLink {
-  id        String    @id @default(uuid())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  tokenHash String    @unique // SHA-256 hash of the magic link token
-  expiresAt DateTime? // Null = never expires (persistent QR code)
-  active    Boolean   @default(true)
-  // Which scoped session this link mints on validation: 'warehouse' (WMS task surface) or
-  // 'inventory' (the lighter inventory-app surface, #233). Defaults to 'warehouse' for
-  // pre-existing links.
-  scope     String    @default("warehouse")
-  createdAt DateTime  @default(now())
-
-  @@index([userId])
-  @@index([tokenHash])
-}
-
-// ─── Warehouse App: Login Audit Log ─────────────────────────────────────────
-
-model LoginAuditLog {
-  id         String   @id @default(uuid())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String
-  method     String // "password", "magic_link", "oauth_google", "oauth_microsoft"
-  ipAddress  String?
-  userAgent  String?
-  success    Boolean  @default(true)
-  failReason String? // "invalid_password", "locked", "expired_link", etc.
-  createdAt  DateTime @default(now())
-
-  @@index([userId])
-  @@index([createdAt])
-  @@index([method])
 }
 
 // ─── Comments (polymorphic, any entity) ─────────────────────────────────────

@@ -138,34 +138,6 @@ export const TOKENS = {
   IQuoteRepository: Symbol.for('IQuoteRepository'),
   ILtlRatingService: Symbol.for('ILtlRatingService'),
 
-  // Inventory tokens
-  IInventoryObservationRepository: Symbol.for('IInventoryObservationRepository'),
-
-  // WMS tokens
-  IFacilityRepository: Symbol.for('IFacilityRepository'),
-  IPutawayRepository: Symbol.for('IPutawayRepository'),
-  IWaveRepository: Symbol.for('IWaveRepository'),
-  ICycleCountRepository: Symbol.for('ICycleCountRepository'),
-  ILoadPlanRepository: Symbol.for('ILoadPlanRepository'),
-  IWmsDashboardRepository: Symbol.for('IWmsDashboardRepository'),
-  IPackingRepository: Symbol.for('IPackingRepository'),
-  IReplenishmentRuleRepository: Symbol.for('IReplenishmentRuleRepository'),
-  IWaveTemplateRepository: Symbol.for('IWaveTemplateRepository'),
-  IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
-  IReceivingRepository: Symbol.for('IReceivingRepository'),
-  IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
-  ICartonizationService: Symbol.for('ICartonizationService'),
-  IFulfilmentDemandSource: Symbol.for('IFulfilmentDemandSource'),
-  // Cross-module ports (#359). Registered by the implementing module, resolved by the caller.
-  IFulfilmentProgress: Symbol.for('IFulfilmentProgress'),
-  IPackTaskContext: Symbol.for('IPackTaskContext'),
-  ICartonCatalogue: Symbol.for('ICartonCatalogue'),
-  IBinDirectory: Symbol.for('IBinDirectory'),
-  IOperationsSignals: Symbol.for('IOperationsSignals'),
-  IOpenIssueLookup: Symbol.for('IOpenIssueLookup'),
-  IShipmentDirectory: Symbol.for('IShipmentDirectory'),
-  ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),
-
   // Order line-item rating tokens (Phase 1)
   IModeRulesService: Symbol.for('IModeRulesService'),
   IOrderCartonizationService: Symbol.for('IOrderCartonizationService'),

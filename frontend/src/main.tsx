@@ -408,6 +408,16 @@ root.render(
           {/* Redirect legacy /admin paths to /settings */}
           <Route path="admin" element={<Navigate to="/settings" replace />} />
           <Route path="admin/*" element={<Navigate to="/settings" replace />} />
+
+          {/* The pages that sat under /wms moved, and the warehouse surfaces are gone. Old bookmarks
+              land somewhere useful instead of on a blank page. */}
+          <Route path="wms/returns/*" element={<Navigate to="/returns" replace />} />
+          <Route path="wms/cutoff-monitor" element={<Navigate to="/cutoff-monitor" replace />} />
+          <Route path="wms/carrier-cutoffs" element={<Navigate to="/carrier-cutoffs" replace />} />
+          <Route path="wms/packaging-types" element={<Navigate to="/packaging-types" replace />} />
+          <Route path="wms/*" element={<Navigate to="/" replace />} />
+          <Route path="warehouse/*" element={<Navigate to="/" replace />} />
+          <Route path="inventory-app/*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
       </MapProvider>

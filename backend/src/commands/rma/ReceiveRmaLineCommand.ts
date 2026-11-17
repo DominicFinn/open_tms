@@ -5,13 +5,11 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 
 /**
- * Records physical receipt of a returned item at the dock.
- * Moves the item to the quarantine zone for inspection.
+ * Records physical receipt of a returned item, ready for inspection.
  */
 export interface ReceiveRmaLinePayload {
   rmaLineId: string;
   receivedQuantity: number;
-  quarantineBinId?: string;               // where the item is parked for inspection
   trackableUnitId?: string;               // if physically tracked
 }
 
@@ -56,34 +54,15 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
       });
       if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
     }
-    // The bin is a warehouse row. The route checks it exists before dispatching, and the warehouse
-    // checks it again when it moves the unit (#359).
 
     // Update the line
     await tx.rmaLine.update({
       where: { id: line.id, rma: { orgId: command.orgId } },
       data: {
         receivedQuantity: p.receivedQuantity,
-        currentBinId: p.quarantineBinId ?? line.currentBinId,
         trackableUnitId: p.trackableUnitId ?? line.trackableUnitId,
       },
     });
-
-    // Moving the unit is the warehouse's job: it holds the unit's bin and quality on its
-    // HandlingUnit, so it hears about the move by event (#357).
-    if (p.trackableUnitId && p.quarantineBinId) {
-      emit(this.createEvent(command, {
-        type: EVENT_TYPES.RMA_UNIT_MOVED,
-        entityType: 'rma_line',
-        entityId: line.id,
-        payload: {
-          rmaId: rma.id,
-          unitId: p.trackableUnitId,
-          binId: p.quarantineBinId,
-          qualityStatus: 'quarantine',
-        },
-      }));
-    }
 
     // If RMA was authorized, bump to received
     if (rma.status === 'authorized') {

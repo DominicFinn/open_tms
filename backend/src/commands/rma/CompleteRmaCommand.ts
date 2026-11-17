@@ -5,9 +5,7 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 
 /**
- * Completes an RMA after all lines are dispositioned.
- * Announces each restock line for the warehouse to put back into stock, and triggers credit note
- * creation.
+ * Completes an RMA after all lines are dispositioned, and triggers credit note creation.
  */
 export interface CompleteRmaPayload {
   rmaId: string;
@@ -20,7 +18,7 @@ export const COMPLETE_RMA = 'rma.complete';
 
 export class CompleteRmaCommandHandler extends BaseCommandHandler<
   CompleteRmaPayload,
-  { id: string; status: string; actualRefundCents: number; restockTasksCreated: number }
+  { id: string; status: string; actualRefundCents: number }
 > {
   readonly commandType = COMPLETE_RMA;
 
@@ -32,7 +30,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
     command: Command<CompleteRmaPayload>,
     tx: TransactionClient,
     emit: EmitFn
-  ): Promise<{ id: string; status: string; actualRefundCents: number; restockTasksCreated: number }> {
+  ): Promise<{ id: string; status: string; actualRefundCents: number }> {
     const p = command.payload;
 
     const rma = await tx.rma.findUnique({
@@ -50,28 +48,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
 
     // Auto-calculate actual refund if not provided
     const actualRefundCents = p.actualRefundCents ?? rma.suggestedRefundCents;
-
-    // Restocking is the warehouse's job: it owns the stock and the bin. Each restock line is
-    // announced, and the warehouse puts it back into stock, once per line (#359).
-    let restockTasksCreated = 0;
-    for (const line of rma.lines) {
-      if (line.disposition === 'restock' && line.receivedQuantity > 0 && line.currentBinId) {
-        emit(this.createEvent(command, {
-          type: EVENT_TYPES.RMA_RESTOCK_REQUESTED,
-          entityType: 'rma_line',
-          entityId: line.id,
-          payload: {
-            rmaId: rma.id,
-            rmaLineId: line.id,
-            sku: line.sku,
-            quantity: line.receivedQuantity,
-            binId: line.currentBinId,
-            unitId: line.trackableUnitId ?? null,
-          },
-        }));
-        restockTasksCreated++;
-      }
-    }
 
     // Complete the RMA
     const refundAdjusted = p.actualRefundCents !== undefined && p.actualRefundCents !== rma.suggestedRefundCents;
@@ -109,7 +85,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
         orderId: rma.orderId,
         actualRefundCents,
         suggestedRefundCents: rma.suggestedRefundCents,
-        restockTasksCreated,
         dispositions: rma.lines.map(l => ({ sku: l.sku, disposition: l.disposition, qty: l.receivedQuantity })),
       },
     }));
@@ -118,7 +93,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
       id: rma.id,
       status: 'completed',
       actualRefundCents,
-      restockTasksCreated,
     };
   }
 }

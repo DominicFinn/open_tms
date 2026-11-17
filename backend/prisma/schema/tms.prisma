@@ -115,11 +115,6 @@ model Shipment {
   charges                  Charge[]
   shipmentFinancialSummary ShipmentFinancialSummary?
 
-  // Warehouse app
-  accessories ShipmentAccessory[] // Door seals, BLE sensors, etc.
-  flags       ShipmentFlag[] // Warehouse user flagged issues
-  launchedAt  DateTime? // When warehouse user completed launch workflow
-  launchedBy  String? // User ID who launched
 
   // Carrier tracking API
   trackingNumber        String? // Carrier tracking number (PRO, AWB, etc.)
@@ -364,7 +359,7 @@ model ShipmentEvent {
 }
 
 // Carrier cutoff times: latest handoff time for same-day pickup or a service-level guarantee.
-// The monitor compares projected warehouse-ready-time against these rows to fire shipment.cutoff_at_risk.
+// The monitor compares a shipment's projected ready time against these rows to fire shipment.cutoff_at_risk.
 model CarrierCutoff {
   id              String   @id @default(uuid())
   carrierId       String
@@ -860,41 +855,12 @@ model TrackableUnit {
   packagingTypeId String?
   packagingType   PackagingType? @relation(fields: [packagingTypeId], references: [id])
 
-  // WMS fields
-  currentBinId    String?
-  currentBin      WarehouseBin?   @relation("UnitCurrentBin", fields: [currentBinId], references: [id])
-  parentUnitId    String?
-  parentUnit      TrackableUnit?  @relation("UnitNesting", fields: [parentUnitId], references: [id])
-  childUnits      TrackableUnit[] @relation("UnitNesting")
-  currentZoneId   String?
-  currentZone     WarehouseZone?  @relation("UnitCurrentZone", fields: [currentZoneId], references: [id])
-  lotNumber       String?
-  expiryDate      DateTime?
-  receivedAt      DateTime?
-  ownerCustomerId String?
-  ownerCustomer   Customer?       @relation("OwnedUnits", fields: [ownerCustomerId], references: [id])
-  qualityStatus   String          @default("available") // available, hold, quarantine, damaged
-
-  // WMS task relations
-  putawayTasks          PutawayTask[]
-  receivingLines        ReceivingLine[]
-  pickLines             PickLine[]
-  packLines             PackLine[]
-  allocations           Allocation[]
-  inventoryTransactions InventoryTransaction[]
-  stagingAssignments    StagingAssignment[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([orderId, sequenceNumber])
   @@index([orderId])
   @@index([currentStopId])
-  @@index([currentBinId])
-  @@index([currentZoneId])
-  @@index([parentUnitId])
-  @@index([ownerCustomerId])
-  @@index([lotNumber])
 }
 
 model PendingLaneRequest {
@@ -2014,59 +1980,6 @@ model ColdChainExcursion {
   @@index([startedAt])
 }
 
-// ─── Warehouse App: Shipment Accessories ────────────────────────────────────
-
-model ShipmentAccessory {
-  id            String   @id @default(uuid())
-  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  shipmentId    String
-  accessoryType String // "door_seal", "temp_sensor_front", "temp_sensor_middle", "temp_sensor_back", "door_sensor", "ble_tracker"
-  alias         String? // User-friendly label
-  identifier    String? // Physical ID (barcode, serial number)
-  isIoT         Boolean  @default(false) // true = BLE/cellular device, false = physical seal
-  deviceId      String? // If IoT, link to Device
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  @@index([shipmentId])
-  @@index([deviceId])
-}
-
-// ─── Warehouse App: Shipment Flags ──────────────────────────────────────────
-
-model ShipmentFlag {
-  id            String    @id @default(uuid())
-  shipment      Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  shipmentId    String
-  flaggedBy     String // User ID
-  flaggedByName String // User display name for quick lookup
-  reason        String // Free-text description of the issue
-  resolved      Boolean   @default(false)
-  resolvedBy    String?
-  resolvedAt    DateTime?
-  createdAt     DateTime  @default(now())
-
-  @@index([shipmentId])
-  @@index([resolved])
-}
-
-// ─── Warehouse App: WiFi Connectivity Log ───────────────────────────────────
-
-model ConnectivityLog {
-  id         String   @id @default(uuid())
-  orgId      String
-  userId     String?
-  deviceInfo String? // User agent / device model
-  eventType  String // "wifi_lost", "wifi_restored", "slow_connection"
-  locationId String? // Which warehouse
-  duration   Int? // Seconds offline (for restored events)
-  metadata   Json? // Signal strength, SSID, etc.
-  createdAt  DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([locationId])
-}
-
 // ─── Agent Decision Logging (AI Compliance & Audit) ───────────────────────────
 // Every AI agent decision is logged for compliance, auditability, and
 // automation discovery. Captures what was decided, why, what context was
@@ -2642,7 +2555,6 @@ model RmaLine {
 
   // Physical tracking
   trackableUnitId String? // if physically tracked
-  currentBinId    String? // where item is right now (quarantine, refurb zone, etc.)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

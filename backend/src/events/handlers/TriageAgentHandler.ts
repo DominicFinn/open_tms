@@ -24,7 +24,6 @@ import { AutomationRuleHandler } from './AutomationRuleHandler.js';
 import { EVENT_TYPES } from '../eventTypes.js';
 import { priorityRank } from '../../services/issues/issueTypeRegistry.js';
 import { randomUUID } from 'crypto';
-import type { IPackTaskContext } from '../../ports/warehouseQueries.js';
 
 /** Unified condition format shared between agent decisions and automation rules */
 export interface RuleCondition {
@@ -134,8 +133,6 @@ export class TriageAgentHandler implements IEventHandler {
     private llm: ILlmProvider,
     private commandBus: ICommandBus,
     automationRules?: AutomationRuleHandler | null,
-    /** Pack task context, asked of WMS rather than read from its tables (#359). */
-    private packTaskContext: IPackTaskContext | null = null,
   ) {
     this.automationRules = automationRules ?? null;
   }
@@ -331,17 +328,6 @@ export class TriageAgentHandler implements IEventHandler {
         ctx.openIssueCount = await this.prisma.issue.count({
           where: { orgId: issue.orgId, sourceEntityType: 'shipment', sourceEntityId: shipment.id, status: { in: ['open', 'in_progress'] } },
         });
-      }
-    }
-    // WMS sources (#133): pack-audit issues attach to a pack task. Give the
-    // agent the task, its lines, and the recent audit history so it can judge
-    // one-off scale drift vs a repeating mis-pack.
-    if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId && this.packTaskContext) {
-      const context = await this.packTaskContext.get(issue.orgId, issue.sourceEntityId);
-      if (context) {
-        const { recentAudits, ...packTask } = context;
-        ctx.packTask = packTask;
-        ctx.recentAudits = recentAudits;
       }
     }
     return ctx;

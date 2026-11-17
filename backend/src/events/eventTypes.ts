@@ -321,107 +321,14 @@ export const EVENT_TYPES = {
   SOP_AUDIT_COMPLETED: 'sop_audit.completed',
   SOP_AUDIT_FAILED: 'sop_audit.failed',
 
-  // WMS: Warehouse Zones & Bins
-  // Facility — the WMS root (Phase 2a, #217)
-  FACILITY_CREATED: 'facility.created',
-  FACILITY_UPDATED: 'facility.updated',
-  FACILITY_ARCHIVED: 'facility.archived',
-
-  WAREHOUSE_ZONE_CREATED: 'warehouse_zone.created',
-  WAREHOUSE_ZONE_UPDATED: 'warehouse_zone.updated',
-  WAREHOUSE_ZONE_ARCHIVED: 'warehouse_zone.archived',
-  WAREHOUSE_BIN_CREATED: 'warehouse_bin.created',
-  WAREHOUSE_BIN_UPDATED: 'warehouse_bin.updated',
-  WAREHOUSE_BIN_ARCHIVED: 'warehouse_bin.archived',
-  WAREHOUSE_BIN_BULK_CREATED: 'warehouse_bin.bulk_created',
-
-  // WMS: Receiving
-  RECEIVING_APPOINTMENT_CREATED: 'receiving_appointment.created',
-  RECEIVING_APPOINTMENT_CHECKED_IN: 'receiving_appointment.checked_in',
-  RECEIVING_APPOINTMENT_CANCELLED: 'receiving_appointment.cancelled',
-  RECEIVING_TASK_CREATED: 'receiving_task.created',
-  RECEIVING_TASK_STARTED: 'receiving_task.started',
-  RECEIVING_LINE_RECORDED: 'receiving_line.recorded',
-  RECEIVING_LINE_INSPECTED: 'receiving_line.inspected',
-  RECEIVING_TASK_COMPLETED: 'receiving_task.completed',
-
-  // WMS: Putaway
-  PUTAWAY_RULE_CREATED: 'putaway_rule.created',
-  PUTAWAY_TASK_CREATED: 'putaway_task.created',
-  PUTAWAY_TASK_ASSIGNED: 'putaway_task.assigned',
-  PUTAWAY_TASK_STARTED: 'putaway_task.started',
-  PUTAWAY_TASK_COMPLETED: 'putaway_task.completed',
-  /** A handling unit was moved, or its quality changed, outside a putaway (#357). */
-  HANDLING_UNIT_MOVED: 'handling_unit.moved',
-  PUTAWAY_TASK_DEVIATION: 'putaway_task.deviation',
-
-  // WMS: Inventory
-  INVENTORY_RECEIVED: 'inventory.received',
-  INVENTORY_ADJUSTED: 'inventory.adjusted',
-  /** Returned goods put back into stock (#359). */
-  INVENTORY_RETURN_RECEIVED: 'inventory.return_received',
-  INVENTORY_TRANSFERRED: 'inventory.transferred',
-
-  // Inventory: Observations (#233) — ad hoc scan/spot-check records, distinct from CycleCount
-  INVENTORY_OBSERVATION_RECORDED: 'inventory_observation.recorded',
-
-  // WMS: Waves & Picking
-  WAVE_CREATED: 'wave.created',
-  WAVE_RELEASED: 'wave.released',
-  WAVE_COMPLETED: 'wave.completed',
-  WAVE_CANCELLED: 'wave.cancelled',
-  PICK_TASK_CREATED: 'pick_task.created',
-  PICK_TASK_ASSIGNED: 'pick_task.assigned',
-  PICK_LINE_COMPLETED: 'pick_line.completed',
-  PICK_LINE_SHORT: 'pick_line.short',
-  PICK_TASK_COMPLETED: 'pick_task.completed',
-
-  // WMS: Packing & Loading
-  PACK_TASK_CREATED: 'pack_task.created',
-  PACK_LINE_VERIFIED: 'pack_line.verified',
-  PACK_TASK_COMPLETED: 'pack_task.completed',
-  PACK_AUDIT_RECORDED: 'pack.audit_recorded',
-  PACK_AUDIT_VARIANCE_DETECTED: 'pack.audit_variance_detected',
-  STAGING_ASSIGNMENT_CREATED: 'staging_assignment.created',
-  LOADING_COMPLETED: 'loading.completed',
-
-  // WMS: Cycle Counting
-  CYCLE_COUNT_CREATED: 'cycle_count.created',
-  CYCLE_COUNT_STARTED: 'cycle_count.started',
-  CYCLE_COUNT_LINE_RECORDED: 'cycle_count.line_recorded',
-  CYCLE_COUNT_COMPLETED: 'cycle_count.completed',
-  CYCLE_COUNT_VARIANCE_DETECTED: 'cycle_count.variance_detected',
-
-  // WMS: Replenishment
-  WAVE_TEMPLATE_CREATED: 'wave_template.created',
-  WAVE_TEMPLATE_UPDATED: 'wave_template.updated',
-  WAVE_TEMPLATE_DELETED: 'wave_template.deleted',
-  REPLENISHMENT_RULE_CREATED: 'replenishment_rule.created',
-  REPLENISHMENT_RULE_UPDATED: 'replenishment_rule.updated',
-  REPLENISHMENT_RULE_DELETED: 'replenishment_rule.deleted',
-  INVENTORY_BELOW_MINIMUM: 'inventory.below_minimum',
-  REPLENISHMENT_TRIGGERED: 'replenishment.triggered',
-
-  // WMS: Load Planning
-  LOAD_PLAN_CREATED: 'load_plan.created',
-  LOAD_PLAN_COMPLETED: 'load_plan.completed',
-  LOAD_PLAN_BOL_GENERATED: 'load_plan.bol_generated',
-
-  // WMS: Cross-dock
-  CROSS_DOCK_SORTED: 'cross_dock.sorted',
-
-  // WMS: Returns / RMA
+  // Returns / RMA
   RMA_REQUESTED: 'rma.requested',
   RMA_AUTHORIZED: 'rma.authorized',
   RMA_REJECTED: 'rma.rejected',
   RMA_GOODS_RECEIVED: 'rma.goods_received',
   RMA_LINE_INSPECTED: 'rma.line_inspected',
-  /** A returned unit was moved to a bin and given a quality status. WMS applies it to the handling unit (#357). */
-  RMA_UNIT_MOVED: 'rma.unit_moved',
   RMA_DISPOSITION_SET: 'rma.disposition_set',
   RMA_COMPLETED: 'rma.completed',
-  /** A completed RMA's restock line, for the warehouse to put back into stock (#359). */
-  RMA_RESTOCK_REQUESTED: 'rma.restock_requested',
   RMA_REFUND_ADJUSTED: 'rma.refund_adjusted',
   RMA_RETURN_LABEL_GENERATED: 'rma.return_label_generated',
   RMA_PICKUP_SCHEDULED: 'rma.pickup_scheduled',
@@ -631,81 +538,14 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SOP_AUDIT_COMPLETED]: 1,
   [EVENT_TYPES.SOP_AUDIT_FAILED]: 1,
 
-  // WMS
-  [EVENT_TYPES.FACILITY_CREATED]: 1,
-  [EVENT_TYPES.FACILITY_UPDATED]: 1,
-  [EVENT_TYPES.FACILITY_ARCHIVED]: 1,
-  [EVENT_TYPES.WAREHOUSE_ZONE_CREATED]: 1,
-  [EVENT_TYPES.WAREHOUSE_ZONE_UPDATED]: 1,
-  [EVENT_TYPES.WAREHOUSE_ZONE_ARCHIVED]: 1,
-  [EVENT_TYPES.WAREHOUSE_BIN_CREATED]: 1,
-  [EVENT_TYPES.WAREHOUSE_BIN_UPDATED]: 1,
-  [EVENT_TYPES.WAREHOUSE_BIN_ARCHIVED]: 1,
-  [EVENT_TYPES.WAREHOUSE_BIN_BULK_CREATED]: 1,
-  [EVENT_TYPES.RECEIVING_APPOINTMENT_CREATED]: 1,
-  [EVENT_TYPES.RECEIVING_APPOINTMENT_CHECKED_IN]: 1,
-  [EVENT_TYPES.RECEIVING_APPOINTMENT_CANCELLED]: 1,
-  [EVENT_TYPES.RECEIVING_TASK_CREATED]: 1,
-  [EVENT_TYPES.RECEIVING_TASK_STARTED]: 1,
-  [EVENT_TYPES.RECEIVING_LINE_RECORDED]: 1,
-  [EVENT_TYPES.RECEIVING_LINE_INSPECTED]: 1,
-  [EVENT_TYPES.RECEIVING_TASK_COMPLETED]: 1,
-  [EVENT_TYPES.PUTAWAY_RULE_CREATED]: 1,
-  [EVENT_TYPES.PUTAWAY_TASK_CREATED]: 1,
-  [EVENT_TYPES.PUTAWAY_TASK_ASSIGNED]: 1,
-  [EVENT_TYPES.PUTAWAY_TASK_STARTED]: 1,
-  [EVENT_TYPES.PUTAWAY_TASK_COMPLETED]: 1,
-  [EVENT_TYPES.HANDLING_UNIT_MOVED]: 1,
-  [EVENT_TYPES.PUTAWAY_TASK_DEVIATION]: 1,
-  [EVENT_TYPES.INVENTORY_RECEIVED]: 1,
-  [EVENT_TYPES.INVENTORY_ADJUSTED]: 1,
-  [EVENT_TYPES.INVENTORY_RETURN_RECEIVED]: 1,
-  [EVENT_TYPES.INVENTORY_TRANSFERRED]: 1,
-  [EVENT_TYPES.INVENTORY_OBSERVATION_RECORDED]: 1,
-  [EVENT_TYPES.WAVE_CREATED]: 1,
-  [EVENT_TYPES.WAVE_RELEASED]: 1,
-  [EVENT_TYPES.WAVE_COMPLETED]: 1,
-  [EVENT_TYPES.WAVE_CANCELLED]: 1,
-  [EVENT_TYPES.PICK_TASK_CREATED]: 1,
-  [EVENT_TYPES.PICK_TASK_ASSIGNED]: 1,
-  [EVENT_TYPES.PICK_LINE_COMPLETED]: 1,
-  [EVENT_TYPES.PICK_LINE_SHORT]: 1,
-  [EVENT_TYPES.PICK_TASK_COMPLETED]: 1,
-  [EVENT_TYPES.PACK_TASK_CREATED]: 1,
-  [EVENT_TYPES.PACK_LINE_VERIFIED]: 1,
-  [EVENT_TYPES.PACK_AUDIT_RECORDED]: 1,
-  [EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED]: 1,
-  [EVENT_TYPES.PACK_TASK_COMPLETED]: 1,
-  [EVENT_TYPES.STAGING_ASSIGNMENT_CREATED]: 1,
-  [EVENT_TYPES.LOADING_COMPLETED]: 1,
-  [EVENT_TYPES.CYCLE_COUNT_CREATED]: 1,
-  [EVENT_TYPES.CYCLE_COUNT_STARTED]: 1,
-  [EVENT_TYPES.CYCLE_COUNT_LINE_RECORDED]: 1,
-  [EVENT_TYPES.CYCLE_COUNT_COMPLETED]: 1,
-  [EVENT_TYPES.CYCLE_COUNT_VARIANCE_DETECTED]: 1,
-  [EVENT_TYPES.WAVE_TEMPLATE_CREATED]: 1,
-  [EVENT_TYPES.WAVE_TEMPLATE_UPDATED]: 1,
-  [EVENT_TYPES.WAVE_TEMPLATE_DELETED]: 1,
-  [EVENT_TYPES.REPLENISHMENT_RULE_CREATED]: 1,
-  [EVENT_TYPES.REPLENISHMENT_RULE_UPDATED]: 1,
-  [EVENT_TYPES.REPLENISHMENT_RULE_DELETED]: 1,
-  [EVENT_TYPES.INVENTORY_BELOW_MINIMUM]: 1,
-  [EVENT_TYPES.REPLENISHMENT_TRIGGERED]: 1,
-  [EVENT_TYPES.LOAD_PLAN_CREATED]: 1,
-  [EVENT_TYPES.LOAD_PLAN_COMPLETED]: 1,
-  // v2: emitted by the TMS subscriber after the document exists, carrying documentId and
-  // fileName. v1 was emitted by WMS to mean 'a BOL was asked for', which the name never said.
-  [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 2,
-  [EVENT_TYPES.CROSS_DOCK_SORTED]: 1,
+  // Returns / RMA
   [EVENT_TYPES.RMA_REQUESTED]: 1,
   [EVENT_TYPES.RMA_AUTHORIZED]: 1,
   [EVENT_TYPES.RMA_REJECTED]: 1,
   [EVENT_TYPES.RMA_GOODS_RECEIVED]: 1,
   [EVENT_TYPES.RMA_LINE_INSPECTED]: 1,
-  [EVENT_TYPES.RMA_UNIT_MOVED]: 1,
   [EVENT_TYPES.RMA_DISPOSITION_SET]: 1,
   [EVENT_TYPES.RMA_COMPLETED]: 1,
-  [EVENT_TYPES.RMA_RESTOCK_REQUESTED]: 1,
   [EVENT_TYPES.RMA_REFUND_ADJUSTED]: 1,
   [EVENT_TYPES.RMA_RETURN_LABEL_GENERATED]: 1,
   [EVENT_TYPES.RMA_PICKUP_SCHEDULED]: 1,
