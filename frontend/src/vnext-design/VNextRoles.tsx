@@ -35,7 +35,6 @@ function roleBadgeVariant(name: string): 'info' | 'success' | 'warning' | 'secon
   if (name.includes('broker')) return 'info';
   if (name === 'finance') return 'success';
   if (name === 'readonly') return 'secondary';
-  if (name === 'warehouse') return 'warning';
   return 'secondary';
 }
 
