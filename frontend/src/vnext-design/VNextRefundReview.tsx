@@ -45,7 +45,7 @@ function dispositionVariant(d: string): BadgeVariant {
   }
 }
 
-export default function VNextWmsRefundReview() {
+export default function VNextRefundReview() {
   const navigate = useNavigate();
   const [rmas, setRmas] = useState<RmaInQueue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +71,7 @@ export default function VNextWmsRefundReview() {
           <h1 className="text-3xl font-bold tracking-tight">Refund Review Queue</h1>
           <p className="mt-1 text-sm text-muted-foreground">RMAs awaiting finance approval before refund is issued</p>
         </div>
-        <Button variant="outline" onClick={() => navigate('/wms/returns')}>
+        <Button variant="outline" onClick={() => navigate('/returns')}>
           <ArrowLeft className="h-4 w-4" />
           Back to Returns
         </Button>
@@ -151,10 +151,10 @@ export default function VNextWmsRefundReview() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="gradient" onClick={() => navigate(`/wms/returns/${r.id}`)}>
+                  <Button variant="gradient" onClick={() => navigate(`/returns/${r.id}`)}>
                     Review &amp; Complete
                   </Button>
-                  <Button variant="outline" onClick={() => navigate(`/wms/returns/${r.id}`)}>
+                  <Button variant="outline" onClick={() => navigate(`/returns/${r.id}`)}>
                     View Detail
                   </Button>
                 </div>

@@ -398,7 +398,7 @@ export default function VNextRoles() {
                     id="role-name"
                     value={editor.name}
                     onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-                    placeholder="e.g. wms-supervisor"
+                    placeholder="e.g. dispatch-supervisor"
                     maxLength={50}
                   />
                 </div>
