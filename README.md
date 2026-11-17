@@ -441,7 +441,7 @@ The auth-service runs as a standalone Fastify service on port 3002.
 | `AUTH_SERVICE_URL` | `http://localhost:3002` | Base URL for OAuth callbacks |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for OAuth redirects |
 
-On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispatcher, warehouse, readonly, customer) and create the initial admin user.
+On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispatcher, broker_admin, broker_agent, readonly, finance) and create the initial admin user.
 
 ## 📚 API Documentation
 
@@ -762,55 +762,27 @@ container.singleton(TOKENS.ICustomersRepository)
 ### Location Management
 - **Comprehensive address handling** with coordinates
 - **Geographic data support** for mapping
-- **Warehouse and retail location** management
+- **Warehouse, depot and retail locations** as pickup and delivery points
 - **Address validation** and formatting
 
-### Warehouse Management System (WMS)
-- **Location hierarchy** - Zones, aisles, and bins with capacity tracking, temperature zones, hazmat certification
-- **Bulk bin generation** - Pattern-based bin creation ({aisle}-{row}-{level}) with live preview
-- **Receiving** - Dock appointments, ASN-based and blind receiving, line-by-line inspection
-- **Cross-dock** - Flow-through workflow: received goods skip storage and sort directly to staging bins for outbound loading
-- **Returns / RMA** - Full returns lifecycle with 7 dispositions (restock, refurb, scrap, recycle, donate, rtv, customer_keeps), quarantine-first flow, partial returns, auto-calculated refunds with finance review queue. Five initiation channels: admin UI, customer portal (self-service request flow with list/new/detail pages and JWT-scoped label download), public REST API (customer-keyed), EDI 180 Return Merchandise Authorization (inbound request + outbound authorization response), and marketplace webhooks (roadmap). Return label generation and carrier pickup scheduling via provider-agnostic `IReturnLabelProvider` (Manual provider active; FedEx/UPS/DHL stubs for live carrier integration)
-- **Directed putaway** - Priority-based rules (SKU pattern, temperature, hazmat, customer, velocity), scan-to-confirm with deviation tracking, bin constraint validation, product consolidation
-- **Inventory tracking** - Real-time stock levels per bin with immutable transaction ledger, stock adjustments with reason codes, bin-to-bin transfers, per-SKU summary aggregation
-- **Wave planning** - Group orders into pick waves (discrete or batch strategy), inventory allocation on release
-- **Wave templates** - Automate wave creation with reusable templates (grouping rules, carrier cutoff times, min/max orders, cron schedules, auto-release)
-- **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
-- **Packing** - Pack station verification, line-by-line item confirmation
-- **Pack Audit** - Scale weight + cubiscan dim-weight variance checks at the pack station. Default ±10% tolerance (configurable per-audit), pass/warning/fail verdict auto-raises medium or high priority quality issues linked to the pack task. Expected weight auto-calculated from `ProductUom.weightGrams × quantity` across pack lines. Admin dashboard shows 30-day pass rate and variance trends
-- **Cutoff-at-Risk Monitor** - Per-carrier, per-day-of-week cutoff times with IANA timezone support. A pg-boss cron scans open shipments every 5 minutes, projects warehouse-ready time from remaining pick/pack/load work, and fires `shipment.cutoff_at_risk` with severity (minor/warning/critical). Warning and critical auto-raise triage issues linked to the shipment; dedup prevents spam while still escalating. Admin dashboard surfaces at-risk shipments and lets ops configure cutoffs per carrier
-- **Cartonization** - Recommends smallest viable shipping carton at pack time. ProductUom master data for SKU dimensions, CartonCatalogue per location, First-Fit-Decreasing algorithm with volume and weight scoring
-- **Loading** - Staging assignments at dock bins, batch loading completion
-- **Cycle counting** - Full warehouse, zone, and random sample counts with variance detection and auto-adjustment of inventory
-- **Replenishment** - Auto-replenish pick faces from bulk storage when stock drops below configured minimums
-- **Manifest ingestion** - CSV upload with column mapping templates and header-checksum auto-detection for reusable supplier formats
-- **Zone picking** - Sequential (pick-and-pass) and parallel (pick-and-merge) zone strategies with per-zone task tracking
-- **Product dimensions** - SKU-level dimension and weight master data (ProductUom) for cartonization and future palletization
-- **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
-- **Operations KPI dashboard** - Dedicated `/wms/operations` view with six KPI groups (throughput today vs 7-day, 30-day avg cycle times for pick / dock-to-stock / order-to-ship, pick accuracy + pack audit pass rate + inventory record accuracy, live work queue, exceptions rollup including cutoff-at-risk, bin utilization). Tone-coloured accuracy thresholds, clickable drill-downs, 60-second auto-refresh
-- **Pallet Types & Palletization** - `PalletType` catalog with one-click seed of 13 standard types (EUR1 / EUR2 / EUR3 / EUR6 half / US GMA 48×40 / US 42×42 / CHEP 1210 + 48×40 / AU 1165 / plastic + one-way + quarter display) plus full CRUD. Planner service computes cartons-per-layer (best of two orientations), layers (min of height- and weight-bound), stacked height and weight utilization. Recommender ranks all active pallet types for a given carton spec
-- **Container Intelligence** - Carton catalogue extended with temperature zone, insulation hours, tamper-evident flag, value class, hazmat UN classes, and material type. Recommender groups pack items by constraint profile (temperature + value + hazmat compatibility with UN segregation matrix), picks the smallest qualifying carton per group, and attaches required ancillaries (gel pack, dry ice, desiccant, fragile padding, tamper seal). Transit-hours aware: refrigerated packages past 24h transit automatically promote to dry ice
-- **Warehouse mobile app** - Pick task execution, putaway scan-to-confirm, receiving (ASN + blind) with per-line inspection, packing with barcode verification and carton selection, pack audit (scale + dim variance), and return receiving + inspection/disposition tasks - all on one unified task list with Receive / Putaway / Pick / Pack / Returns tabs. Supports Zebra / Honeywell RF gun barcode wedges alongside camera scanning
-- **147 tests** across 13 test suites covering the full goods flow
+### Returns, cutoffs and packaging
+- **Returns / RMA** - Returns lifecycle with 7 dispositions (restock, refurb, scrap, recycle, donate, rtv, customer_keeps), receipt and inspection against the RMA, partial returns, auto-calculated refunds with a finance review queue. Initiation channels: admin UI, customer portal (self-service request flow with list/new/detail pages and JWT-scoped label download), public REST API (customer-keyed) and EDI 180 Return Merchandise Authorization (inbound request + outbound authorization response). Return label generation and carrier pickup scheduling via provider-agnostic `IReturnLabelProvider` (Manual provider active; FedEx/UPS/DHL stubs for live carrier integration). Open TMS records the disposition; putting a returned item back into stock is a job for your warehouse system
+- **Cutoff-at-Risk Monitor** - Per-carrier, per-day-of-week cutoff times with IANA timezone support. A pg-boss cron scans open, carrier-assigned shipments every 5 minutes, allows a fixed handling time before each can be handed over (30 minutes by default), and fires `shipment.cutoff_at_risk` with severity (minor/warning/critical). Warning and critical auto-raise triage issues linked to the shipment; dedup prevents spam while still escalating. The Cutoff At Risk page lists flagged shipments, and Carrier Cutoffs configures the times per carrier
+- **Packaging Types & Palletization** - Packaging catalogue (pallets, cartons, crates, drums, totes and more) with a one-click seed of standard types (EUR1 / EUR2 / EUR3 / EUR6 half / US GMA 48×40 / US 42×42 / CHEP 1210 + 48×40 / AU 1165 / plastic + one-way + quarter display) plus full CRUD. Planner service computes cartons-per-layer (best of two orientations), layers (min of height- and weight-bound), stacked height and weight utilization. Recommender ranks all active pallet types for a given carton spec
+
+Warehouse management and inventory were removed in November 2026 ([ADR 0007](docs/adr/0007-tms-only-in-typescript.md)). The last commit that carries them is tagged `last-with-wms`.
 
 ### Bill of Lading (BOL) workflow
 
-The BOL is an **immutable** document. Its content is captured as a metadata snapshot at generation time and frozen — re-opening the document later does not pull fresh data from the shipment. Generating a BOL too early therefore produces a permanently empty document, so generation is gated to the end of the WMS flow.
+The BOL is an **immutable** document. Its content is captured as a metadata snapshot at generation time and frozen, so re-opening the document later does not pull fresh data from the shipment. Generating a BOL too early therefore produces a permanently incomplete document, so generation is guarded.
 
-**Intended flow (the only path that produces a fully populated BOL):**
+**Generation (`POST /api/v1/documents/generate/bol`)** is on demand, from the shipment detail page or the API, and refuses with `400` until the shipment carries enough detail:
 
-1. Order created → assigned to shipment
-2. Pick task created → handheld scans (or admin "complete pick")
-3. Load plan created with vehicle / dock / driver
-4. Lines loaded onto vehicle (handheld scans or admin "Load all")
-5. Load plan completed + sealed → BOL is auto-generated here. `POST /api/v1/load-plans/:id/complete` synchronously calls `DocumentGenerationService.generateBOL` after the load plan transitions to `completed`, capturing vehicle, driver, stops, orders, trackable units, and line items.
+- the shipper and consignee are set
+- at least one order is attached
+- every line item describes the goods, with a piece count and a weight
 
-**Manual generation (`POST /api/v1/documents/generate/bol`)** is still supported for re-issuing a BOL or for admin testing, but it is guarded:
-
-- `400` if the shipment has no orders attached
-- `400` if every attached order has zero trackable units **and** zero line items
-
-The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate. Once picking and loading have produced units/line items the same call succeeds and stores the immutable snapshot.
+`evaluateBolReadiness` is the single check, shared by the route and the frontend button. The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate.
 
 **Viewing the PDF.** `GET /api/v1/documents/:id/download` is JWT-protected. Plain `<a href>` navigation bypasses the global `window.fetch` interceptor in `frontend/src/authFetch.ts`, so the link arrives without an Authorization header and the backend returns `401 "Authorization header required"`. The BOL view's Download button instead does an authenticated `fetch`, reads the response as a blob, and synthesises a click on a hidden `<a download>`. The pattern lives in [`VNextBolView.handleDownload`](frontend/src/vnext-design/VNextBolView.tsx) and should be reused for any other JWT-protected file download — a system-wide signed-URL or download-cookie scheme is a separate, larger change.
 

@@ -250,25 +250,26 @@ fail silently rather than erroring. The script is upsert-based and safe to run o
 To rebuild one read model rather than all of them, name it:
 
 ```bash
-DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --only=wmsFulfilmentOrders
+DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --only=issues
 ```
 
 An unknown name is refused with the list of valid ones.
 
-### Upgrading past the Facility split
+### Upgrading past the warehouse removal
 
-The `facilities` step derives a `Facility` for every warehouse `Location` that does not already
-have one. The Phase 2a migrations only derive facilities for locations a warehouse row already
-points at, so an install with warehouse locations but no zones, receiving or waves yet comes up
-with none, and every WMS page reports "No facilities".
+Open TMS no longer includes warehouse management, inventory, or the warehouse and inventory apps.
+The migration `20261117_remove_wms_inventory_and_dock_app` drops their tables, and the data in them
+goes with it. Take a database dump first if you want to keep any of it. The last version that
+carries those features is tagged `last-with-wms`.
 
-Run it once after upgrading:
+Three things to check afterwards:
 
-```bash
-DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --only=facilities
-```
-
-It is idempotent, so running it again creates nothing.
+- A custom role that held `wms:read` or `wms:write` needs `returns:read` or `returns:write` to keep
+  working with RMAs. The `warehouse` system role is deleted, along with its assignments.
+- Anyone signed in to the warehouse or inventory app is signed out. Those sessions are refused.
+- If you ran the .NET WMS service, stop it and remove it from your deployment. The migration drops
+  its `wms` schema. It also tries to drop the `wms_app` and `wms_outbox_reader` roles, and leaves
+  them in place with a notice if they still hold privileges in another database on the server.
 
 ## Backups
 

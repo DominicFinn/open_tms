@@ -1,6 +1,6 @@
 # ADR 0006: The event bridge between Node and .NET runs through Postgres
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0007](0007-tms-only-in-typescript.md). The bridge was removed with the .NET service
 - **Date:** 2026-10-22
 - **Relates to:** [ADR 0004](0004-port-to-csharp-starting-with-finnwms.md) (left the broker open),
   [ADR 0005](0005-wms-table-handover-in-one-move.md), #360

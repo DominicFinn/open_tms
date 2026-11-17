@@ -35,7 +35,7 @@ Seed gives you these logins (all internal users password `Password1!`):
 | `admin@meridian-tms.demo` | admin |
 | `dispatch@meridian-tms.demo` | dispatcher |
 | `ops-manager@meridian-tms.demo` | admin |
-| `warehouse@meridian-tms.demo` | warehouse |
+| `viewer@meridian-tms.demo` | readonly |
 | `finance@meridian-tms.demo` | admin |
 
 Plus **customer portal** users (`Portal123!`) and **carrier portal** users (`Carrier123!`).

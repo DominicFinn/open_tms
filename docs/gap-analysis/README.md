@@ -2,6 +2,11 @@
 
 A comprehensive comparison of Open TMS against the commercial TMS market (Oracle TMS, SAP TM, MercuryGate, Blue Yonder, Trimble/TMW, McLeod, Descartes, Manhattan Associates, e2open, 3Gtms, project44, FourKites).
 
+> **Update, November 2026.** This analysis is a snapshot from April 2026. Since then the warehouse
+> app, its magic-link login and the warehouse role have been removed, and Open TMS covers transport
+> management only. The files here have been corrected where they listed those as built. The removed
+> code stays in git history under the tag `last-with-wms`.
+
 ## Methodology
 
 - **Codebase audit**: Every Prisma model, route file, service, command handler, and frontend page was inventoried

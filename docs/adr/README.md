@@ -9,11 +9,12 @@ supersedes the old one and link the two.
 | # | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-security-event-geofencing.md) | Security event geofencing | Accepted | 2026 |
-| [0002](0002-modular-monolith-product-composition.md) | Modular monolith with build-time product composition (FinnTMS / FinnWMS split) | Accepted, partly superseded by 0004 | 2026-08-16 |
+| [0002](0002-modular-monolith-product-composition.md) | Modular monolith with build-time product composition (FinnTMS / FinnWMS split) | Superseded by 0007 | 2026-08-16 |
 | [0003](0003-two-map-modes.md) | Two map modes: Google when a key is configured, OSM when not | Accepted | 2026-09-02 |
-| [0004](0004-port-to-csharp-starting-with-finnwms.md) | Port to C#, starting with FinnWMS | Accepted, handover section superseded by 0005 | 2026-10-21 |
-| [0005](0005-wms-table-handover-in-one-move.md) | Hand the WMS tables over from Prisma in one move | Accepted | 2026-10-21 |
-| [0006](0006-event-bridge-over-postgres.md) | The event bridge between Node and .NET runs through Postgres | Accepted | 2026-10-22 |
+| [0004](0004-port-to-csharp-starting-with-finnwms.md) | Port to C#, starting with FinnWMS | Superseded by 0007 | 2026-10-21 |
+| [0005](0005-wms-table-handover-in-one-move.md) | Hand the WMS tables over from Prisma in one move | Superseded by 0007 | 2026-10-21 |
+| [0006](0006-event-bridge-over-postgres.md) | The event bridge between Node and .NET runs through Postgres | Superseded by 0007 | 2026-10-22 |
+| [0007](0007-tms-only-in-typescript.md) | Open TMS is a TMS only, and stays on TypeScript | Accepted | 2026-11-17 |
 
 ## Convention
 

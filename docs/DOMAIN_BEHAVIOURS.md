@@ -32,7 +32,7 @@ the event on one `evt.__dispatch` queue instead; every process that has started 
 consumes that queue and fans each event out to its own handler queues. pg-boss delivers each job
 once, so nothing is handled twice, and scaled-out workers share the dispatch queue. Both the API's
 embedded workers and the standalone worker register the event handlers with the full command bus,
-so the command-driven handlers (issue engine, auto-replenishment, route planning) run in either
+so the command-driven handlers (issue engine, route planning) run in either
 setup; the triage agent still also needs an LLM provider.
 
 ---
@@ -309,7 +309,7 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 
 Eligibility filtering for `AddOrdersToShipmentCommand` (shipment status, origin/customer/service-level/hazmat/temp-control match) runs in `OrderConversionService` as a soft pre-dispatch check — same pattern as `CombineOrdersIntoShipmentCommand`'s `checkCompatibility` — so a batch can partially succeed: eligible orders are linked and dispatched, ineligible ones are reported back as per-order errors without ever reaching the command. Before #266 this path linked orders via a bare `prisma.$transaction` with a no-op `emit`, so despite `OrderProjection.onAssignedToShipment` being implemented and tested, `OrderReadModel.shipmentId`/`shipmentReference` never populated for orders added to an *existing* shipment this way (`removeOrderFromShipment`, the reverse operation, and `SplitOrderCommand`'s one-order-to-many-shipments case remain open — see #266 for why those need a design call rather than a mechanical fix).
 
-`ShipmentAssignmentService.assignOrderToShipment` (auto-assignment on order intake, `POST /api/v1/orders/:id/assign-to-shipment`) and the warehouse app's `POST /api/v1/warehouse/shipments` also create shipments — both now dispatch the existing `CreateShipmentCommand` rather than writing the row directly, so they emit `shipment.created` too (#264). Before #264, all five of these paths wrote the `Shipment` row with a bare `prisma.shipment.create` and never emitted anything, so `ShipmentReadModel` (and therefore `GET /api/v1/shipments`, live GPS tracking, `AutoTenderHandler`, and `SlaEvaluationHandler`) silently never saw shipments created this way — only the one path that already went through `CreateShipmentCommand` (`POST /api/v1/shipments`, and `AcceptQuoteCommand`) worked.
+`ShipmentAssignmentService.assignOrderToShipment` (auto-assignment on order intake, `POST /api/v1/orders/:id/assign-to-shipment`) also creates shipments. It dispatches the existing `CreateShipmentCommand` rather than writing the row directly, so it emits `shipment.created` too (#264). Before #264, these paths wrote the `Shipment` row with a bare `prisma.shipment.create` and never emitted anything, so `ShipmentReadModel` (and therefore `GET /api/v1/shipments`, live GPS tracking, `AutoTenderHandler`, and `SlaEvaluationHandler`) silently never saw shipments created this way — only the one path that already went through `CreateShipmentCommand` (`POST /api/v1/shipments`, and `AcceptQuoteCommand`) worked.
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
 
@@ -814,7 +814,7 @@ Each type carries: `defaultPriority`, `latched`, `ignoreSignalSeverity` (tempera
 
 **Recovery emitters** live in the monitors that own each condition: `ShipmentCutoffMonitorService` emits `shipment.cutoff_cleared` on the at-risk→clear edge; `ShipmentEtaMonitorService` tracks `Shipment.lastEtaDelaySeverity` and emits `tracking.eta_recovered` on the delay→on-time edge.
 
-This engine **replaced** the previous bespoke direct-writers (cold-chain compliance handler, cutoff monitor) and the LLM-as-primary-creator. Other domains (order, financial/margin, SLA, WMS variances, EDI) still use their own creators and will be migrated onto this framework incrementally.
+This engine **replaced** the previous bespoke direct-writers (cold-chain compliance handler, cutoff monitor) and the LLM-as-primary-creator. Other domains (order, financial/margin, SLA, EDI) still use their own creators and will be migrated onto this framework incrementally.
 
 ### Commands
 
@@ -1704,88 +1704,6 @@ During each ETA monitor cycle, for shipments with a `laneId` that has a `LaneRou
 
 ---
 
-## Warehouse App
-
-The warehouse app is a mobile-first sub-application for warehouse operatives to "launch" shipments — preparing them for dispatch by assigning IoT trackers, accessories, and verifying details.
-
-### Auth: Magic Links
-
-Magic links are persistent, reusable tokens encoded in QR codes for wall-mounting in warehouses.
-
-| Action | API | What Happens |
-|--------|-----|-------------|
-| Generate Magic Link | `POST /api/v1/warehouse/auth/magic-link/generate` | Creates SHA-256 hashed token, deactivates previous links for user |
-| Validate Magic Link | `POST /api/v1/warehouse/auth/magic-link/validate` | Verifies hash, checks expiry, logs to LoginAuditLog, returns user data |
-| Password Login | `POST /api/v1/warehouse/auth/login` | Standard login with lockout (5 attempts → 15 min), logs to LoginAuditLog |
-| Revoke Magic Links | `DELETE /api/v1/warehouse/auth/magic-link/:userId` | Deactivates all active magic links for user |
-
-### Login Audit Log
-
-Every login attempt (success or failure) is recorded in `LoginAuditLog` with:
-- `method`: password, magic_link, oauth_google, oauth_microsoft
-- `success`: boolean
-- `failReason`: user_not_found, invalid_password, locked, expired_link, inactive_link
-- `ipAddress`, `userAgent`: client metadata
-
-### Shipment Launch Workflow
-
-```
-Shipment (draft) → Warehouse Operative opens detail
-                  → Step 1: Assign IoT trackers (scan barcode → device lookup → assign)
-                  → Step 2: Add accessories (temp sensors, door seals)
-                  → Step 3: Pair trackable units with IoT devices
-                  → Step 4: Review & Launch
-                  → Shipment marked as launched (launchedAt, launchedBy set)
-                  → Status transitions from "draft" to "ready"
-                  → Geofence exit will later transition to "in_transit"
-```
-
-### Shipment Flags
-
-Users cannot edit shipment details — they flag issues instead.
-
-| Action | API | What Happens |
-|--------|-----|-------------|
-| Flag Issue | `POST /api/v1/warehouse/shipments/:id/flag` | Creates ShipmentFlag record with reason, user info |
-| Resolve Flag | `PUT /api/v1/warehouse/shipments/:shipmentId/flags/:flagId/resolve` | Marks flag resolved, records resolver |
-| Launch Check | `POST /api/v1/warehouse/shipments/:id/launch` | Blocks launch if unresolved flags exist |
-
-### Device Assignment (Scanning)
-
-| Action | API | What Happens |
-|--------|-----|-------------|
-| Lookup Device | `GET /api/v1/warehouse/devices/lookup?barcode=X` | Finds by externalId, displayId, or name |
-| Assign to Shipment | `POST /api/v1/warehouse/shipments/:id/assign-device` | Deactivates previous assignment, creates new |
-| Assign to Unit | Same endpoint with `trackableUnitId` | Links device to specific pallet/tote |
-| Remove Device | `DELETE /api/v1/warehouse/shipments/:id/devices/:deviceId` | Soft-deactivates assignment |
-
-### Accessories
-
-Accessories are physical items attached to shipments (BLE sensors, door seals).
-
-Types: `temp_sensor_front`, `temp_sensor_middle`, `temp_sensor_back`, `door_sensor`, `door_seal`, `ble_tracker`
-
-| Action | API | What Happens |
-|--------|-----|-------------|
-| Add Accessory | `POST /api/v1/warehouse/shipments/:id/accessories` | Creates ShipmentAccessory record |
-| Remove Accessory | `DELETE /api/v1/warehouse/shipments/:id/accessories/:id` | Hard deletes record |
-
-### WiFi Connectivity Monitoring
-
-`POST /api/v1/warehouse/connectivity` — Logs `wifi_lost`, `wifi_restored`, `slow_connection` events. Fire-and-forget from the frontend when `navigator.onLine` changes. Used for operational diagnostics.
-
-### Shipment Lifecycle (Warehouse Perspective)
-
-```
-draft ──(warehouse launch)──→ ready ──(geofence exit)──→ in_transit ──→ delivered
-  │                             │
-  └──(idle >2 days)──→ archive  └──(warehouse app shows as "launched")
-```
-
-Launched shipments drop off the active list. Stale shipments (>2 days in draft without launch) appear on the archive screen.
-
----
-
 ## SLA (Service Level Agreements)
 
 ### Commands
@@ -2131,24 +2049,8 @@ When not ready, the check returns the list of missing requirements. This gates:
 - **Both** generate endpoints (sync and async) - they return 400 with the missing-requirements list rather than producing an incomplete document (the BOL metadata snapshot is captured immutably at generation time).
 - The **"Generate BOL" button** on the shipment Documents tab (`VNextShipmentDetail`), which greys out and shows the missing requirements inline until the data exists.
 
-The happy-path trigger remains `POST /load-plans/:id/complete`, after WMS picking and loading, by
-which point the cargo detail is populated. Since #173 the route does not generate the document
-itself. Completing a load plan emits `load_plan.completed` carrying `bolRequested`, and
-`BolGenerationHandler` on the TMS side generates the BOL and emits `load_plan.bol_generated`
-(schema v2, carrying `documentId` and `fileName`). Since #359 the warehouse records the link:
-`LoadPlanBolLinkHandler` sets `LoadPlan.bolDocumentId`, keeping the first document if two arrive.
-The TMS handler no longer reads or writes the load plan, and skips a load plan it has already
-published a BOL for, found in the event log.
-
-Two consequences worth knowing:
-- Generation is asynchronous, so the completion response carries `bolRequested`, not
-  `bolDocumentId`. The load plan shows the document once the handler finishes.
-- The handler is idempotent. It skips a load plan that already has a document and claims the link
-  with a conditional update, so a redelivery cannot produce two BOL links. Two concurrent
-  deliveries can each render a PDF; only one link is ever recorded.
-
-A standalone FinnWMS registers no subscriber, produces no BOL, and completes loads normally. That
-is the point of the seam.
+A BOL is only ever generated on request, through the two endpoints above. Nothing generates one
+automatically.
 
 ### Rate Confirmation PDF
 
@@ -2168,14 +2070,15 @@ Generates a carrier-facing PDF showing the agreed carrier rate (cost charges onl
 | `broker_agent` | Sales rep / agent | Quotes, margins - no settings/users |
 | `dispatcher` | Operational user | Shipments, orders, tendering |
 | `finance` | Financial operations | Quotes, invoices, charges, reports |
-| `warehouse` | Warehouse operator | Shipment read/write, devices |
 | `readonly` | Read-only access | All `:read` and `:view` permissions |
 
 **Broker-Specific Permissions:** `margin:view`, `credit:check`, `rate_confirmation:generate`
 
+**Returns:** `returns:read` and `returns:write` guard the RMA routes. `dispatcher` and `readonly` hold `returns:read`, and `broker_admin` holds `returns:*`.
+
 **Seeding:** `POST /api/v1/roles/seed` creates or updates system roles (idempotent). Custom roles can be created via the Roles CRUD API.
 
-**Middleware:** `requirePermission(...perms)` in `jwtAuth.ts` checks JWT permissions. `optionalAuth` sets `req.user` when token present without blocking unauthenticated requests.
+**Middleware:** `requirePermission(...perms)` in `jwtAuth.ts` checks JWT permissions. `optionalAuth` sets `req.user` when token present without blocking unauthenticated requests. A token that carries a `scope` claim is refused: those were restricted sessions for the removed warehouse and inventory apps, and nothing issues one any more.
 
 ### Margin Reports
 
@@ -2245,241 +2148,9 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 
 ---
 
-## Warehouse Management System (WMS)
+## EDI 940 / 945 (Warehouse Shipping Order + Advice)
 
-### Tenancy
-
-Every WMS read and write is scoped to `req.orgId`, resolved from the authenticated principal and
-never from a request parameter (#220). Query building lives in the per-domain repositories
-(`PutawayRepository`, `ReceivingRepository`, `WaveRepository`, `PackingRepository`,
-`CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
-`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`,
-`WarehouseZoneRepository`), none of which expose an unscoped variant. A cross-tenant id returns
-404, so existence stays opaque.
-
-`WarehouseZoneRepository` was missed by the #220 sweep and every read on it was unscoped until
-#231, so one tenant could list or fetch another's zones, aisles and bins. `WarehouseAisle` carries
-no `orgId` of its own and is scoped through its zone.
-
-The sweep also did not reach the queries **inside** command handlers, which #225, #227 and #229
-fixed as they went: 21 unscoped reads and writes in total. Two patterns account for all of them.
-A command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy bug, and
-`locationId` alone is never a sufficient filter.
-
-`registerWmsGuard` now does both: it attaches the org scope and refuses a request that resolves no
-tenant, then checks the permission. Tenancy lives there rather than in each route plugin because
-**no WMS route registered the org scope at all** until #238, so `req.orgId` was undefined on every
-WMS request. Prisma reads `where: { orgId: undefined }` as no filter, which meant every WMS list
-returned every tenant's rows while the source looked correct.
-
-It still does not make the surface strictly JWT-scoped: `resolveOrgId` falls back to the first
-Organization when a token carries no `organizationId`, on every surface. That is #239.
-
-### Domain: Facilities
-
-**On upgrade**, run `backfill-read-models.ts --only=facilities` once. The Phase 2a migrations only
-derive a facility per Location that a warehouse row already points at, so an install with warehouse
-locations but no zones, receiving or waves yet gets none, and every WMS page reports "No facilities"
-(#236). The step is idempotent.
-
-The warehouse a WMS install operates. A Facility is deliberately not a Location: Location is the
-TMS geographic node used by shipment stops, lane endpoints and arrival criteria, and a standalone
-FinnWMS has no TMS schema to point at. `sourceLocationId` is a soft reference, not a foreign key,
-kept so a combined install can reconcile the two.
-
-### Commands
-- `facility.create` - Create a facility, optionally linked to a Location. One facility per source
-  location per organisation
-- `facility.update` - Update name, code, address, timezone or active flag. `sourceLocationId` is
-  not updatable: re-pointing a facility would silently move every zone and bin under it
-- `facility.archive` - Soft archive. Refused while active zones still hang off the facility
-
-### Events
-- `facility.created`, `facility.updated`, `facility.archived`
-
-### Side Effects
-- Creating a zone or a bin resolves the facility for its Location and creates one from the
-  Location's details if it does not exist yet, emitting `facility.created` with `derived: true`.
-  This is the Phase 2a dual-write (#217); reads still go through `locationId` until a later chunk
-  switches them over
-- The same resolution runs on every inbound create: appointments, receiving tasks, putaway rules,
-  and the putaway tasks generated by receiving completion and replenishment (#225). Replenishment
-  resolves on first use, so a run that replenishes nothing does not create a facility as a side
-  effect
-- And on every outbound create: pack tasks, staging assignments, and the pick tasks generated by
-  releasing a wave (#227). Receiving completion resolves once for whichever branch it takes, and
-  skips resolution entirely when there is nothing to put away or stage
-- And on waves and wave templates (#229), which completes the dual-write. **Every WMS model that
-  references `Location` now carries a `facilityId` beside it.**
-
-### Reading by facility
-
-Every WMS list endpoint takes **either** `facilityId` **or** `locationId`, exactly one, enforced by
-`oneOf` in the querystring schema rather than by a check in the handler (#231). New callers should
-send `facilityId`. `locationId` stays until the frontend has migrated and a soak has passed, then it
-goes with the `Location` FKs.
-
-Repositories take a `WarehouseScope` rather than a bare id, and build their filter through
-`scopedWhere(orgId, scope)`, so a read cannot be written that narrows by warehouse without also
-narrowing by tenant.
-
-The WMS UI sends `facilityId` (#234). The warehouse picker is `FacilitySelect` over the
-`useFacilities` hook, one shared component rather than the nineteen copies each page used to carry.
-It also drops a filter those copies applied: they fetched `/api/v1/locations` and kept only
-`warehouse`, `distribution_centre` and `cross_dock` types, whereas a Facility is a warehouse by
-definition and the endpoint already excludes archived ones.
-
-`locationId` is nullable on the WMS models from #245, so a warehouse row can exist without a
-Location, which is what a standalone FinnWMS needs. Its foreign keys became `ON DELETE SET NULL`:
-deleting a Location detaches warehouse rows rather than refusing, and they keep their `facilityId`,
-which is the reference that matters from here on.
-
-**Inventory is the exception.** `InventoryRecord.locationId` is still NOT NULL and the inventory
-module has no facility reference, so putaway completion, returns and wave release all still need a
-real Location. `requireLocationForInventory` fails loudly rather than inventing one. Giving
-inventory a facility is Phase 4.
-
-**Writes moved too** (#248). Create command payloads name the `facilityId`, which
-`loadFacilityForWrite` looks up within the caller's org, so naming another tenant's facility misses
-rather than writing into their warehouse. `locationId` is still written alongside, from the
-facility's `sourceLocationId`, and is null for a facility that has none. Dropping the column, the
-`Location` foreign keys and the `locationId` query parameter is 6c.
-
-Bin label uniqueness is checked per facility rather than through the `(locationId, label)` compound
-unique, which cannot serve a warehouse-only install and never carried `orgId`.
-
-All sixteen WMS models carry `facilityId` (#285). Four of them — `CycleCount`, `ReplenishmentRule`,
-`LoadPlan` and `CartonCatalogue` — hold `locationId` as a plain column with no `Location` relation,
-so every dual-write batch built its list from the relation fields and missed them.
-
-`InventoryRecord` deliberately has none. It is still keyed on Location, so the WMS dashboard counts
-stock through the bins a facility owns rather than filtering inventory by facility directly.
-
-**The `Location` foreign keys are gone** (#280). `locationId` survives on the warehouse tables as a
-soft string reference, which is what the module rule asks for, and a schema without a `Location`
-table now resolves. The list endpoints take `facilityId` only.
-
-The columns themselves cannot go yet. `InventoryRecord.locationId` is NOT NULL and the inventory
-module has no facility, so putaway completion, returns and wave release still need a real Location;
-`CompletePutaway` also resolves a scanned bin by `(locationId, label)`. Giving inventory a facility
-is Phase 4, and the columns go with it.
-
-**Inventory has a facility, and its references into core are soft** (#297). `InventoryRecord` and
-`InventoryObservation` carry `facilityId`, the facility of the row's bin, written on every create
-(putaway, transfer, RMA restock, observation) and backfilled from the bin, or failing that from the
-facility derived from the row's own Location within its own org. Reads still go by `locationId`
-until they switch. The foreign keys from inventory to `Location` and `Customer` are gone, because
-these tables leave Prisma for the .NET service (ADR 0005). The inventory API still returns
-`ownerCustomer: { id, name }`, now looked up through core within the caller's org, so a record
-pointing at another org's customer shows no name.
-
-**Inventory is read by facility** (#297). The inventory and observation endpoints take
-`facilityId`, wave release allocates from the wave's facility, cycle counts and replenishment read
-stock and rules by facility and org, putaway resolves a scanned label within the task's facility,
-and the WMS dashboard counts stock by facility directly. `locationId` is nullable on inventory and
-written only when the bin has one, so a facility with no Location (a standalone FinnWMS) can hold
-stock. `requireLocationForInventory` is gone. A wave or putaway task with no facility is refused
-rather than guessed at. The inventory app picks a facility, and its session may read
-`/api/v1/facilities` (on both stacks) but no longer the dock app's Location list.
-
----
-
-### Domain: Warehouse Zones & Bins
-
-Manages the physical location hierarchy within warehouses: zones (logical areas), aisles, and bins (individual storage locations).
-
-### Commands
-- `warehouse_zone.create` - Create a zone within a location (type, temperature, hazmat, capacity)
-- `warehouse_zone.update` - Update zone properties
-- `warehouse_bin.create` - Create a single bin within a zone
-- `warehouse_bin.update` - Update bin properties (label uniqueness enforced on rename)
-- `warehouse_bin.bulk_create` - Generate bins from a label pattern ({aisle}-{row}-{level}) with ranges; max 10,000 per batch
-
-### Events
-- `warehouse_zone.created`, `warehouse_zone.updated`, `warehouse_zone.archived`
-- `warehouse_bin.created`, `warehouse_bin.updated`, `warehouse_bin.archived`, `warehouse_bin.bulk_created`
-
-### Side Effects
-- Zone and bin creation dual-writes `facilityId` alongside `locationId` (Phase 2a, #217)
-
----
-
-### Domain: Receiving
-
-Manages inbound goods - dock appointments, receiving tasks, and line-by-line item verification.
-
-### Commands
-- `receiving_appointment.create` - Schedule a dock appointment. Rejects a window that ends before it starts, and a dock bin belonging to another organisation
-- `receiving_appointment.check_in` - Carrier has arrived. Refused on a completed or cancelled appointment
-- `receiving_appointment.cancel` - Cancel a scheduled or checked-in appointment. Refused once completed, since goods already received cannot be un-received. Cancelling twice is a no-op
-- `receiving_task.create` - Create a receiving task (ASN-based with expected lines, or blind). Auto-updates linked appointment status.
-- `receiving_line.record` - Record a received item against an existing line (ASN) or create a new line (blind). Auto-starts task on first line recorded.
-- `receiving_line.inspect` - Set a line's inspection status. Scoped through its task, since `ReceivingLine` carries no `orgId`
-- `receiving_task.complete` - Complete receiving, tally totals, auto-generate putaway tasks for units with trackableUnitIds. Evaluates putaway rules for directed routing, falls back to first available bulk bin.
-
-### Events
-- `receiving_appointment.created`, `receiving_appointment.checked_in`, `receiving_appointment.cancelled`
-- `receiving_task.created`, `receiving_task.started`, `receiving_task.completed`
-- `receiving_line.recorded`, `receiving_line.inspected`
-- `putaway_task.created` (emitted by CompleteReceiving for each generated putaway task)
-
-### Side Effects
-- CompleteReceiving generates PutawayTasks using PutawayRule evaluation
-- Every receiving read and write is scoped to `req.orgId` (#220). `ReceivingRepository` exposes
-  reads only; there is no unscoped create or update on it to reach for
-- The org filter reaches inside the commands too (#220): `receiving_task.create` rejects an
-  appointment belonging to another organisation rather than moving it to `receiving`, and
-  `receiving_task.complete` looks its task up by id **and** `orgId`, as do the putaway rules and
-  bins it evaluates
-- Appointment status auto-updated on task creation and completion
-- Appointments, receiving tasks and the putaway tasks generated on completion dual-write
-  `facilityId` alongside `locationId` (Phase 2a, #225)
-
-### Mobile flow (warehouse app)
-- `/warehouse/tasks/receive/:id` opens the task. Summary card shows receiving type (ASN vs blind) + cross-dock flag + dock bin
-- Barcode scanner wedge hook (`useBarcodeScanner`) matches the scanned value against expected line SKUs and auto-opens that line with remaining qty pre-filled
-- Blind receipts: an unknown scan opens a "New SKU" panel where the worker enters a quantity, and the backend creates the line
-- Per-line inputs for received quantity and damaged quantity
-- Inspection chips (pass / fail / quarantine) appear next to completed lines
-- "Complete Receipt" button fires `receiving_task.complete` which cascades into auto-putaway generation
-
----
-
-### Domain: Cross-dock
-
-A workflow variant of receiving where goods skip storage entirely and sort directly to staging bins for outbound loading. Used for high-velocity flow-through operations.
-
-### How it works
-When a `ReceivingTask` is created with `crossDock: true`, the `CompleteReceiving` command diverges from the normal flow:
-- **Normal receiving**: Complete -> generate PutawayTask(s) -> worker puts goods into storage bins
-- **Cross-dock receiving**: Complete -> skip putaway entirely -> create StagingAssignment for each received unit -> move units directly to a staging/shipping_dock/cross_dock zone bin
-
-### Behaviour
-- Finds a staging bin at the location (zones with zoneType in `staging`, `shipping_dock`, or `cross_dock`)
-- For each received unit with a `trackableUnitId`:
-  1. Looks up the order via the receiving line's `orderLineItemId`
-  2. Creates a `StagingAssignment` (status: `staged`) linking unit to staging bin and order
-  3. Updates `TrackableUnit.currentBinId` and `currentZoneId` to the staging location
-- Emits `cross_dock.sorted` event with unit count and staging bin
-
-### Events
-- `cross_dock.sorted` - Emitted when a cross-dock receiving task sorts units to staging
-- `receiving_task.completed` - Includes `crossDock: true` and `crossDockSorted` count in payload
-
-### Side Effects
-- Units arrive at staging bins ready for inclusion in LoadPlans
-- Inventory is NOT created (goods are transient, never entering storage)
-- PutawayTasks are NOT generated
-
-### Key Files
-- `backend/src/commands/warehouse/CompleteReceivingCommand.ts` - Cross-dock branch in receiving completion
-- `backend/src/__tests__/commands/CrossDockCommands.test.ts` - 2 tests (cross-dock sort + non-crossdock control)
-
----
-
-### Domain: EDI 940 / 945 (Warehouse Shipping Order + Advice)
-
-The 940/945 pair is the 3PL-to-depositor interchange: a depositor (brand, shipper) sends a 940 telling the warehouse what to ship, and the warehouse sends back a 945 confirming what actually shipped. Together they replace manual order entry and packing-slip emails for customers running on a 3PL WMS.
+The 940/945 pair is the 3PL-to-depositor interchange: a depositor (brand, shipper) sends a 940 saying what to ship, and gets back a 945 confirming what actually shipped. Open TMS handles the transport side of that exchange. An inbound 940 becomes an order, and a delivered shipment sends the 945. It holds no stock and runs no warehouse.
 
 ### GS functional identifiers
 - 940: `OW` (Warehouse Shipping Order)
@@ -2526,78 +2197,17 @@ Both are registered in `TRANSACTION_TO_GS` / `GS_TO_TRANSACTION` and route throu
 
 ---
 
-### Domain: Container Intelligence
+## Packaging Types & Palletization
 
-Given a list of items to pack and the active carton catalogue, the service groups items by constraint profile (temperature zone + value class + hazmat compatibility), picks the smallest carton that qualifies for each group, and returns a multi-package plan with required ancillaries and handling flags. This prevents the warehouse from putting oxidizers next to flammables, high-value watches in a plain mailer, or frozen pharma in an uninsulated box.
-
-### Catalogue fields
-`CartonCatalogue` gains eight intelligence fields alongside its physical dimensions:
-- `temperatureZone` - `any` | `ambient` | `refrigerated` | `frozen` | `dry_ice`
-- `insulated` + `insulationHours` - whether and for how long the carton maintains temp without active cooling
-- `tamperEvident` - pre-sealed high-value packaging
-- `valueClass` - `any` | `standard` | `high_value`
-- `hazmatRated` + `hazmatClasses[]` - UN class codes the carton is approved to transport
-- `materialType` - `corrugated` | `plastic` | `metal` | `foam` | `composite`
-
-### Constraint rules
-| Cargo attribute | Carton must satisfy |
-|-|-|
-| `temperatureZone = 'ambient'` | `temperatureZone in ('any', 'ambient')` |
-| `temperatureZone in ('refrigerated', 'frozen', 'dry_ice')` | exact match - no "any" fallback |
-| `hazmat = true` with class X | `hazmatRated = true` AND class X is in the carton's `hazmatClasses[]` |
-| `hazmat = false` | carton's `hazmatClasses[]` is empty (hazmat cartons stay reserved for hazmat) |
-| `valueClass = 'high_value'` | carton's `valueClass = 'high_value'` |
-| Physical fit | cartonVolume >= sum(item volume × qty); maxWeightGrams >= total weight; longest item edge fits along one carton axis |
-
-### Hazmat segregation
-Incompatible UN classes cannot share a package even if both appear in the carton's approved list. The service keeps a simplified 49 CFR §177.848 / UN Model Regulations segregation matrix for classes 1, 2.1, 2.3, 3, 4.1, 4.2, 4.3, 5.1, 5.2, 6.1, and 8. Compatible pairs (e.g., class 3 + class 6.1) can share; incompatible pairs (e.g., class 3 + class 5.1) get split into separate packages automatically.
-
-### Grouping
-1. Non-hazmat items with the same `(temperatureZone, valueClass)` cluster into one group.
-2. Hazmat items cluster only when all existing classes in the group are compatible with the incoming class AND temperature / value match.
-3. Hazmat and non-hazmat items always split.
-
-### Ancillaries
-Automatically attached to the package suggestion based on cargo + carton:
-- `gel_pack` - refrigerated packages (always)
-- `dry_ice` - frozen or dry_ice packages; also added to refrigerated packages when `transitHours > 24`
-- `fragile_padding` - when any item is `fragile`
-- `tamper_seal` - high-value group using a carton that isn't already tamper-evident
-
-### API
-`POST /api/v1/containers/recommend` with body `{ locationId?, transitHours?, items: PackItem[] }` returns:
-```
-{
-  packages: PackageSuggestion[],        // one per constraint group
-  warnings: string[],                   // e.g., "Refrigerated package ... 36h transit - adding dry_ice"
-  errors: string[],                     // e.g., "No carton qualifies for group (temperature=frozen, ...)"
-  totalContainerCostCents: number,
-  totalWeightGrams: number,
-}
-```
-
-Each `PackageSuggestion` carries the selected `cartonId` + name, items, ancillaries, specialHandling, hazmatClasses, volume and weight utilization %, and a human-readable reason string.
-
-### Key Files
-- `backend/prisma/migrations/20260420_add_container_intelligence/migration.sql`
-- `backend/src/services/containers/ContainerIntelligenceService.ts` - service + segregation matrix
-- `backend/src/routes/containerIntelligence.ts` - recommend endpoint
-- `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - extended admin form + chips in table
-- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 36 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile ancillaries, multi-constraint splits, cost + weight totals)
-
----
-
-### Domain: Pallet Types & Palletization
-
-Standard pallet specs are first-class master data. Every org curates a `PalletType` catalog with EUR, US GMA, CHEP, Australian, half/quarter, and plastic variants. Pallet-level `TrackableUnit`s reference a `PalletType` so load plans, BOL generation, and palletization estimates use accurate dimensions and weight limits instead of guessing.
+Packaging specs are first-class master data. Every org curates a `PackagingType` catalogue, with a `kind` of pallet, carton, crate, drum, roll, bag, tote, loose or custom. The pallet kinds cover EUR, US GMA, CHEP, Australian, half/quarter and plastic variants. A `TrackableUnit` references a `PackagingType`, so BOL generation, rating and palletization estimates use accurate dimensions and weight limits instead of guessing.
 
 ### Schema
-`PalletType` fields: `code` (unique per org), `name`, `description`, external dimensions in mm (`lengthMm`, `widthMm`, deck `heightMm`), `tareWeightGrams`, `maxLoadGrams`, optional `maxStackHeightMm`, `material` (wood / plastic / metal / cardboard / composite), `reusable`, `isoCertified` (ISPM-15 heat treatment for international export), `stackable`, `active`.
+`PackagingType` fields: `code` (unique per org), `name`, `description`, `kind`, external dimensions in mm (`lengthMm`, `widthMm`, `heightMm`, which is the deck height for a pallet), `tareWeightGrams`, `maxLoadGrams`, optional `maxStackHeightMm`, `material` (wood / plastic / metal / cardboard / composite), `reusable`, `isoCertified` (ISPM-15 heat treatment for international export), `stackable`, `active`.
 
-`TrackableUnit.palletTypeId` is nullable so legacy pallets remain valid. When set, it anchors the unit to a real spec.
+`TrackableUnit.packagingTypeId` is nullable, so an ad-hoc unit remains valid. When set, it anchors the unit to a real spec.
 
 ### Standard seed
-13 standard types covering the common real-world pallets: EUR1 (1200×800), EUR2 (1200×1000), EUR3, EUR6 (half), US GMA (48×40), US 42×42, CHEP 1210, CHEP 48×40, AU 1165, plastic Euro + plastic GMA, one-way export, and quarter display. `POST /api/v1/pallet-types/seed-standards` bulk-adds missing rows (by code uniqueness).
+13 standard types covering the common real-world pallets: EUR1 (1200×800), EUR2 (1200×1000), EUR3, EUR6 (half), US GMA (48×40), US 42×42, CHEP 1210, CHEP 48×40, AU 1165, plastic Euro + plastic GMA, one-way export, and quarter display. `POST /api/v1/packaging-types/seed-standards` bulk-adds missing rows (by code uniqueness).
 
 ### Palletization planner
 `PalletizationPlanner.planHomogeneousPallet(palletType, carton)` returns:
@@ -2612,78 +2222,39 @@ Standard pallet specs are first-class master data. Every org curates a `PalletTy
 ### API
 | Method | Endpoint | Purpose |
 |--|--|--|
-| GET | `/api/v1/pallet-types` | List (optionally active-only) |
-| GET | `/api/v1/pallet-types/standards` | Preview the standard seed |
-| GET | `/api/v1/pallet-types/:id` | Detail |
-| POST | `/api/v1/pallet-types` | Create |
-| PUT | `/api/v1/pallet-types/:id` | Update |
-| DELETE | `/api/v1/pallet-types/:id` | Delete (soft-deactivates if referenced by any TrackableUnit) |
-| POST | `/api/v1/pallet-types/seed-standards` | Bulk-add missing standards |
-| POST | `/api/v1/pallet-types/:id/plan` | Layer/weight estimate for one pallet type and a carton |
-| POST | `/api/v1/pallet-types/recommend` | Rank all active types for a carton |
+| GET | `/api/v1/packaging-types` | List (optionally active-only) |
+| GET | `/api/v1/packaging-types/standards` | Preview the standard seed |
+| GET | `/api/v1/packaging-types/:id` | Detail |
+| POST | `/api/v1/packaging-types` | Create |
+| PUT | `/api/v1/packaging-types/:id` | Update |
+| DELETE | `/api/v1/packaging-types/:id` | Delete (soft-deactivates if referenced by any TrackableUnit) |
+| POST | `/api/v1/packaging-types/seed-standards` | Bulk-add missing standards |
+| POST | `/api/v1/packaging-types/:id/plan` | Layer/weight estimate for one pallet type and a carton |
+| POST | `/api/v1/packaging-types/recommend` | Rank all active types for a carton |
 
 ### UI
-- `/wms/pallet-types` - table with code, name, dimensions (cm), tare and max load (kg), badges for reusable / ISPM-15 / stackable. Create/edit modal with the full spec form. One-click "Load standard types" button seeds the 13 common types.
-- Sidebar entry under the Warehouse app.
+- `/packaging-types` - table with kind, code, name, dimensions (cm), tare and max load (kg), badges for reusable / ISPM-15 / stackable. Create/edit modal with the full spec form. One-click "Load standard types" button seeds the standard types.
+- Sidebar entry under Operations, in the Network section.
 
 ### Key Files
 - `backend/prisma/migrations/20260420_add_pallet_types/migration.sql`
-- `backend/src/services/palletization/standardPalletTypes.ts` - canonical seed data
+- `backend/src/services/palletization/standardPackagingTypes.ts` - canonical seed data
 - `backend/src/services/palletization/PalletizationPlanner.ts` - homogeneous planner + recommender
-- `backend/src/routes/palletTypes.ts` - CRUD + seed + plan + recommend
-- `frontend/src/vnext-design/VNextPalletTypes.tsx` - admin UI
+- `backend/src/routes/packagingTypes.ts` - CRUD + seed + plan + recommend
+- `frontend/src/vnext-design/VNextPackagingTypes.tsx` - admin UI
 - `backend/src/__tests__/services/PalletizationPlanner.test.ts` - 11 tests (orientation, height/weight bounds, utilization, recommendation ranking, ties, inactive filtering)
 
 ---
 
-### Domain: Warehouse Operations Dashboard
+## Cutoff-at-Risk Monitoring
 
-One aggregate endpoint (`GET /api/v1/wms/operations-dashboard`) returns a snapshot of warehouse health across six dimensions, built from parallel Prisma queries. Auto-refreshes every 60 seconds on the admin UI.
-
-### KPI sections
-1. **Throughput** - completed receipts, putaways, picks, packs, and dispatched shipments for today (UTC midnight boundary) vs last 7 days.
-2. **Cycle times** (30-day avg):
-   - Pick cycle = completed PickTask `completedAt - startedAt`
-   - Dock-to-stock = completed PutawayTask `updatedAt - receivingTask.createdAt` (only for putaways linked to a receiving task)
-   - Order-to-ship = dispatched Shipment `updatedAt - order.createdAt` via OrderShipment join
-   - Each metric ships with a `samples` count so operators can gauge confidence
-3. **Quality & accuracy** (30-day):
-   - Pick accuracy = `completed / (completed + short_pick)` × 100
-   - Pack audit pass rate = `pass / total` × 100 (from `PackAudit.verdict`)
-   - Inventory record accuracy = `(1 - Σ|counted - expected| / Σ expected) × 100` across recent `CycleCountLine` rows with `countedQuantity != null`
-4. **Live work queue** - pending counts for pick tasks, putaway tasks, pack tasks, active waves (`released` / `in_progress`), and receiving tasks in progress.
-5. **Exceptions** - open + critical issues, cutoff-at-risk critical + warning counts (driven by `Shipment.lastCutoffRiskSeverity`), pending RMAs in the warehouse lifecycle, open pack-audit-fail issue count.
-6. **Capacity** - total bins, bins with inventory, utilization percent. Utilization returns null when no bins exist.
-
-### UI behavior
-- Tone coloring on quality metrics: ≥98% success, 95-97% warning, <95% error. Same logic on capacity utilization (inverted for warning at >85%, error at >95%).
-- Every KPI card is clickable when there's a relevant drill target (picks → `/wms/picking`, pack audits → `/wms/pack-audits`, cutoff → `/wms/cutoff-monitor`, issues → `/issues`, returns → `/wms/returns`).
-
-### Why a single endpoint
-The queries are read-only and run concurrently through `Promise.all` - a single round-trip keeps the admin UI simple and eliminates N+1 fetch patterns. Since most KPIs refresh together, interleaved queries aren't a concern.
-
-### Key Files
-- `backend/src/services/warehouse/WarehouseOperationsDashboardService.ts` - Snapshot aggregator
-- `backend/src/routes/warehouseOperationsDashboard.ts` - Single endpoint
-- `frontend/src/vnext-design/VNextWmsOperationsDashboard.tsx` - Dashboard UI
-- `backend/src/__tests__/services/WarehouseOperationsDashboardService.test.ts` - 13 tests (throughput windowing, cycle time math, pick accuracy, pack audit pass rate, inventory accuracy from cycle counts, capacity, exception rollup)
-
----
-
-### Domain: Cutoff-at-Risk Monitoring
-
-Carriers publish daily handoff cutoff times (e.g. 16:30 for same-day FedEx Ground pickup). Missing one slips the shipment a day. The cutoff-at-risk monitor watches open shipments, projects how long the remaining warehouse work will take, and fires `shipment.cutoff_at_risk` when the projected ready time will miss the cutoff (the Issue Engine raises the Issue from that event).
+Carriers publish daily handoff cutoff times (e.g. 16:30 for same-day FedEx Ground pickup). Missing one slips the shipment a day. The cutoff-at-risk monitor watches open, carrier-assigned shipments (`draft`, `booked`, `at_pickup`) and fires `shipment.cutoff_at_risk` when a shipment that has not left yet will miss today's cutoff (the Issue Engine raises the Issue from that event).
 
 ### CarrierCutoff schema
 Per-day-of-week rows per carrier: `dayOfWeek (0-6)`, `cutoffLocalTime (HH:mm)`, `timezone (IANA)`, optional `serviceLevel` and `locationId` override, `active` flag. Multiple rows per carrier are supported; the earliest matching row for today wins.
 
 ### Projected ready time
-Simple additive model (v1, configurable per-instance):
-- Each pending pick task: +45 min
-- Each pending pack task: +15 min
-- No load plan yet: +30 min
-
-Work is resolved by walking `Shipment → OrderShipment[] → Order.id → PickTask/PackTask` (non-completed, non-cancelled rows) and `Shipment → LoadPlan`.
+A shipment that has not left yet needs a fixed handling allowance before it can be handed to the carrier. The projected ready time is the time of the scan plus that allowance: `minutesToReady`, 30 minutes by default, configurable per instance of `ShipmentCutoffMonitorService`. Nothing else feeds it.
 
 ### Severity bands
 The monitor **fires events only** — issue creation/escalation/auto-resolve is owned by the deterministic Issue Engine (`shipment_cutoff_risk`), which consumes these events.
@@ -2701,14 +2272,22 @@ Re-evaluation runs every 5 min. To avoid event spam:
 - Issue-level dedup (one open issue per shipment, escalation) is handled by the Issue Engine, not the monitor. The monitor only tracks `Shipment.lastCutoffRiskSeverity` for its own event dedup and to detect the recovery edge.
 
 ### Events
-- `shipment.cutoff_at_risk` - payload: `{ shipmentId, shipmentReference, carrierId, cutoffAt, projectedReadyAt, bufferMinutes, severity, blockingStage, pendingPickTasks, pendingPackTasks, pendingLoadPlan }`
-- `shipment.cutoff_cleared` - emitted when a previously-flagged shipment returns to a safe buffer (or completes). The Issue Engine auto-resolves the open cutoff issue.
+- `shipment.cutoff_at_risk` - payload: `{ shipmentId, shipmentReference, carrierId, cutoffAt, projectedReadyAt, bufferMinutes, severity }`
+- `shipment.cutoff_cleared` - emitted when a previously-flagged shipment is evaluated again and has a safe buffer. The Issue Engine auto-resolves the open cutoff issue.
+
+A flagged shipment that departs, is cancelled or is archived drops out of the scan, so it is never evaluated again and its cutoff issue stays open until someone resolves it (#399).
 
 ### API
 - CRUD: `GET/POST /api/v1/carriers/:carrierId/cutoffs`, `PUT/DELETE /api/v1/carrier-cutoffs/:id`
 - `GET /api/v1/cutoff-monitor/at-risk?severity=warning|critical` - current at-risk list
-- `GET /api/v1/cutoff-monitor/evaluate/:shipmentId` - evaluate a single shipment without firing
-- `POST /api/v1/cutoff-monitor/run` - manual full scan (useful for testing + on-demand review)
+- `GET /api/v1/cutoff-monitor/evaluate/:shipmentId` - evaluate a single shipment
+- `POST /api/v1/cutoff-monitor/run` - manual full scan of the caller's org (useful for testing + on-demand review)
+
+Every route is guarded by `registerReadWriteGuard(server, 'carriers')`: reads need `carriers:read`, and everything else needs `carriers:write`.
+
+### UI
+- `/cutoff-monitor` - the at-risk list, under Operations
+- `/carrier-cutoffs` - per-carrier cutoff configuration, under Operations in the Network section
 
 ### Worker
 `cutoffMonitorWorker` registers a pg-boss cron on the `cutoff-monitor` queue. Default `*/5 * * * *`, override with `CUTOFF_MONITOR_CRON`.
@@ -2718,72 +2297,26 @@ Re-evaluation runs every 5 min. To avoid event spam:
 - `backend/src/services/cutoff/ShipmentCutoffMonitorService.ts`
 - `backend/src/workers/cutoffMonitorWorker.ts`
 - `backend/src/routes/cutoffMonitor.ts`
+- `backend/src/auth/readWriteGuard.ts` - the read/write permission guard
 - `frontend/src/vnext-design/VNextCutoffDashboard.tsx` - at-risk list with stats
 - `frontend/src/vnext-design/VNextCarrierCutoffs.tsx` - per-carrier cutoff configuration
-- `backend/src/__tests__/services/ShipmentCutoffMonitorService.test.ts` - 24 tests
+- `backend/src/__tests__/services/ShipmentCutoffMonitorService.test.ts` - 28 tests
 
 ---
 
-### Domain: Pack Audit (weight / dim-weight variance)
+## Returns / RMA
 
-Pack audits run at the pack station after a pick is packed into a carton. A scale captures the actual weight in grams, and optionally a cubiscan (or tape measure) captures LxWxH in mm. The service compares actual against the expected total (sum of `ProductUom.weightGrams × line.expectedQuantity` across the pack task) and assigns a verdict.
+Full returns lifecycle from customer request through receipt, inspection, disposition, and refund. Open TMS records what was received and what was decided about it. It holds no stock, so it does not track where a returned item is put. See `docs/RETURNS_SPECIFICATION.md` for the complete specification.
 
-### Verdict logic
-| `|variance|` vs tolerance | Verdict |
-|--|--|
-| `≤ tolerance` | `pass` |
-| `≤ 2 × tolerance` | `warning` - medium-priority quality issue auto-raised |
-| `> 2 × tolerance` | `fail` - high-priority quality issue auto-raised |
-
-Default tolerance is 10%, overridable per-audit via `weightTolerancePercent` on the command payload. The tolerance actually applied is persisted on the `PackAudit` row so historical rows stay self-describing even if defaults change.
-
-### Dim-weight
-Dim-weight is calculated only when an audit links to a `CartonCatalogue` (expected dims) AND the caller supplies all three actual dims. Formula is the industry standard `(L × W × H cm) / 5000 = kg`. The result is stored as a separate `dimWeightVariancePercent` column; verdict today is driven only by the scale weight, but the dim-weight delta is surfaced in UI so ops can investigate.
-
-### Issue auto-creation
-When verdict is `warning` or `fail`, the deterministic issue engine raises the issue from its registry entry (`pack_audit_variance`: `category: 'exception'`, `sourceEntityType: 'pack_task'`, verdict `fail` maps to high priority, `warning` to medium), with the engine's full signal ledger, dedup, corroboration scoring and SLA stamping. `PackAuditLinkHandler` (WMS since #359, asking core for the open issue through `IOpenIssueLookup`) maintains the `PackAudit.issueId` back-link (on `issue.created` for the first raise, on the variance event for repeats against an open issue). The previous behaviour (inline `issue.create` in the command's transaction with the invalid `category: 'quality'`) bypassed the issue pipeline, so those issues never fired `issue.created` and never reached `IssueReadModel` or the triage board; `scripts/fix-pack-audit-issues.ts` repairs historical rows, followed by the read-model backfill.
-
-### Events
-- `pack.audit_recorded` - every audit, payload includes verdict, variances, expected/actual weight, tolerance, issueId (null at emit time; linked after commit)
-- `pack.audit_variance_detected` - only warning/fail, payload includes verdict, both variances, expected/actual weight, tolerance and auditor notes (what the issue handler needs to build the issue)
-
-### Commands
-- `RECORD_PACK_AUDIT` - compute expected (unless override supplied), compute variance, assign verdict, persist audit row, emit events. Issue creation happens after commit via `PackAuditIssueHandler` → `CREATE_ISSUE`
-
-### API
-| Method | Endpoint | Purpose |
-|-|-|-|
-| POST | `/api/v1/pack-audits` | Record a new audit (weight required, dims optional) |
-| GET | `/api/v1/pack-audits` | List with filters `verdict`, `packTaskId` |
-| GET | `/api/v1/pack-audits/:id` | Detail including full pack task + lines |
-| GET | `/api/v1/pack-audits/stats` | 30-day totals + pass rate |
-| GET | `/api/v1/warehouse/pack-tasks/:id/audit-context` | Pre-computed expected totals + SKU catalog data for the mobile app, plus the task's existing audit history |
-
-### UI
-- Admin: `/wms/pack-audits` - stats tiles (total, pass rate, warnings, failures over 30 days), verdict filter, table with sign-colored variance, one-click jump to the auto-raised issue
-- Warehouse mobile: `/warehouse/tasks/pack-audit/:packTaskId` - shows expected weight prominently, scale input with numeric keyboard, optional LxWxH inputs, notes, previous-audit history. Submit returns an immediate verdict tile with the variance, plus an "issue raised" banner when applicable
-
-### Key Files
-- `backend/prisma/migrations/20260419_add_pack_audit/migration.sql` - creates `PackAudit` table
-- `backend/src/commands/packAudit/RecordPackAuditCommand.ts` - command handler with verdict logic and auto-issue creation
-- `backend/src/routes/packAudit.ts` - five admin + warehouse endpoints
-- `frontend/src/warehouse/WarehousePackAudit.tsx` - mobile capture page
-- `frontend/src/vnext-design/VNextWmsPackAudits.tsx` - admin list + stats
-- `backend/src/__tests__/commands/PackAuditCommands.test.ts` - 10 tests covering verdict boundaries, overrides, dim-weight math, validation
-
----
-
-### Domain: Returns / RMA
-
-Full returns lifecycle from customer request through physical receipt, inspection, disposition, and refund. See `docs/RETURNS_SPECIFICATION.md` for the complete specification.
+The RMA routes are guarded by `registerReadWriteGuard(server, 'returns')`: reads need `returns:read`, and everything else needs `returns:write`.
 
 ### Commands
 - `rma.create` - Create a new RMA for a customer return. Validates that requested quantities don't exceed order line quantities. Auto-calculates suggested refund from order line prices. Optionally auto-authorizes for CSR-initiated RMAs.
 - `rma.authorize` - CSR approves a requested RMA. Moves status from `requested` to `authorized`.
 - `rma.reject` - CSR rejects an RMA with reason notes.
-- `rma_line.receive` - Record physical receipt of a returned item at the dock. Moves the unit to quarantine zone with `qualityStatus: quarantine`. Advances RMA status to `received` when all lines are fully received.
-- `rma_line.inspect` - Inspector sets final disposition per line. Routes unit to next physical destination (putaway for restock, refurb zone for refurb, etc.). Updates `qualityStatus` based on disposition (available for restock, hold for refurb, damaged for scrap, quarantine for others).
-- `rma.complete` - Finalizes RMA. Emits `rma.restock_requested` per `restock` line; the warehouse puts the stock back (see below). Finance can override the suggested refund with `actualRefundCents` and adjustment notes.
+- `rma_line.receive` - Record receipt of a returned item: the received quantity, and optionally the `trackableUnitId` of the unit that came back. Moves an `authorized` RMA to `received`, and emits `rma.goods_received` once every line is fully received.
+- `rma_line.inspect` - Inspector sets the inspection status, final disposition and notes per line. The RMA moves to `inspecting`, then to `dispositioning` once every line has a disposition.
+- `rma.complete` - Finalizes RMA. Finance can override the suggested refund with `actualRefundCents` and adjustment notes. The `rma.completed` payload lists each line's SKU, disposition and received quantity.
 
 ### Seven Dispositions
 `restock`, `refurb`, `scrap`, `recycle`, `donate`, `rtv`, `customer_keeps`. See specification doc for full behaviour of each.
@@ -2799,34 +2332,30 @@ requested -> authorized -> in_transit -> received -> inspecting -> dispositionin
 - `rma.requested` - Customer portal submission or CSR creation
 - `rma.authorized` - CSR approved or auto-authorized on creation
 - `rma.rejected` - CSR declined the return
-- `rma.goods_received` - All lines physically received at dock
+- `rma.goods_received` - All lines received
 - `rma.line_inspected` - Inspector set disposition on a line
 - `rma.disposition_set` - All lines on an RMA have dispositions (moves to `dispositioning` status)
-- `rma.completed` - RMA closed, inventory updated, ready for credit note issuance
+- `rma.completed` - RMA closed, ready for credit note issuance
 - `rma.refund_adjusted` - Finance overrode the suggested refund amount
 
 ### Side Effects
-- **Quarantine-first flow**: returned units always go to quarantine zone before any other action. No direct restock.
-- **Restock inventory movement** (WMS since #359): `WarehouseReturnsStockHandler` takes each `rma.restock_requested` and dispatches `inventory.receive_return` with an idempotency key per RMA line, which creates or increments the `InventoryRecord` at the route-to-bin with an `InventoryTransaction` of type `receive`, reason `return`, referenceType `rma`, and emits `inventory.return_received`. A redelivered event adds nothing. Returns no longer read bins: the receive and inspect routes check a named bin exists in the org through the `IBinDirectory` port and answer 404 if not.
-- **Trackable unit quality status** changes based on disposition: available/hold/damaged/quarantine.
+- **A disposition records a decision.** `restock` or `scrap` says what was decided about the item. Nothing in Open TMS moves stock or changes a unit as a result.
 - **Finance review queue**: RMAs in `dispositioning` status appear in the refund review queue for finance team approval before completion.
+- **Customer webhooks**: `CustomerWebhookHandler` subscribes to `rma.*`, so a customer with a webhook hears about each step.
 
 ### Key Files
-- `backend/src/commands/rma/` - All RMA command handlers (6 handlers)
-- `backend/src/routes/rma.ts` - RMA API endpoints (9 endpoints)
-- `backend/src/__tests__/commands/RmaCommands.test.ts` - 15 tests
-- `frontend/src/vnext-design/VNextWmsReturns.tsx` - Returns list
-- `frontend/src/vnext-design/VNextWmsCreateReturn.tsx` - Multi-step RMA creation form
-- `frontend/src/vnext-design/VNextWmsReturnDetail.tsx` - RMA detail with inline inspection and completion
-- `frontend/src/vnext-design/VNextWmsRefundReview.tsx` - Finance refund approval queue
+- `backend/src/commands/rma/` - All RMA command handlers (9 handlers)
+- `backend/src/routes/rma.ts` - RMA API endpoints (13 endpoints)
+- `backend/src/__tests__/commands/RmaCommands.test.ts` - 17 tests
+- `frontend/src/vnext-design/VNextReturns.tsx` - Returns list, at `/returns`
+- `frontend/src/vnext-design/VNextCreateReturn.tsx` - Multi-step RMA creation form
+- `frontend/src/vnext-design/VNextReturnDetail.tsx` - RMA detail with inline receipt, inspection and completion
+- `frontend/src/vnext-design/VNextRefundReview.tsx` - Finance refund approval queue, at `/returns/refund-review`
 - `backend/src/routes/customerRmaApi.ts` - Public customer-facing RMA API (ApiKey-authenticated)
 - `backend/src/routes/customerPortal.ts` - Customer portal RMA endpoints (JWT-authenticated, list/detail/create/label-download/eligible-orders)
 - `frontend/src/pages/customer-portal/CustomerReturns.tsx` - Portal: list my returns
 - `frontend/src/pages/customer-portal/CustomerRequestReturn.tsx` - Portal: request a return (multi-step form)
 - `frontend/src/pages/customer-portal/CustomerReturnDetail.tsx` - Portal: return detail with status explanation + label download
-- `backend/src/routes/rma.ts` - `GET /api/v1/warehouse/rmas` - enriched list for warehouse mobile (linesToReceive / linesToInspect counts, supports rmaNumber exact lookup for scanned labels)
-- `frontend/src/warehouse/WarehouseReturnReceive.tsx` - Mobile: scan RMA and receive lines with per-line qty input
-- `frontend/src/warehouse/WarehouseReturnInspect.tsx` - Mobile: set condition + disposition per received line (7 disposition choices with hints)
 - `backend/src/services/EDI180ParseService.ts` - EDI 180 inbound parser with X12 reason code mapping
 - `backend/src/services/EDI180Service.ts` - EDI 180 outbound generator (authorization response)
 - `backend/src/routes/edi180.ts` - EDI 180 inbound (auto-creates RMA) + outbound generation endpoints
@@ -2889,399 +2418,6 @@ Returns can enter the system through five channels, all converging on the same `
 
 ---
 
-### Domain: Putaway
-
-Directs received goods to their storage location with scan-to-confirm and constraint validation.
-
-### Commands
-- `putaway_rule.create` - Create a directed-putaway rule. Target zone and target bin are both
-  checked against the caller's organisation: a rule pointing at another tenant's bin would route
-  their stock into ours
-- `putaway_task.assign` - Assign a putaway task to a worker
-- `putaway_task.complete` - Scan-to-confirm completion:
-  1. Resolves scanned bin label to actual bin
-  2. Detects deviation (scanned != directed) and records it
-  3. Validates bin constraints (temperature compatibility, hazmat certification) - warnings returned but don't block
-  4. Updates TrackableUnit.currentBinId and currentZoneId (cascades to child units)
-  5. Increments bin capacity counters (currentPalletCount, currentWeightKg)
-  6. Creates/updates InventoryRecord + immutable InventoryTransaction
-
-### Events
-- `putaway_rule.created`
-- `putaway_task.assigned`, `putaway_task.started`, `putaway_task.completed`
-- `putaway_task.deviation` - Emitted when scanned bin differs from directed target
-- `inventory.received` - Emitted when putaway writes to inventory
-
-### Side Effects
-- Putaway completion creates the first InventoryRecord for received goods
-- Bin capacity denormalization updated on completion
-- Every putaway read is scoped to `req.orgId` through `PutawayRepository` (#220)
-- Putaway rules and tasks dual-write `facilityId` alongside `locationId` (Phase 2a, #225)
-
-### Putaway Rule Evaluation
-- Rules evaluated in priority order (lower = higher priority), first match wins
-- Criteria (all nullable = match any): skuPattern (glob), temperatureRequirement, hazmat, customerId, velocityClass, unitType
-- Target types: specific_bin, zone (first available), next_available_in_zone (capacity + level preference)
-- Consolidation: when enabled, prefers bins where the same SKU already has inventory
-- Fallback: first available bin in any bulk_storage zone
-
----
-
-### Domain: Inventory
-
-Tracks stock levels across warehouse bins with an immutable transaction ledger.
-
-### Commands
-- `inventory.adjust` - Manual stock correction with reason code (damage, expired, recount, scrap, found, return). Validates non-negative result.
-- `inventory.transfer` - Move stock between bins. Creates/updates InventoryRecord at target, cleans up empty source records. Two-sided transaction ledger entries.
-
-### Events
-- `inventory.adjusted` - Includes sku, quantityChange, reasonCode, previousQuantity, newQuantity
-- `inventory.transferred` - Includes sku, quantity, sourceBinId, targetBinId
-
-### Side Effects
-- Empty InventoryRecords (zero on-hand, zero allocated, zero hold) are deleted on transfer
-- A record created at the target of a transfer takes the target bin's facility (#297)
-
----
-
-### Domain: Inventory Observations (#233)
-
-A lightweight, non-authoritative record of "at time T, someone observed X at location Y" from an
-ad hoc scan or spot-check. Deliberately distinct from `CycleCount` (a formal, stateful audit
-process with expected-vs-counted variance and auto-adjust) and from `InventoryTransaction` (the
-system-driven stock ledger) — recording an observation does **not** itself change
-`quantityOnHand`. It's evidence, not a correction.
-
-**Model:** `InventoryObservation` (table role: ledger, insert-only). Best-effort linked to the
-matching `InventoryRecord` (by bin + sku + uomCode + lotNumber) when one exists; `observedQuantity`
-is nullable so a pure "I saw this SKU here" scan with no count is valid. `cycleCountLineId` is a
-soft string reference (not a Prisma relation) so it can later be promoted into a formal count line
-without requiring one up front — `CycleCountLine` is a `wms` model, and `inventory` may not hold a
-hard FK into `wms` (see the module-boundaries rule).
-
-### Commands
-- `inventory_observation.record` — Validates the bin belongs to the caller's org and the stated
-  location, then inserts the observation row directly inside the transaction (ledger write, no
-  projection needed — read paths query the table directly, same pattern as
-  `InventoryTransaction`/`GET /api/v1/inventory/transactions`).
-
-### Events
-- `inventory_observation.recorded` — Includes locationId, binId, sku, uomCode, observedQuantity,
-  inventoryRecordId (nullable)
-
-### Access surfaces
-- Admin desktop: `GET/POST /api/v1/inventory/observations`, gated by the existing `wms:read`/
-  `wms:write` permission family (`registerWmsGuard`), same as the rest of the `inventory` module's
-  routes.
-- A new **inventory-app** mobile-web surface (`frontend/src/inventory-app/`, routed under
-  `/inventory-app/*`) — a lighter, separately-scoped sibling of the warehouse PWA focused on
-  checking stock levels and recording observations, for a future companion Android client. It logs
-  in through the same magic-link/password flow as the warehouse PWA (`WarehouseService`), but
-  requests a narrower `scope: 'inventory'` session JWT instead of `scope: 'warehouse'`.
-
-### The `scope: 'inventory'` JWT (`backend/src/middleware/jwtAuth.ts`)
-Deliberately narrower than the existing `scope: 'warehouse'` PWA session, so a lost or leaked
-inventory-app device has a smaller blast radius than a warehouse-floor one:
-- **Allowed:** `GET /api/v1/inventory*` (levels, summary, detail, observations),
-  `GET /api/v1/warehouse/zones`, `GET /api/v1/warehouse/bins`, `GET /api/v1/warehouse/locations`,
-  and the single write `POST /api/v1/inventory/observations`.
-- **Not allowed:** stock adjust/transfer, cycle-count creation, zone/bin writes, and everything the
-  `warehouse` scope can reach that isn't listed above (receiving, putaway, picking, packing, RMAs).
-- `MagicLink.scope` (defaulting to `'warehouse'`) records which surface a given link mints into,
-  so the same magic-link/password-login endpoints serve both PWAs without duplicating the login
-  flow.
-
----
-
-### Domain: Fulfilment Demand (WmsFulfilmentOrder)
-
-The warehouse's own record of what it has been asked to ship. Wave planning, eligibility and
-allocation all read this, never the TMS `Order` tables, because a standalone FinnWMS has no TMS
-order pipeline to read.
-
-**Models:** `WmsFulfilmentOrder`, `WmsFulfilmentOrderLine` (table role: read model).
-
-The link back to whatever created the demand is a soft `(sourceType, sourceId)` pair, never a
-foreign key. `sourceType` is `tms_order` today; a WMS-only install writes `edi_940`, `api` or
-`manifest` rows into the same table and nothing downstream changes.
-
-**Built by:** `WmsFulfilmentOrderProjection`, subscribing to `order.*` and `order_line_item.*`.
-It reads the source through `IFulfilmentDemandSource` (a core port implemented by TMS's
-`OrderFulfilmentDemandSource`), so the projection itself never touches a TMS model.
-
-**Projection behaviour:**
-- Every relevant event re-projects the whole order and replaces its lines. Order and line events
-  arrive independently and can interleave, and a wave built from a half-applied order picks the
-  wrong stock. Re-projection is idempotent and costs one query.
-- `order.status_changed` carries the status through verbatim, which is what drops a cancelled or
-  archived order out of wave eligibility. WMS treats the value as opaque apart from that and the
-  template rules.
-- `order.deleted`, and any event whose source no longer resolves, removes the row.
-- Delivery, exception and shipment-assignment events are ignored: they don't change what the
-  warehouse has to pick.
-
-**Backfill:** `npx tsx backend/src/scripts/backfill-read-models.ts` runs the projection itself
-rather than a second copy of the mapping, so the backfill cannot drift from the live path. It
-covers every organisation.
-
----
-
-### Cross-module reads in the warehouse (#359)
-
-WMS commands read no TMS table. What they need from TMS comes from the warehouse's own copies:
-`WmsFulfilmentOrder` and its lines (which carry each source line's dimensions, for cartonisation)
-and `HandlingUnit`. Receiving's cross-dock and cartonisation find a line by its source line id;
-staging checks the order against `WmsFulfilmentOrder`. Where a route names something TMS owns, it
-asks through a port before dispatching: `POST /api/v1/staging` checks the shipment through
-`IShipmentDirectory` (404 if not in the org). Load plans order by order position; the shipment-stop
-query that used to sit there was read and then ignored.
-
-Manifest ingestion (supplier ASNs into receiving) is a warehouse intake: `ManifestTemplate` and
-`ManifestUpload` are WMS models, `ManifestUpload` carries `facilityId`, and its `locationId` is a soft
-reference.
-
----
-
-### Domain: Handling Units
-
-The warehouse's own record of a pallet, tote or box (#357, split step 2b). Until this, warehouse
-state (bin, zone, lot, quality, owner, nesting) was written onto the TMS `TrackableUnit`.
-
-`HandlingUnitProjection` keeps one `HandlingUnit` per TMS unit, with the **same id**, built from
-`trackable_unit.*`, `order_line_item.*` and `order.deleted` events through the `IHandlingUnitSource`
-port (implemented by TMS as `TrackableUnitHandlingSource`). It copies identity (identifier, type,
-barcode, order) and contents (`HandlingUnitLine`, one per packed order line) and never writes
-warehouse state, so a replayed event cannot move a pallet. A unit deleted upstream is marked with
-`sourceRemovedAt` rather than deleted, because the warehouse may still hold it.
-
-**The warehouse reads and writes only its handling units** (#357 step 2). Receiving, putaway,
-cross-dock, staging, packing, loading and load plans check and move the `HandlingUnit`, scoped by
-org, and putaway reads the unit's contents and quality from it. Nothing in WMS touches
-`TrackableUnit` any more. Warehouse rows still carry both `trackableUnitId` and `handlingUnitId`
-(the same value) until step 3 drops the first. The putaway and staging APIs return `handlingUnit`
-(with `lines`) in place of `trackableUnit` (with `lineItems`).
-
-Commands:
-- `handling_unit.move` - moves a unit to a bin in the caller's org and optionally sets its quality
-  (`available`, `hold`, `quarantine`, `damaged`). Emits `handling_unit.moved` with a reason and
-  reference.
-
-Returns are TMS, but a returned unit's bin and quality are warehouse state, so `rma.receive_line`
-and `rma.inspect_line` emit `rma.unit_moved` instead of writing them, and
-`HandlingUnitReturnsHandler` dispatches `handling_unit.move`. A unit the projection hasn't created
-yet fails the move and the queue retries it.
-
-A replenishment putaway names no unit (it used to put an inventory record id in
-`trackableUnitId`, which the foreign key refused). Completing one isn't supported yet: #380.
-
-Backfill: `--only=handlingUnits`.
-
----
-
-### Domain: Waves & Picking
-
-Groups orders into pick waves and generates walk-sequence-optimized pick tasks. All three wave
-commands read `WmsFulfilmentOrder` rather than `Order` or `OrderLineItem`. An `Allocation` records
-its demand as `(demandType, demandId)`: the fulfilment order's `sourceType` and the source line id
-(#358). `PickLine` carries the same line id. Neither holds a foreign key to the order tables.
-
-### Commands
-- `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
-- `wave.release` - Release wave: hard-allocates inventory (FIFO) for each order line, creates PickTasks with walk-sequence-sorted PickLines. Discrete strategy = one task per order, batch = one task for all.
-- `pick_task.assign` - Assign a pick task to a picker. Refused once completed or cancelled; a task
-  already in progress can be reassigned, since a picker can be pulled off a job mid-walk
-- `pick_line.complete` - Complete a pick line: deducts from InventoryRecord (quantityOnHand + quantityAllocated), creates InventoryTransaction (type: pick). Short pick handling: backorder (keep allocated) or cancel_line (release back to available). Auto-completes task and wave when all lines done.
-
-### Events
-- `wave.created`, `wave.released`, `wave.completed`, `wave.cancelled`
-- `pick_task.created`, `pick_task.assigned`, `pick_task.completed`
-- `pick_line.completed`, `pick_line.short`
-
-### Side Effects
-- Wave release hard-allocates inventory (increments quantityAllocated, decrements quantityAvailable)
-- Pick line completion decrements quantityOnHand and creates pick transaction
-- Short pick with cancel_line releases allocation back to available
-- Task auto-completes when all lines done; wave auto-completes when all tasks done
-- Wave, pick task, pack task and staging reads are scoped to `req.orgId` through `WaveRepository`
-  and `PackingRepository` (#220)
-- `wave.release` looks its wave up by id **and** `orgId`, and allocates only inventory in the
-  caller's org. Filtering on location and SKU alone hard-allocated another tenant's stock and
-  decremented their `quantityAvailable` (#220)
-- Pick tasks dual-write `facilityId` alongside `locationId`, resolved once per release and shared
-  by all three picking strategies (Phase 2a, #227)
-- Waves and wave templates do the same (Phase 2a, #229). `wave_template.apply` resolves the
-  facility from the template's location rather than copying the template's own `facilityId`, which
-  may predate the backfill, and skips resolution entirely when no eligible orders are found
-- `wave_template.apply` looks its template up by id **and** `orgId`. Applying a template creates a
-  wave at that template's location, so a bare id lookup built the wave on another tenant's floor
-  and against their grouping rules (#220)
-
----
-
-### Domain: Packing & Loading
-
-Verifies picked items at pack stations, stages for outbound, and loads onto vehicles.
-
-### Commands
-- `pack_task.create` - Create a pack task with lines (typically from completed pick). Links to order and pick task.
-- `pack_line.complete` - Verify and pack a line item. Auto-starts task, auto-completes when all lines done.
-- `staging_assignment.create` - Stage a packed unit at a dock bin. Moves TrackableUnit to staging bin.
-- `loading.complete` - Mark staged assignments as loaded onto vehicle. Clears unit bin/zone (on vehicle now).
-
-### Events
-- `pack_task.created`, `pack_line.verified`, `pack_task.completed`
-- `staging_assignment.created`, `loading.completed`
-
-### Side Effects
-- Staging moves TrackableUnit.currentBinId to the staging bin
-- Loading clears TrackableUnit.currentBinId and currentZoneId (unit is on vehicle)
-- `staging_assignment.create` checks both the bin and the unit against the caller's org before it
-  writes. `TrackableUnit` carries no `orgId` of its own, so it is scoped through its order until
-  Phase 2b splits out a WMS `HandlingUnit` (#220)
-- Pack tasks and staging assignments dual-write `facilityId` alongside `locationId`, including the
-  assignments a cross-dock receipt creates (Phase 2a, #227)
-
-### Mobile flow (warehouse app)
-- `/warehouse/tasks/pack/:id` opens the task with a summary card, carton selector (lists active `CartonCatalogue` entries with temperature zone and max weight), and one row per pack line
-- Barcode wedge matches the scanned value against expected line SKUs, auto-opens the line, pre-fills remaining qty
-- Rejects scans that aren't on the pick (surfaces `Scanned "X" does not match any item on this pack task`)
-- Rejects over-scans for already-completed lines
-- When all lines are packed, surfaces a "Run Pack Audit" button that navigates straight to `/warehouse/tasks/pack-audit/:id` so the scale + dim variance check runs before the parcel ships
-
----
-
-### Domain: Cycle Counting
-
-Verifies inventory accuracy by comparing physical bin counts against system records. Reads are
-scoped to `req.orgId` through `CycleCountRepository` (#220).
-
-### Commands
-- `cycle_count.create` - Creates a cycle count from current inventory records. Three types: `full` (all bins), `zone` (specific zone), `random_sample` (~20% random selection). Auto-generates count lines with expected quantities.
-- `cycle_count.record_line` - Record a counted quantity for a bin/SKU. Auto-starts count on first recording. Detects variances. On final line: auto-completes count, auto-adjusts inventory for all variances (creates InventoryTransaction with `cycle_count` type), updates `lastCountedAt`.
-
-### Events
-- `cycle_count.created`, `cycle_count.started`, `cycle_count.completed`
-- `cycle_count.line_recorded`
-- `cycle_count.variance_detected` - Emitted for each line where counted != expected
-
-### Side Effects
-- On completion: all variance lines auto-adjust InventoryRecord.quantityOnHand to match counted quantity
-- InventoryTransaction created for each adjustment (transactionType: `cycle_count`, reasonCode: `recount`)
-- All counted InventoryRecords get `lastCountedAt` updated
-
----
-
-### Domain: Replenishment
-
-Auto-replenishes pick face bins from bulk storage when stock drops below configured minimum levels.
-
-### Commands
-- `replenishment_rule.create` - Define a rule: SKU + pick face bin + bulk zone + min/max quantities. Validates min < max, bin and zone exist.
-- `replenishment_rule.update` - Change quantities or deactivate. The min/max band is validated against the merged values, since a request moving one side alone can still invert it
-- `replenishment_rule.delete` - Remove a rule. Scoped to the caller's organisation (#220)
-- `replenishment.check` - Evaluates all active rules for a location. For each rule where pick face qty < minQuantity: finds bulk inventory, creates PutawayTask (type: `replenishment`). Skips if already being replenished or no bulk stock available. Rules, pick face stock, bulk stock and the duplicate-task check are all filtered by `orgId` as well as location (#220)
-
-### Events
-- `replenishment_rule.created`, `replenishment_rule.updated`, `replenishment_rule.deleted`
-- `inventory.below_minimum` - Emitted when a pick face drops below its rule's minQuantity
-- `replenishment.triggered` - Emitted when a replenishment putaway task is created
-
-### Side Effects
-- CheckReplenishment creates PutawayTask records (putawayType: `replenishment`) that appear in the putaway task queue
-- Those tasks dual-write `facilityId` alongside `locationId`, resolved on first use so a run that replenishes nothing creates no facility (Phase 2a, #225)
-- Deduplication: skips if a pending/assigned/in-progress replenishment task already exists for the same target bin
-
-### Event-driven auto-trigger
-`AutoReplenishmentHandler` subscribes to `pick_line.completed` and `inventory.adjusted`. When fired, it resolves the affected location (PickTask → locationId or WarehouseBin → locationId) and dispatches `CHECK_REPLENISHMENT` scoped to `(locationId, sku)`. Replenishment tasks are created within seconds of a pick rather than waiting for an operational sweep. The command-level dedup guarantees no duplicate putaway tasks.
-
----
-
-### Domain: Wave Templates
-
-Automates wave creation from reusable template definitions with grouping rules, cutoff times, and order constraints.
-
-### Commands
-- `wave_template.create` - Define a template: name, pick strategy, grouping rules (JSON), cutoff time (HH:MM), min/max orders, priority, cron schedule, auto-release toggle.
-- `wave_template.update` - Change a template. maxOrders is validated against the stored minOrders
-- `wave_template.delete` - Remove a template. Refused once it has released waves, since a `Wave`
-  keeps a foreign key to the template it came from and deleting one would orphan them
-- `wave_template.apply` - Run a template: finds eligible orders (excludes already-waved), applies grouping rules, enforces min/max, generates wave number, creates wave with linked orders. Skips gracefully with reason if below minimum or no eligible orders.
-
-### Events
-- `wave_template.updated`, `wave_template.deleted`
-- `wave.created` (with templateId and templateName in payload when template-driven)
-
-### Side Effects
-- ApplyWaveTemplate creates Wave + WaveOrder records
-- Template reads are scoped to `req.orgId` through `WaveTemplateRepository` (#220)
-- Eligible orders are those not currently in any active (non-completed, non-cancelled) wave
-- Eligibility reads `WmsFulfilmentOrder`, and both halves of the query are org-scoped. They were
-  not before, so a template could pull another organisation's orders into a wave
-- Cutoff time resolved from template HH:MM to today's datetime
-
----
-
-### Domain: Cartonization
-
-Recommends the smallest viable shipping carton for items being packed, reducing dim-weight charges.
-
-### Where it fits in the workflow
-Cartonization fires at **pack time** - when a PackTask is opened, the system looks up item dimensions, calculates total volume and weight, and recommends the smallest carton from the catalogue that fits. The worker sees the recommendation on the pack task detail page and can accept or override.
-
-### Dimension lookup chain
-1. **ProductUom** - Per-SKU master data (lengthMm, widthMm, heightMm, weightGrams). Most reliable - set once, used forever.
-2. **OrderLineItem** - Per-order dimensions (length, width, height in cm; weight in kg). Converted to mm/grams. Used when ProductUom is missing.
-3. **Neither available** - Recommendation skipped, missing SKUs flagged.
-
-### Algorithm
-First-Fit-Decreasing by volume:
-1. Sum item volumes (L x W x H x quantity) and weights across all pack lines
-2. Score each carton in the catalogue: volumeUtilization = totalItemVolume / cartonVolume, weightUtilization = totalWeight / maxWeight
-3. Pick the smallest carton where both volume and weight utilization <= 100% (highest utilization that still fits)
-4. Return recommended carton plus up to 3 alternatives
-
-### Scope
-- **Applies to**: Parcel/case-level outbound (B2C e-commerce, small shipments)
-- **Does not apply to**: Pallet building (FTL/LTL where cases are loaded onto pallets). Palletization is a separate algorithm (layer-building, weight distribution, stacking constraints) for v2+.
-
-### Key files
-- `backend/src/services/CartonizationService.ts` - Recommendation engine with dimension lookup
-- `backend/src/routes/cartonization.ts` - `POST /api/v1/cartonization/recommend`
-- `backend/src/routes/productUom.ts` - ProductUom CRUD (6 endpoints)
-- `backend/src/routes/cartonCatalogue.ts` - CartonCatalogue CRUD (4 endpoints)
-- `frontend/src/vnext-design/VNextWmsProductUom.tsx` - Product dimensions management
-- `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - Carton catalogue management
-- `backend/src/__tests__/services/CartonizationService.test.ts` - 7 tests
-
----
-
-### WMS Key Files
-- `backend/src/commands/warehouse/` - All WMS command handlers (23 handlers)
-- `backend/src/repositories/WarehouseZoneRepository.ts` - Zone/aisle/bin CRUD
-- `backend/src/repositories/ReceivingRepository.ts` - Appointment/task/line CRUD
-- `backend/src/services/PutawayRuleEvaluator.ts` - Rule evaluation with consolidation
-- `backend/src/routes/warehouseZones.ts` - Zone & bin API (10 endpoints)
-- `backend/src/routes/receiving.ts` - Receiving API (8 endpoints)
-- `backend/src/routes/putaway.ts` - Putaway API (6 endpoints)
-- `backend/src/routes/inventory.ts` - Inventory API (6 endpoints)
-- `backend/src/routes/waves.ts` - Wave & pick API (8 endpoints)
-- `backend/src/routes/packing.ts` - Packing & loading API (7 endpoints)
-- `backend/src/routes/cycleCounts.ts` - Cycle counting API (4 endpoints)
-- `backend/src/routes/replenishment.ts` - Replenishment API (5 endpoints)
-- `backend/src/routes/waveTemplates.ts` - Wave template API (6 endpoints)
-- `backend/src/routes/wmsDashboard.ts` - Dashboard stats API
-- `backend/src/__tests__/commands/WarehouseZoneCommands.test.ts` - 14 tests
-- `backend/src/__tests__/commands/ReceivingCommands.test.ts` - 10 tests
-- `backend/src/__tests__/commands/PutawayCommands.test.ts` - 9 tests
-- `backend/src/__tests__/commands/InventoryCommands.test.ts` - 11 tests
-- `backend/src/__tests__/commands/WavePickCommands.test.ts` - 9 tests
-- `backend/src/__tests__/commands/PackingLoadingCommands.test.ts` - 9 tests
-- `backend/src/__tests__/commands/CycleCountCommands.test.ts` - 5 tests
-- `backend/src/__tests__/commands/ReplenishmentCommands.test.ts` - 6 tests
-- `backend/src/__tests__/commands/WaveTemplateCommands.test.ts` - 6 tests
-- `frontend/src/vnext-design/VNextWms*.tsx` - 24 WMS pages
-
 ## Customer Portal - Developer Area
 
 The customer portal is a multi-app workspace with an app switcher (Google-style grid) in the top-right. Apps: **Portal** (orders, shipments, returns, invoices, documents, profile) and **Developer**. The Developer app gives customers self-service control over every integration surface that connects their systems to Open TMS.
@@ -3305,7 +2441,7 @@ X-OpenTms-Signature: t=<unix_seconds>,v1=<hex_hmac_sha256>
 `v1` is `HMAC_SHA256(secret, `${timestamp}.${raw_body}`)` hex-encoded. Customers verify by computing the same HMAC and comparing using a constant-time equality check, rejecting requests outside a 5-minute window. `signPayload()` and `verifySignature()` helpers live in `CustomerWebhookDeliveryService` for reuse.
 
 ### Event Fanout
-`CustomerWebhookHandler` subscribes to `rma.*`, `order.created|confirmed|delivered|cancelled|status_changed`, `shipment.dispatched|delivered|exception|status_changed`, `invoice.created|sent|paid`, and `pack.audit_recorded|pack.audit_variance_detected`. Pack audit events don't carry `customerId` directly, so the handler resolves it via PackTask → Order → customerId. All other events read `payload.customerId` directly. Finds enabled customer webhooks whose event pattern matches and dispatches each through `CustomerWebhookDeliveryService` concurrently. Failed deliveries are logged to `CustomerWebhookDelivery` and rolled up into per-webhook delivery/failure counters.
+`CustomerWebhookHandler` subscribes to `rma.*`, `order.created|confirmed|delivered|cancelled|status_changed`, `shipment.dispatched|delivered|exception|status_changed`, and `invoice.created|sent|paid`. Each of these carries `payload.customerId`, which is how the handler finds the customer. Finds enabled customer webhooks whose event pattern matches and dispatches each through `CustomerWebhookDeliveryService` concurrently. Failed deliveries are logged to `CustomerWebhookDelivery` and rolled up into per-webhook delivery/failure counters.
 
 ### Delivery Retry (exponential backoff)
 Failed deliveries are retried by the `webhookRetryWorker` pg-boss cron (`*/1 * * * *`, override `WEBHOOK_RETRY_CRON`). Eligibility checks run via `CustomerWebhookDeliveryService.findEligibleForRetry`:

@@ -60,7 +60,7 @@ curl -X POST http://localhost:3002/api/v1/auth/setup \
   }'
 ```
 
-This seeds the 5 default roles (admin, dispatcher, warehouse, readonly, customer), creates OAuth provider placeholders, and registers the admin user with the `admin` role.
+This seeds the default roles, creates OAuth provider placeholders, and registers the admin user with the `admin` role.
 
 ---
 
@@ -512,13 +512,12 @@ Handles the provider's redirect after authentication. On success, redirects to `
 
 ### Default Roles
 
-The system ships with 5 built-in roles (seeded during setup). System roles cannot be modified or deleted.
+The system ships with built-in roles (seeded during setup). System roles cannot be modified or deleted.
 
 | Role | Description | Permissions |
 |------|-------------|-------------|
 | **admin** | Full system access | `*` (wildcard — all permissions) |
 | **dispatcher** | Manage shipments, orders, and carrier assignments | `shipments:*`, `orders:*`, `carriers:read`, `lanes:read`, `locations:read`, `customers:read`, `integrations:read` |
-| **warehouse** | Manage orders and inventory | `orders:read`, `orders:update`, `shipments:read`, `locations:read`, `customers:read` |
 | **readonly** | View-only access to all data | `shipments:read`, `orders:read`, `carriers:read`, `lanes:read`, `locations:read`, `customers:read`, `integrations:read` |
 | **customer** | Customer portal — own data only | `orders:read:own`, `shipments:read:own`, `documents:read:own` |
 
