@@ -16,19 +16,20 @@ Last reviewed November 2026.
 
 ## Now
 
-**Consolidations.** Several customers' shipments on one truck (#329). Still to come: tendering a
-consolidated run to carriers as one load (#386), checking a consolidation fits on its truck (#387),
-and suggesting consolidations, including LTL to FTL upgrades (#388).
+**Consolidations.** Several customers' shipments on one truck have shipped. Still to come:
+tendering a consolidated run to carriers as one load (#386), checking a consolidation fits on its
+truck (#387), suggesting consolidations, including LTL to FTL upgrades (#388), and driver and
+vehicle on the run (#411).
 
-**Platform hardening.** The tenancy baseline is empty (#314). What's left is the last of the
-`organization.findFirst` calls (#296, #203), rate limiting (#116), security headers, a handful of
-correctness bugs, and the internal auth gaps: password reset by email, persistent lockout, argon2id,
-invitations and MFA.
+**Platform hardening.** The tenancy baseline is empty and no route guesses its organisation any
+more. What's left is rate limiting (#116), security headers, a proper password hash (#407),
+constant-time signature checks (#408), a handful of correctness bugs, and the internal auth gaps:
+password reset by email, persistent lockout, invitations and MFA.
 
 **Ingest and live tracking.** Moving IoT, carrier webhooks and EDI inbound into their own process
-(#301), fixing the geofence and arrival-criteria gaps that showed up in the journey work (#287,
-#288, #289, #347), journey reports for multi-stop shipments (#348), and finishing the checkpoint
-and geofence drawing UI (#305, #307, #312).
+(#301), fixing the geofence and arrival-criteria gaps that showed up in the journey work (#288,
+#289, #347), journey reports for multi-stop shipments (#348), and getting Google Maps loading again
+for signed-in users (#405).
 
 **Shipment quality.** Making the core shipment flow behave properly for someone using it for the
 first time: the cargo tab, map errors, carrier bidding buttons that do nothing, soft delete, cutoff
@@ -45,8 +46,7 @@ and automating 204 and 990. Aggregators and direct APIs come after that.
 implementation, replacing the Quality Centre page), operational reports and scheduled reports.
 This is the biggest gap when demoing.
 
-**Developer experience and deployment.** A proper bootstrap command for the first user, jest
-exiting properly (#298), retiring `vnext` from the frontend (#124), and the observability and
+**Developer experience and deployment.** A proper bootstrap command for the first user (#412), retiring `vnext` from the frontend (#124), and the observability and
 operations docs a self-hoster needs.
 
 ## Later
