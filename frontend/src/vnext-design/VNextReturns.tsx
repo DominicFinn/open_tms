@@ -62,7 +62,7 @@ function formatReason(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-export default function VNextWmsReturns() {
+export default function VNextReturns() {
   const navigate = useNavigate();
   const [rmas, setRmas] = useState<Rma[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,11 +93,11 @@ export default function VNextWmsReturns() {
           <p className="mt-1 text-sm text-muted-foreground">Manage RMAs from request through disposition to refund</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/wms/returns/refund-review')}>
+          <Button variant="outline" onClick={() => navigate('/returns/refund-review')}>
             <Banknote className="h-4 w-4" />
             Refund Review
           </Button>
-          <Button variant="gradient" onClick={() => navigate('/wms/returns/create')}>
+          <Button variant="gradient" onClick={() => navigate('/returns/create')}>
             <Plus className="h-4 w-4" />
             New RMA
           </Button>
@@ -153,7 +153,7 @@ export default function VNextWmsReturns() {
             </TableHeader>
             <TableBody>
               {filtered.map(r => (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/wms/returns/${r.id}`)}>
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/returns/${r.id}`)}>
                   <TableCell className="font-mono text-sm font-semibold">{r.rmaNumber}</TableCell>
                   <TableCell>
                     <Badge variant={statusVariant(r.status)}>{formatStatus(r.status)}</Badge>

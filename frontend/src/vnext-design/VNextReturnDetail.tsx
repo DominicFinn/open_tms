@@ -102,7 +102,7 @@ function formatStr(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-export default function VNextWmsReturnDetail() {
+export default function VNextReturnDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [rma, setRma] = useState<RmaDetail | null>(null);
@@ -327,7 +327,7 @@ export default function VNextWmsReturnDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link to="/wms/returns" className="hover:text-foreground">
+        <Link to="/returns" className="hover:text-foreground">
           <ArrowLeft className="inline h-4 w-4" /> Returns
         </Link>
         <ChevronRight className="h-3 w-3" />

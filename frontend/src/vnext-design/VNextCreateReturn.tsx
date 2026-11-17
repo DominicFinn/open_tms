@@ -34,7 +34,7 @@ function formatStr(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-export default function VNextWmsCreateReturn() {
+export default function VNextCreateReturn() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
@@ -129,7 +129,7 @@ export default function VNextWmsCreateReturn() {
       });
       const data = await res.json();
       if (data.error) setError(data.error);
-      else navigate(`/wms/returns/${data.data.id}`);
+      else navigate(`/returns/${data.data.id}`);
     } catch {
       setError('Failed to create RMA');
     } finally { setSaving(false); }
@@ -322,7 +322,7 @@ export default function VNextWmsCreateReturn() {
         )}
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" type="button" onClick={() => navigate('/wms/returns')}>Cancel</Button>
+          <Button variant="outline" type="button" onClick={() => navigate('/returns')}>Cancel</Button>
           <Button variant="gradient" type="submit" disabled={saving || Object.keys(lineSelections).length === 0}>
             {saving ? 'Creating...' : 'Create RMA'}
           </Button>
