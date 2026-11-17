@@ -11,6 +11,48 @@ export interface Article {
 
 export const articles: Article[] = [
   {
+    slug: 'open-tms-back-to-tms',
+    title: 'Open TMS Is Going Back to Being a TMS',
+    excerpt: 'The warehouse and inventory modules are coming out, and the split announced in August is off. Open TMS is going back to transport only so the TMS features can be finished.',
+    date: '2026-11-17',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '3 min read',
+    content: `
+## What Is Changing
+
+Open TMS is going back to being a transport management system and nothing else. The warehouse management module, the inventory module, the warehouse floor app and the inventory app are being removed, along with the .NET service the warehouse work had started moving into.
+
+In August I wrote that the project would split into FinnTMS and FinnWMS, with an inventory system possibly following. That plan is dropped. There is one project, it keeps the name Open TMS, and it stays on TypeScript.
+
+## Why
+
+We tried to do too much. A TMS, a WMS and an inventory system are separate products, and maintaining all of them at once meant none was getting finished. The transport side is the most complete, so that is where the effort goes now: completing the TMS features and making the existing ones dependable.
+
+The maintainers had also wanted to move to .NET, and the warehouse service was the first step. That work is moving off to another project, because at Finnlytics we have other things to focus on.
+
+## What Stays
+
+Everything on the transport side stays: orders, shipments, consolidations, carriers and tendering, EDI, IoT and carrier tracking, the Triage Centre, the Quality Centre, finance, and the customer and carrier portals.
+
+A few things that sat under the Warehouse menu were TMS features all along, and they have moved under Operations: packaging types, carrier cutoffs, the cutoff-at-risk monitor and returns. Returns keep authorisation, labels, pickups and refund review. Receiving a return into stock and restocking it were warehouse steps, so they go with the WMS.
+
+Tracking devices are still assigned to shipments. That happens in the admin app now that the floor app has gone.
+
+## If You Were Using the Warehouse Features
+
+Nothing is deleted from history. The last commit that carries the WMS, the inventory module and the .NET service is tagged \`last-with-wms\`, and you can run or fork from there.
+
+Be careful upgrading past that tag. The removal includes a migration that drops the warehouse and inventory tables, and the data in them goes too. If you have warehouse data you care about, take a backup first or stay on the tag.
+
+## What Comes Next
+
+The near-term work is all transport: tendering a consolidated run to carriers as one load, checking that a consolidation fits on its truck, journey reports for multi-stop shipments, and matching pings against drawn geofences. The roadmap in the repo has the fuller list.
+
+Keep an eye on the repo and this blog for updates, and don't forget you can contribute. Issues and pull requests are welcome, and so is feedback from people who run freight for a living. The contributing guide in the repo explains how to get started, and with the warehouse code gone there is a lot less to read before you can make a change.
+    `,
+  },
+  {
     slug: 'open-tms-is-changing',
     title: 'Open TMS is Changing',
     excerpt: 'The project is splitting into two: FinnTMS and FinnWMS, with an IMS possibly following later. Here is why one repo stopped making sense, and what that means for anyone running this.',
@@ -19,6 +61,8 @@ export const articles: Article[] = [
     category: 'announcements',
     readTime: '7 min read',
     content: `
+**Update, 17 November 2026:** this plan has been dropped. Open TMS stays one project, as a TMS only, and keeps its name. The article "Open TMS Is Going Back to Being a TMS" explains what changed.
+
 ## The Decision
 
 I have been circling this for months. Two earlier articles on this blog talk about the name and about scope creep, and both of them end with some version of "not yet, but it is coming". It is here now.
@@ -357,6 +401,8 @@ No premium license. No per-feature pricing. It's just part of the platform.
     category: 'product',
     readTime: '5 min read',
     content: `
+**Update, 17 November 2026:** the Warehouse Launch App described below was removed along with the warehouse module. Devices are now assigned to shipments from the admin app. Unit-level tracking and cargo reconciliation are unchanged.
+
 ## The Problem With Shipment-Level Tracking
 
 "Shipment X is at Location Y." Great. But which of the 24 pallets on that truck are for which customer? Did the right pallets get unloaded at stop 3? Is pallet 17 still at the correct temperature?

@@ -7,7 +7,6 @@ const featurePages = [
   { href: '/features/quality', label: 'Quality Centre', description: 'CAPA & cold chain compliance' },
   { href: '/features/reports', label: 'Reports', description: 'Analytics & compliance docs' },
   { href: '/features/financial', label: 'Financial', description: 'Invoicing, freight audit & rating' },
-  { href: '/features/warehouse', label: 'Warehouse', description: 'Mobile launch app' },
 ]
 
 export default function Navbar() {

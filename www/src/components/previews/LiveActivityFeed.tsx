@@ -16,7 +16,7 @@ const outboundDock = [
 const notifications = [
   { type: 'shipment', text: 'New shipment SHP-9247 created', detail: 'Chicago → Dallas • 24 pallets', time: 'Just now' },
   { type: 'arrival', text: 'PRO-884721 arriving at Dock 7', detail: 'Swift Transport • ETA 2 min', time: '30s ago' },
-  { type: 'complete', text: 'Order ORD-18842 fulfilled', detail: '32 units picked, packed & shipped', time: '1m ago' },
+  { type: 'complete', text: 'Order ORD-18842 shipped', detail: '32 units on SHP-9246 • Dallas, TX', time: '1m ago' },
   { type: 'tender', text: 'Tender TND-402 awarded', detail: 'Schneider • $2,847 • Dallas route', time: '2m ago' },
   { type: 'alert', text: 'Temp alert on SHP-9201', detail: '6.2°C exceeded threshold (6°C)', time: '3m ago' },
   { type: 'shipment', text: 'SHP-9244 delivered on time', detail: 'Miami, FL • Signed by J. Rivera', time: '4m ago' },
