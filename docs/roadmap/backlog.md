@@ -11,7 +11,9 @@ come off this list. Where an issue already exists it's linked.
 
 Security, tenancy and correctness gaps. See the security rule for the reasoning behind each.
 
-- #296 and #203: remove the remaining `organization.findFirst` calls from routes and services
+- #407: hash passwords with a real password hash
+- #408: compare JWT signatures in constant time
+- #409: skills routes use Prisma directly and write outside the command bus
 - #318: tenders have no `orgId` of their own
 - #116: register `@fastify/rate-limit`, with aggressive limits on the auth endpoints
 - Security headers on every response (HSTS, frame, nosniff, referrer and permissions policy, CSP on
@@ -43,13 +45,11 @@ Audit trail:
 
 - #301: move IoT, carrier webhooks and EDI inbound into their own ingest process (verify, enqueue,
   202). Inbound webhook and worker org resolution moves with it
-- #287: the worker container never wires arrival-criteria evaluation into the webhook worker
 - #288: consolidate the duplicate geofence evaluators
 - #289: dead `payload.shipmentId` read breaks EDI 214 auto-completion
 - #317: edi-collector can't load trading partner config
-- #305: journey checkpoints in the Events tab, with live refresh
-- #307: origin-departure auto-transition, checkpoint radius exclusion, order status cascade
-- #312: geofence drawing UI and docs (follow-up to #309)
+- #347: drawn location geofences are ignored by ping arrival matching
+- #348: the journey report for multi-stop shipments
 - #153: repeatable test for shipment telemetry through the ingestion API
 - IoT-driven alerts and automation (excursion alerts, geofence plus sensor triggers)
 - System Loco Device Reports V2 feed (denser telemetry) and Shipments feed (their lifecycle events)
@@ -61,17 +61,17 @@ Audit trail:
 The work that was on the Shipments v1 board: making the core shipment flow behave properly.
 
 - #276: cargo tab never shows weight, quantity or dimensions from line items
-- #247: some shipments open a "not found" page from the list
 - #249: tab-switch scroll lands in the wrong place on detail pages
 - #199: shipment delete should be admin-only and soft
 - #399: a cutoff issue stays open after its shipment departs
+- #406: the Issue column on Cutoff At Risk is always empty
 - #202: `CreateShipmentCommand` publishes to two queues nobody consumes
 - #149: test overriding a lane's default carrier on a shipment
 - #151: decide what a rate confirmation should contain
-- #195, #196, #198: map error messages, route generation auth, map view layout
-- #80 and #103: carrier bidding buttons do nothing, and the map shows the same lane for every bid
+- #195 and #198: map error messages and the map view layout
+- #80: carrier bidding buttons do nothing, and the map shows the same lane for every bid
 - #104: pickup stops show no cargo
-- #70, #73, #76: carrier tracking discoverability, adding events, the Track button
+- #70 and #76: carrier tracking discoverability and the Track button
 - #90: filter orders by kind of issue
 - Customer portal leftovers: map of active shipments, POD access, order templates, embeddable
   tracking widget
@@ -85,6 +85,7 @@ Background in [CARRIER_INTEGRATIONS.md](../CARRIER_INTEGRATIONS.md).
 - Per-carrier PRO check-digit validation, once checked against real carrier documentation
 - Verify the seeded SCAC codes and PRO formats against each carrier's EDI guide
 - Automated EDI 204 delivery and 990 polling over SFTP/HTTP (both manual today)
+- #410: decide whether EDI 940 and 945 stay
 - EDI 855 outbound
 - AS2 transport
 - Configurable outbound file naming per partner
@@ -111,7 +112,9 @@ The executive dashboard exists. Background in
 
 ## Developer experience and deployment
 
-- #298: jest never exits cleanly
+- #412: a bootstrap command for the first organisation and admin user
+- #413: bring the README back in line with the code
+- #414: loose ends from the TMS-only change
 - #111: a hosted demo people can try
 - #402: `Session` and `AuthProvider` tables have no reader, and the forgot-password stub logs the
   email
@@ -129,7 +132,10 @@ Background in [12-PLANNING.md](../gap-analysis/12-PLANNING.md).
 
 - Multi-stop route optimisation (VROOM or OR-Tools) with time windows, capacity and driver hours,
   compared against the manual route
-- Consolidation suggestions, including LTL to FTL upgrades
+- #386, #387 and #388: tender a consolidation as one run, check it fits its truck, and suggest
+  consolidations, including LTL to FTL upgrades
+- #411: driver and vehicle on a consolidation, and what happens to `Load`
+- #405: Google Maps never loads for signed-in users
 - Mode selection: FTL vs LTL vs parcel with rate and transit comparison
 - Load planning board with weight, cube and pallet-position building
 - Appointment scheduling for docks and delivery windows
