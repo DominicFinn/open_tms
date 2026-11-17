@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { container, TOKENS } from '../di/index.js';
 import { ShipmentCutoffMonitorService } from '../services/cutoff/ShipmentCutoffMonitorService.js';
 import type { PgBossEventBus } from '../events/PgBossEventBus.js';
-import { registerWmsGuard } from '../auth/wmsGuard.js';
+import { registerReadWriteGuard } from '../auth/readWriteGuard.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function cutoffMonitorRoutes(server: FastifyInstance) {
@@ -12,18 +12,19 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
   // Organization row comes back first (#117).
   await registerOrgScope(server);
 
-  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
-  await registerWmsGuard(server);
+  // Permission guard (#134): carriers:read for reads, carriers:write for mutations. Cutoffs are
+  // carrier configuration, and the at-risk list is read-only.
+  await registerReadWriteGuard(server, 'carriers');
 
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
-  const service = new ShipmentCutoffMonitorService(prisma, eventBus, container.resolve(TOKENS.IFulfilmentProgress));
+  const service = new ShipmentCutoffMonitorService(prisma, eventBus);
 
   // ── CarrierCutoff CRUD ──────────────────────────────────────────────
 
   server.get('/api/v1/carriers/:carrierId/cutoffs', {
     schema: {
-      tags: ['WMS - Cutoff Monitoring'],
+      tags: ['Cutoff Monitoring'],
       summary: 'List cutoff times for a carrier',
     },
   }, async (req: FastifyRequest) => {
@@ -37,7 +38,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/carriers/:carrierId/cutoffs', {
     schema: {
-      tags: ['WMS - Cutoff Monitoring'],
+      tags: ['Cutoff Monitoring'],
       summary: 'Create a carrier cutoff row',
       body: {
         type: 'object',
@@ -87,7 +88,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/carrier-cutoffs/:id', {
-    schema: { tags: ['WMS - Cutoff Monitoring'], summary: 'Update a carrier cutoff row' },
+    schema: { tags: ['Cutoff Monitoring'], summary: 'Update a carrier cutoff row' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
@@ -108,7 +109,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/carrier-cutoffs/:id', {
-    schema: { tags: ['WMS - Cutoff Monitoring'], summary: 'Delete a carrier cutoff row' },
+    schema: { tags: ['Cutoff Monitoring'], summary: 'Delete a carrier cutoff row' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
@@ -122,7 +123,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
 
   server.get('/api/v1/cutoff-monitor/at-risk', {
     schema: {
-      tags: ['WMS - Cutoff Monitoring'],
+      tags: ['Cutoff Monitoring'],
       summary: 'List shipments currently at cutoff risk (severity warning or critical)',
       querystring: {
         type: 'object',
@@ -149,23 +150,22 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
 
   server.get('/api/v1/cutoff-monitor/evaluate/:shipmentId', {
     schema: {
-      tags: ['WMS - Cutoff Monitoring'],
+      tags: ['Cutoff Monitoring'],
       summary: 'Manually evaluate a single shipment (does not fire notifications)',
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
     const shipment = await prisma.shipment.findFirst({
       where: { id: shipmentId, orgId: req.orgId! },
-      include: { orderShipments: { select: { orderId: true } } },
     });
     if (!shipment) { reply.code(404); return { data: null, error: 'Shipment not found' }; }
 
-    const result = await service.evaluateShipment(shipment as any, new Date(), req.orgId!);
+    const result = await service.evaluateShipment(shipment, new Date(), req.orgId!);
     return { data: result, error: null };
   });
 
   server.post('/api/v1/cutoff-monitor/run', {
-    schema: { tags: ['WMS - Cutoff Monitoring'], summary: 'Manually trigger a full cutoff scan' },
+    schema: { tags: ['Cutoff Monitoring'], summary: 'Manually trigger a full cutoff scan' },
   }, async (req: FastifyRequest) => {
     const results = await service.runOnce(new Date(), req.orgId!);
     const atRisk = results.filter(r => r.severity);

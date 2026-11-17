@@ -18,8 +18,6 @@ import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE }
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
 import { createCutoffMonitorWorker, registerCutoffMonitorSchedule, CUTOFF_MONITOR_QUEUE } from './workers/cutoffMonitorWorker.js';
 import { ShipmentCutoffMonitorService } from './services/cutoff/ShipmentCutoffMonitorService.js';
-import { createWaveAutoReleaseWorker, registerWaveAutoReleaseSchedule, WAVE_AUTO_RELEASE_QUEUE } from './workers/waveAutoReleaseWorker.js';
-import { WaveAutoReleaseService } from './services/waves/WaveAutoReleaseService.js';
 import { createOrderAutoArchiveWorker, registerOrderAutoArchiveSchedule, ORDER_AUTO_ARCHIVE_QUEUE } from './workers/orderAutoArchiveWorker.js';
 import { OrderAutoArchiveService } from './services/OrderAutoArchiveService.js';
 import { createCarrierUserAnonymizeWorker, registerCarrierUserAnonymizeSchedule, CARRIER_USER_ANONYMIZE_QUEUE } from './workers/carrierUserAnonymizeWorker.js';
@@ -50,11 +48,8 @@ import { authenticateJWT } from './middleware/jwtAuth.js';
 import { registerStrictOrgScope } from './auth/orgScopeMiddleware.js';
 import { registerCorePublicRoutes, registerCoreAuthenticatedRoutes } from './routes/modules/core.js';
 import { registerFinancePublicRoutes, registerFinanceAuthenticatedRoutes } from './routes/modules/finance.js';
-import { registerInventoryPublicRoutes, registerInventoryAuthenticatedRoutes } from './routes/modules/inventory.js';
 import { registerQualityPublicRoutes, registerQualityAuthenticatedRoutes } from './routes/modules/quality.js';
 import { registerTmsPublicRoutes, registerTmsAuthenticatedRoutes } from './routes/modules/tms.js';
-import { registerWmsAuthenticatedRoutes } from './routes/modules/wms.js';
-import wmsServiceProxy from './plugins/wmsServiceProxy.js';
 
 const server = Fastify({ logger: true });
 
@@ -68,7 +63,6 @@ async function start() {
     credentials: true,
   });
   // After CORS, so forwarded responses still carry the CORS headers.
-  await server.register(wmsServiceProxy);
   await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {
@@ -125,7 +119,6 @@ async function start() {
 
   await registerCorePublicRoutes(server);
   await registerFinancePublicRoutes(server);
-  await registerInventoryPublicRoutes(server);
   await registerQualityPublicRoutes(server);
   await registerTmsPublicRoutes(server);
 
@@ -138,10 +131,8 @@ async function start() {
     await registerStrictOrgScope(app);
     await registerCoreAuthenticatedRoutes(app);
     await registerFinanceAuthenticatedRoutes(app);
-    await registerInventoryAuthenticatedRoutes(app);
     await registerQualityAuthenticatedRoutes(app);
     await registerTmsAuthenticatedRoutes(app);
-    await registerWmsAuthenticatedRoutes(app);
   });
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
@@ -159,14 +150,11 @@ async function start() {
       // then runs no handlers, so its events go to the dispatch queue for the worker (#327).
       try {
         const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-        const documentService = container.has(TOKENS.IDocumentGenerationService)
-          ? container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService)
-          : undefined;
-        // With the command bus, the command-driven handlers (issue engine, auto-replenishment,
-        // route planning) run here too, as they do in the standalone worker (#327).
+        // With the command bus, the command-driven handlers (issue engine, route planning) run
+        // here too, as they do in the standalone worker (#327).
         await registerEventHandlers(
           eventBus, server.prisma, undefined, undefined, undefined,
-          container.resolve<ICommandBus>(TOKENS.ICommandBus), undefined, documentService
+          container.resolve<ICommandBus>(TOKENS.ICommandBus),
         );
         await eventBus.start();
         server.log.info('Embedded event handlers registered (projections + audit + notifications)');
@@ -212,27 +200,13 @@ async function start() {
         const cutoffBoss = (queue as any).boss;
         if (cutoffBoss) {
           const eventBus = container.resolve<any>(TOKENS.IEventBus);
-          const cutoffService = new ShipmentCutoffMonitorService(server.prisma, eventBus, container.resolve(TOKENS.IFulfilmentProgress));
+          const cutoffService = new ShipmentCutoffMonitorService(server.prisma, eventBus);
           await registerCutoffMonitorSchedule(cutoffBoss);
           await queue.subscribe(CUTOFF_MONITOR_QUEUE, createCutoffMonitorWorker(cutoffService));
           server.log.info('Cutoff-at-risk monitor worker registered');
         }
       } catch (err) {
         server.log.warn('Cutoff monitor worker failed to register: ' + (err as Error).message);
-      }
-
-      // Wave auto-release worker — applies templates at their scheduled HH:MM
-      try {
-        const waveBoss = (queue as any).boss;
-        if (waveBoss) {
-          const commandBus = container.resolve<any>(TOKENS.ICommandBus);
-          const waveService = new WaveAutoReleaseService(server.prisma, commandBus);
-          await registerWaveAutoReleaseSchedule(waveBoss);
-          await queue.subscribe(WAVE_AUTO_RELEASE_QUEUE, createWaveAutoReleaseWorker(waveService));
-          server.log.info('Wave auto-release worker registered');
-        }
-      } catch (err) {
-        server.log.warn('Wave auto-release worker failed to register: ' + (err as Error).message);
       }
 
       // Order auto-archive worker — archives delivered/cancelled orders after the retention window

@@ -1,12 +1,11 @@
 /**
- * FinnTMS routes: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
+ * TMS routes: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
  *
  * Module: tms. Registered by index.ts, which owns the server lifecycle and the JWT scope.
  * See .claude/rules/module-boundaries.md for what this module may depend on.
  */
 
 import type { FastifyInstance } from 'fastify';
-import { warehouseRoutes } from '../warehouse.js';
 import { publicShipmentShareRoutes } from '../publicShipmentShare.js';
 import { authRoutes } from '../auth.js';
 import { carrierPortalRoutes } from '../carrierPortal.js';
@@ -52,7 +51,6 @@ import { mapRoutes } from '../map.js';
 import { rmaRoutes } from '../rma.js';
 import { cutoffMonitorRoutes } from '../cutoffMonitor.js';
 import { packagingTypesRoutes } from '../packagingTypes.js';
-import { containerIntelligenceRoutes } from '../containerIntelligence.js';
 import { edi940Routes } from '../edi940.js';
 import { customerRmaApiRoutes } from '../customerRmaApi.js';
 import { edi180Routes } from '../edi180.js';
@@ -71,7 +69,6 @@ import { reportsDashboardRoutes } from '../reportsDashboard.js';
  * themselves, so the global JWT hook must not apply to them.
  */
 export async function registerTmsPublicRoutes(server: FastifyInstance): Promise<void> {
-  await server.register(warehouseRoutes);            // Dock app: own magic link auth internally
   await server.register(publicShipmentShareRoutes);  // Share links: own access code + viewer JWT, own rate limits
   await server.register(authRoutes);                 // Internal user login / forgot-password / me (own JWT auth internally)
   await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally
@@ -124,7 +121,6 @@ export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Prom
   await app.register(rmaRoutes);
   await app.register(cutoffMonitorRoutes);
   await app.register(packagingTypesRoutes);
-  await app.register(containerIntelligenceRoutes);
   await app.register(edi940Routes);
   await app.register(customerRmaApiRoutes);
   await app.register(edi180Routes);

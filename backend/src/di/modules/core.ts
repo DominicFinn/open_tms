@@ -6,7 +6,6 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { OpenIssueLookup } from '../../services/issues/OpenIssueLookup.js';
 import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
@@ -69,7 +68,6 @@ import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js'
 
 export function registerCoreDependencies(prisma: PrismaClient): void {
   // Lets other modules find an open issue without reading the issue table (#359)
-  container.singleton(TOKENS.IOpenIssueLookup).toFactory(() => new OpenIssueLookup(container.resolve(TOKENS.PrismaClient)));
 
   // Register repositories as singletons (they're stateless, so we can reuse instances)
   container.singleton(TOKENS.ICustomersRepository).toFactory(() => {

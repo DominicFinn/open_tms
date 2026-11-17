@@ -87,10 +87,9 @@ export const PERMISSIONS = {
   AUTOMATION_RULES_READ: 'automation_rules:read',
   AUTOMATION_RULES_WRITE: 'automation_rules:write',
 
-  // WMS (warehouse operations: zones/bins, inventory, receiving, putaway,
-  // waves/picking, packing, audits, counts, replenishment, load plans, RMA)
-  WMS_READ: 'wms:read',
-  WMS_WRITE: 'wms:write',
+  // Returns (RMAs: authorise, receive, inspect, refund, return labels and pickups)
+  RETURNS_READ: 'returns:read',
+  RETURNS_WRITE: 'returns:write',
 
   // Admin
   SETTINGS_READ: 'settings:read',
@@ -133,7 +132,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'issues:*', 'documents:*', 'tenders:*',
       'quotes:read', 'charges:read', 'invoices:read',
       'margin:view', 'credit:check', 'rate_confirmation:generate',
-      'wms:read',
+      'returns:read',
     ],
     isSystem: true,
   },
@@ -150,7 +149,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'edi:*', 'integrations:*',
       'agent_decisions:*', 'automation_rules:*',
       'settings:*', 'users:*', 'roles:read',
-      'wms:*',
+      'returns:*',
     ],
     isSystem: true,
   },
@@ -172,18 +171,6 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
     isSystem: true,
   },
   {
-    name: 'warehouse',
-    description: 'Warehouse operator. Can view and manage shipments at their assigned location, and execute warehouse tasks (receive, putaway, pick, pack, count, returns).',
-    permissions: [
-      'shipments:read', 'shipments:write',
-      'orders:read',
-      'devices:read', 'devices:write',
-      'documents:read',
-      'wms:*',
-    ],
-    isSystem: true,
-  },
-  {
     name: 'readonly',
     description: 'Read-only access. Can view all operational data but cannot make changes.',
     permissions: [
@@ -195,7 +182,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'margin:view',
       'tenders:read',
       'agent_decisions:read', 'automation_rules:read',
-      'wms:read',
+      'returns:read',
     ],
     isSystem: true,
   },

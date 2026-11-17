@@ -32,9 +32,8 @@ function makePrisma(overrides: any = {}) {
 describe('CustomerWebhookHandler - subscription patterns', () => {
   const handler = new CustomerWebhookHandler(makePrisma());
 
-  it('includes pack audit events in its subscription list', () => {
-    expect(handler.eventPatterns).toContain('pack.audit_recorded');
-    expect(handler.eventPatterns).toContain('pack.audit_variance_detected');
+  it('no longer subscribes to pack audit events', () => {
+    expect(handler.eventPatterns.filter(p => p.startsWith('pack.'))).toEqual([]);
   });
 
   it('keeps the pre-existing RMA, order, shipment, invoice coverage', () => {
@@ -69,30 +68,6 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     mockFetch.mockRestore();
   });
 
-  it('resolves customerId from the order the pack audit event carries, without reading the pack task (#359)', async () => {
-    const prisma = makePrisma({
-      packTask: { findUnique: jest.fn() },
-      order: { findUnique: jest.fn().mockResolvedValue({ customerId: 'cust-42' }) },
-      customerWebhook: { findMany: jest.fn().mockResolvedValue([]) },
-    });
-
-    const handler = new CustomerWebhookHandler(prisma);
-    await handler.handle(makeEvent({
-      type: 'pack.audit_recorded',
-      entityType: 'pack_audit',
-      entityId: 'audit-1',
-      payload: { packTaskId: 'pt-1', orderId: 'order-42', verdict: 'pass' }, // no customerId
-    }));
-
-    expect(prisma.packTask.findUnique).not.toHaveBeenCalled();
-    expect(prisma.order.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'order-42', orgId: 'org1' }, select: { customerId: true } }),
-    );
-    expect(prisma.customerWebhook.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { customerId: 'cust-42', orgId: 'org1', enabled: true } }),
-    );
-  });
-
   it('only looks up webhooks in the event org, so another tenant cannot receive the payload', async () => {
     const prisma = makePrisma();
     const handler = new CustomerWebhookHandler(prisma);
@@ -103,19 +78,7 @@ describe('CustomerWebhookHandler - customerId resolution', () => {
     expect(prisma.customerWebhookDelivery.create).not.toHaveBeenCalled();
   });
 
-  it('skips delivery when pack task has no order', async () => {
-    const prisma = makePrisma({
-      packTask: { findUnique: jest.fn().mockResolvedValue(null) },
-    });
-    const handler = new CustomerWebhookHandler(prisma);
-    await handler.handle(makeEvent({
-      type: 'pack.audit_variance_detected',
-      payload: { packTaskId: 'pt-missing', verdict: 'fail' },
-    }));
-    expect(prisma.customerWebhook.findMany).not.toHaveBeenCalled();
-  });
-
-  it('skips delivery when event has no customerId and is not a pack audit event', async () => {
+  it('skips delivery when event has no customerId', async () => {
     const prisma = makePrisma();
     const handler = new CustomerWebhookHandler(prisma);
     await handler.handle(makeEvent({

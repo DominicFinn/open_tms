@@ -2,10 +2,10 @@
  * Cutoff-at-risk monitor worker.
  *
  * Runs on a pg-boss cron schedule (default every 5 minutes). For every open,
- * carrier-assigned shipment: look up today's carrier cutoff, estimate projected
- * warehouse-ready time from remaining pick/pack/load work, and fire
- * shipment.cutoff_at_risk (+ auto-create an Issue) when the projected ready
- * time is past or within the warning/critical window of the cutoff.
+ * carrier-assigned shipment: look up today's carrier cutoff, allow a fixed
+ * handling time before the shipment can be handed over, and fire
+ * shipment.cutoff_at_risk (+ auto-create an Issue) when that ready time is
+ * past or within the warning/critical window of the cutoff.
  */
 
 import { ShipmentCutoffMonitorService } from '../services/cutoff/ShipmentCutoffMonitorService.js';

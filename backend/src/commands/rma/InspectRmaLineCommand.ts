@@ -6,7 +6,7 @@ import { Command } from '../types.js';
 
 /**
  * Inspector sets the final disposition on an RMA line after physical inspection.
- * This is the decision point that routes the item to its next physical destination.
+ * This is the decision point for what happens to the item next.
  */
 export interface InspectRmaLinePayload {
   rmaLineId: string;
@@ -14,8 +14,6 @@ export interface InspectRmaLinePayload {
   disposition: string;                   // restock, refurb, scrap, recycle, donate, rtv, customer_keeps
   inspectionNotes?: string;
   conditionPhotos?: string[];            // storage keys
-  /** Where the item should be routed next (putaway target bin for restock, refurb zone, etc.) */
-  routeToBinId?: string;
 }
 
 export const INSPECT_RMA_LINE = 'rma_line.inspect';
@@ -57,9 +55,6 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
 
     const rma = line.rma;
 
-    // The bin is a warehouse row. The route checks it exists before dispatching, and the warehouse
-    // checks it again when it moves the unit (#359).
-
     // Update the line with disposition
     await tx.rmaLine.update({
       where: { id: line.id, rma: { orgId: command.orgId } },
@@ -70,31 +65,8 @@ export class InspectRmaLineCommandHandler extends BaseCommandHandler<
         conditionPhotos: p.conditionPhotos ? (p.conditionPhotos as unknown as Prisma.InputJsonValue) : undefined,
         inspectedByUserId: command.actorId,
         inspectedAt: new Date(),
-        currentBinId: p.routeToBinId ?? line.currentBinId,
       },
     });
-
-    // Move trackable unit if routing
-    if (line.trackableUnitId && p.routeToBinId) {
-      // For restock, mark unit as available again. For other dispositions, keep quarantine or relevant status.
-      const qualityStatus = p.disposition === 'restock' ? 'available'
-        : p.disposition === 'refurb' ? 'hold'
-        : p.disposition === 'scrap' ? 'damaged'
-        : 'quarantine';
-
-      // The warehouse applies the move to its HandlingUnit (#357).
-      emit(this.createEvent(command, {
-        type: EVENT_TYPES.RMA_UNIT_MOVED,
-        entityType: 'rma_line',
-        entityId: line.id,
-        payload: {
-          rmaId: rma.id,
-          unitId: line.trackableUnitId,
-          binId: p.routeToBinId,
-          qualityStatus,
-        },
-      }));
-    }
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.RMA_LINE_INSPECTED,

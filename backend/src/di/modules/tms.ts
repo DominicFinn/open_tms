@@ -1,18 +1,15 @@
 /**
- * FinnTMS: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
+ * TMS: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
  *
  * Module: tms. Registered by di/registry.ts, which is the composition root.
  * See .claude/rules/module-boundaries.md for what this module may depend on.
  */
 
 import { PrismaClient } from '@prisma/client';
-import { OperationsSignalsSource } from '../../services/operations/OperationsSignalsSource.js';
 import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
 import type { CommandHandlerDeps } from '../moduleRegistration.js';
-import { OrderFulfilmentDemandSource } from '../../services/fulfilment/OrderFulfilmentDemandSource.js';
-import { CreateShipmentPortAdapter } from '../../services/shipments/CreateShipmentPortAdapter.js';
 import { ShipmentTypesRepository } from '../../repositories/ShipmentTypesRepository.js';
 import { CarriersRepository } from '../../repositories/CarriersRepository.js';
 import { ShipmentsRepository } from '../../repositories/ShipmentsRepository.js';
@@ -224,28 +221,8 @@ import { CancelPickupCommandHandler } from '../../commands/rma/CancelPickupComma
 import { ReturnLabelProviderRegistry } from '../../services/returnLabel/ReturnLabelProviderRegistry.js';
 import { IReturnLabelProviderRegistry } from '../../services/returnLabel/IReturnLabelProvider.js';
 import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js';
-import { ShipmentDirectory } from '../../services/shipments/ShipmentDirectory.js';
 
 export function registerTmsDependencies(prisma: PrismaClient): void {
-  // Outside signals for the warehouse dashboard (#359)
-  container.singleton(TOKENS.IOperationsSignals).toFactory(() => new OperationsSignalsSource(container.resolve(TOKENS.PrismaClient)));
-  container.singleton(TOKENS.IShipmentDirectory).toFactory(() => new ShipmentDirectory(container.resolve(TOKENS.PrismaClient)));
-
-  // The TMS side of the fulfilment demand port. WMS resolves this token and never sees Order.
-  container.singleton(TOKENS.IFulfilmentDemandSource).toFactory(() => {
-    return new OrderFulfilmentDemandSource(container.resolve(TOKENS.PrismaClient));
-  });
-
-  // The TMS side of the create-shipment port. WMS's warehouse-app admin route
-  // resolves this token instead of importing the command bus or
-  // ShipmentsRepository directly (#264).
-  container.singleton(TOKENS.ICreateShipmentPort).toFactory(() => {
-    return new CreateShipmentPortAdapter(
-      container.resolve(TOKENS.ICommandBus),
-      container.resolve(TOKENS.IShipmentsRepository),
-    );
-  });
-
   container.singleton(TOKENS.ICarriersRepository).toFactory(() => {
     return new CarriersRepository(container.resolve(TOKENS.PrismaClient));
   });
@@ -776,7 +753,7 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new DeclineQuoteCommandHandler(prisma, eventBus));
   bus.register(new ReviseQuoteCommandHandler(prisma, eventBus));
 
-  // WMS Returns / RMA commands
+  // Returns / RMA commands
   bus.register(new CreateRmaCommandHandler(prisma, eventBus));
   bus.register(new AuthorizeRmaCommandHandler(prisma, eventBus));
   bus.register(new RejectRmaCommandHandler(prisma, eventBus));

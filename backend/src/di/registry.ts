@@ -18,20 +18,16 @@ import type { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import type { CommandHandlerDeps } from './moduleRegistration.js';
 import { registerCoreDependencies, registerCoreCommandHandlers } from './modules/core.js';
 import { registerFinanceDependencies, registerFinanceCommandHandlers } from './modules/finance.js';
-import { registerInventoryDependencies, registerInventoryCommandHandlers } from './modules/inventory.js';
 import { registerQualityDependencies, registerQualityCommandHandlers } from './modules/quality.js';
 import { registerTmsDependencies, registerTmsCommandHandlers, wireTmsDependencies } from './modules/tms.js';
-import { registerWmsDependencies, registerWmsCommandHandlers } from './modules/wms.js';
 
 export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.PrismaClient).toFactory(() => prisma);
 
   registerCoreDependencies(prisma);
   registerFinanceDependencies(prisma);
-  registerInventoryDependencies(prisma);
   registerQualityDependencies(prisma);
   registerTmsDependencies(prisma);
-  registerWmsDependencies(prisma);
 
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
     const bus = new CommandBus();
@@ -43,10 +39,8 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     registerCoreCommandHandlers(bus, deps);
     registerFinanceCommandHandlers(bus, deps);
-    registerInventoryCommandHandlers(bus, deps);
     registerQualityCommandHandlers(bus, deps);
     registerTmsCommandHandlers(bus, deps);
-    registerWmsCommandHandlers(bus, deps);
 
     return bus;
   });
