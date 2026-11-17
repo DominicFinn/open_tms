@@ -10,7 +10,9 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://tms:tms@db:5432/tms
       NODE_ENV: development
@@ -26,7 +28,9 @@ services:
     ports:
       - "3001:3001"
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     environment:
       VITE_API_URL: http://localhost:3001
     depends_on:
@@ -58,7 +62,9 @@ services:
   # Event & integration worker — runs in a SEPARATE container from the API
   # See docs/EVENT_ARCHITECTURE_PLAN.md for full details
   worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://tms:tms@db:5432/tms?connection_limit=5
       NODE_ENV: production

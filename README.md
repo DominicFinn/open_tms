@@ -22,24 +22,10 @@ See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](.
 
 ## Deploy
 
-Deploy your own Open TMS instance with one click:
-
-| Provider | Deploy | What you get |
-|----------|--------|--------------|
-| **DigitalOcean** | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/dominicfinn/open_tms/tree/main) | App Platform + Managed PostgreSQL |
-| **Microsoft Azure** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdominicfinn%2Fopen_tms%2Fmain%2Fazuredeploy.json) | Container Apps + PostgreSQL Flexible Server |
-| **Google Cloud** | [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/dominicfinn/open_tms&cloudshell_tutorial=DEPLOYMENT.md) | Cloud Run + Cloud SQL (guided setup) |
-| **AWS** | See [`cloudformation.yaml`](./cloudformation.yaml) | ECS Fargate + RDS PostgreSQL + ALB |
-| **Docker** | `docker compose up` | Local development stack |
+| Option | How | What you get |
+|--------|-----|--------------|
+| **Docker** | `docker compose up --build` | The full stack on one machine: database, API, worker, frontend, EDI collector and object storage |
 | **Your own server** | See [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) | Node + PostgreSQL + object storage + a reverse proxy, no managed services |
-
-> **AWS note:** Upload `cloudformation.yaml` to an S3 bucket, then use the [Launch Stack](https://console.aws.amazon.com/cloudformation/home#/stacks/new) wizard — or deploy via CLI:
-> ```bash
-> aws cloudformation create-stack --stack-name open-tms \
->   --template-body file://cloudformation.yaml \
->   --parameters ParameterKey=DBPassword,ParameterValue=YourSecurePassword123 \
->   --capabilities CAPABILITY_IAM
-> ```
 
 > **After deployment:** There is no self-registration or setup endpoint, and `POST /api/v1/seed` is disabled when `NODE_ENV=production`. Create your first login by running the seed script against the database: `cd backend && npx tsx src/scripts/comprehensive-seed.ts`. It prints the demo credentials when it finishes, and wipes existing data unless you pass `--no-wipe`.
 
@@ -68,7 +54,7 @@ Deploy your own Open TMS instance with one click:
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - Full-page map view with supercluster point clustering, entity switching (shipments/orders/trackable units), location markers, issue/SLA overlay with pulsing breach indicators, fullscreen control centre mode, and 30-second auto-refresh
 - **SLA Management** - Two-tier SLA policy hierarchy (org defaults + customer overrides) with 8 rule types: ETA delivery, issue response/resolution, dwell time, light/seal security events, and temperature excursions. Hybrid event-driven + cron-based breach detection with auto-issue creation. SLA dashboard with compliance rate, at-risk evaluations, and breach history.
-- **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
+- **Authentication & Authorization** - JWT sessions for internal users, separate logins for the customer and carrier portals, API keys for machines, RBAC with fine-grained permissions and custom roles, and account lockout. See [`docs/AUTH_GUIDE.md`](docs/AUTH_GUIDE.md)
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
 - **Quality Centre** - Dedicated quality management app with dashboard analytics, issue trends over time, aggregated quality metrics by carrier/lane/location/customer, CAPA management with 30/60/90-day follow-up tracking, SOP checklists with GDP audit workflows, carrier scorecards, lane quality analysis, and CAPA effectiveness reporting
@@ -151,13 +137,6 @@ Deploy your own Open TMS instance with one click:
          │  │ External     │  │ SMTP /       │   │ Carrier APIs │
          │  │ Webhooks     │  │ SendGrid     │   │ (DHL, FedEx) │
          │  └──────────────┘  └──────────────┘   └──────────────┘
-         │
-         │  ┌─────────────────┐
-         └─►│  Auth Service   │
-            │  Fastify :3002  │
-            │  JWT + OAuth    │
-            │  RBAC           │
-            └─────────────────┘
 ```
 
 **Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools — so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
@@ -273,30 +252,9 @@ curl -X POST http://localhost:3001/api/v1/seed
 - Create, edit, and delete records
 - View shipment details with interactive maps
 
-### 🛡️ Rate Limiting
-
-The demo deployment includes built-in rate limiting to protect against abuse:
-
-- **50 requests per minute** per IP address
-- **Automatic reset** every 60 seconds
-- **429 status code** when limit exceeded
-- **Clear error messages** with retry information
-
-IMPORTANT: If you are using the demo, please do not abuse the rate limit. If you need to make more requests, please contact me.
-
-Rate limiting is implemented in the demo backend (`backend/src/index-demo.ts`) and configured via the Docker container. See the [Dockerfile](./backend/Dockerfile) and [TypeScript configuration](./backend/tsconfig.json) for implementation details.
-
 ## 🌐 Deployment Options
 
-### 🎪 Demo Deployment (5 minutes)
-Perfect for showcasing the system to stakeholders:
-
-**[📖 Hosting a Demo on GCP →](./HOSTING-DEMO-GCP.md)**
-
-### 🏭 Production Deployment
-Complete production setup with monitoring and security:
-
-**[📖 Production Deployment Guide →](./DEPLOYMENT.md)**
+For a server of your own, without Docker, follow the [self-hosting guide](docs/SELF_HOSTING.md).
 
 ### 🐳 Docker Deployment
 Simple containerized deployment:
@@ -305,19 +263,11 @@ Simple containerized deployment:
 # Build and run with Docker Compose (includes worker)
 docker compose up --build -d
 
-# Or build individual services
-docker build -t open-tms-backend ./backend
-docker build -t open-tms-frontend ./frontend
-docker build -t open-tms-auth ./auth-service
+# Or build individual images. The build context is the repository root,
+# because the backend and frontend both depend on packages/shared
+docker build -f backend/Dockerfile -t open-tms-backend .
+docker build -f frontend/Dockerfile -t open-tms-frontend .
 ```
-
-> **Note**: The auth-service is not yet included in `docker-compose.yml`. Build and run it separately with:
-> ```bash
-> docker run -d -p 3002:3002 \
->   -e DATABASE_URL=postgres://tms:tms@host.docker.internal:55432/tms \
->   -e JWT_SECRET=your-secret \
->   open-tms-auth
-> ```
 
 ### 🔧 Running Workers
 
@@ -426,22 +376,6 @@ The backend includes a pluggable email service. By default it uses a console pro
 | `EMAIL_FROM_NAME` | `Open TMS` | Default sender display name |
 
 Email settings can also be managed per-organization via the Admin UI or the `PUT /api/v1/email/settings` endpoint.
-
-### 🔐 Auth Service Configuration
-
-The auth-service runs as a standalone Fastify service on port 3002.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | — | PostgreSQL connection string (shared with backend) |
-| `AUTH_PORT` | `3002` | Port for the auth service |
-| `JWT_SECRET` | `open-tms-dev-secret-change-in-production` | Secret for signing JWTs |
-| `JWT_ACCESS_EXPIRES_IN` | `900` | Access token TTL in seconds (15 min) |
-| `JWT_REFRESH_EXPIRES_IN` | `604800` | Refresh token TTL in seconds (7 days) |
-| `AUTH_SERVICE_URL` | `http://localhost:3002` | Base URL for OAuth callbacks |
-| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for OAuth redirects |
-
-On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispatcher, broker_admin, broker_agent, readonly, finance) and create the initial admin user.
 
 ## 📚 API Documentation
 
@@ -654,19 +588,8 @@ open_tms/
 │   │   ├── scheduler.ts    # Per-partner polling scheduler
 │   │   └── config.ts       # Config from backend API
 │   └── Dockerfile          # Collector container
-├── auth-service/            # Standalone authentication & authorization service
-│   ├── src/
-│   │   ├── index.ts        # Entry point (Fastify, port 3002)
-│   │   ├── services/       # Auth, Token, OAuth, Password services
-│   │   ├── repositories/   # User, Role, Session, AuthProvider repos
-│   │   ├── routes/         # Auth, users, roles, setup, OAuth endpoints
-│   │   ├── middleware/      # JWT verification middleware
-│   │   └── di/             # Dependency injection container
-│   ├── Dockerfile          # Auth service container
-│   └── entrypoint.sh       # Runs migrations on startup
 ├── packages/
 │   └── shared/             # Shared TypeScript types
-├── terraform/              # Infrastructure as Code
 ├── .github/workflows/      # CI/CD pipelines
 ├── docs/                   # Integration guides
 │   ├── CUSTOMER_PORTAL_GUIDE.md
@@ -852,7 +775,6 @@ Each app has its own layout component (`layout.tsx`, `integrations-layout.tsx`, 
 - **Input validation** with Zod schemas
 - **SQL injection protection** via Prisma ORM
 - **CORS configuration** for secure cross-origin requests
-- **Rate limiting** for demo protection (50 requests/minute per IP)
 - **Environment variable** management
 - **Soft delete** for data preservation
 
@@ -900,7 +822,7 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/DominicFinn/open_tms/discussions) for questions and ideas
 - 🐛 **Issues**: [GitHub Issues](https://github.com/DominicFinn/open_tms/issues) for bug reports and feature requests
-- 📖 **Documentation**: Check the [deployment guide](./DEPLOYMENT.md) and deploy your own instance to access interactive API docs at `/docs`
+- 📖 **Documentation**: Check the [self-hosting guide](docs/SELF_HOSTING.md) and deploy your own instance to access interactive API docs at `/docs`
 
 ## 📄 License
 
@@ -908,7 +830,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Documentation**: Check the [deployment guide](./DEPLOYMENT.md)
+- **Documentation**: Check the [self-hosting guide](docs/SELF_HOSTING.md)
 - **Issues**: [GitHub Issues](https://github.com/DominicFinn/open_tms/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/DominicFinn/open_tms/discussions)
 

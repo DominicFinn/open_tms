@@ -2,8 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { createHmac } from 'crypto';
 
 /**
- * JWT payload structure from the auth service.
- * Shared with auth-service/src/services/TokenService.ts
+ * JWT payload for an internal user session, as minted by AuthService.
  */
 export interface JWTPayload {
   sub: string;

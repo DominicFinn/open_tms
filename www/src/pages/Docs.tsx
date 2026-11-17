@@ -5,7 +5,7 @@ const sections = [
     title: 'Getting Started',
     items: [
       { title: 'Quick Start', href: 'https://github.com/dominicfinn/open_tms#-quick-start', external: true },
-      { title: 'Deployment Guide', href: 'https://github.com/dominicfinn/open_tms/blob/main/DEPLOYMENT.md', external: true },
+      { title: 'Self-Hosting Guide', href: 'https://github.com/dominicfinn/open_tms/blob/main/docs/SELF_HOSTING.md', external: true },
       { title: 'Docker Compose', href: 'https://github.com/dominicfinn/open_tms/blob/main/docker-compose.yml', external: true },
     ],
   },

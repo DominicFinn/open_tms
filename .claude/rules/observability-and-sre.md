@@ -1,7 +1,6 @@
 ---
 paths:
   - "backend/src/**/*.ts"
-  - "auth-service/**/*.ts"
   - "edi-collector/**"
 ---
 
