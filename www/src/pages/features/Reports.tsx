@@ -327,10 +327,10 @@ export default function Reports() {
                 Deploy Now
               </a>
               <Link
-                to="/features/warehouse"
+                to="/features/financial"
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-8 py-4 text-lg font-semibold text-white transition-all hover:bg-white/10 hover:-translate-y-0.5"
               >
-                Explore Warehouse App
+                Explore Financial
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
