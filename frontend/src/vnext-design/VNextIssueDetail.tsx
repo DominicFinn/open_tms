@@ -132,6 +132,15 @@ function SourceEntityCard({ entityType, entityId }: { entityType: string | null;
       <Card className="p-4 text-sm text-muted-foreground">No linked entity</Card>
     );
   }
+  // Only shipments and orders have a detail view. Anything else, such as a pack task from the
+  // warehouse module removed in #394, is named rather than reported as missing.
+  if (entityType !== 'shipment' && entityType !== 'order') {
+    return (
+      <Card className="p-4 text-sm text-muted-foreground">
+        Linked to a {entityType.replace(/_/g, ' ')} ({entityId.slice(0, 8)}), which has no detail view here
+      </Card>
+    );
+  }
   if (loading) {
     return (
       <Card className="p-4">

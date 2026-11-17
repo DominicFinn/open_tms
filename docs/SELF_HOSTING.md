@@ -262,7 +262,7 @@ The migration `20261117_remove_wms_inventory_and_dock_app` drops their tables, a
 goes with it. Take a database dump first if you want to keep any of it. The last version that
 carries those features is tagged `last-with-wms`.
 
-Three things to check afterwards:
+Four things to check afterwards:
 
 - A custom role that held `wms:read` or `wms:write` needs `returns:read` or `returns:write` to keep
   working with RMAs. The `warehouse` system role is deleted, along with its assignments.
@@ -270,6 +270,9 @@ Three things to check afterwards:
 - If you ran the .NET WMS service, stop it and remove it from your deployment. The migration drops
   its `wms` schema. It also tries to drop the `wms_app` and `wms_outbox_reader` roles, and leaves
   them in place with a notice if they still hold privileges in another database on the server.
+- The queues the warehouse handlers used are left behind, empty, in the queue monitor. Remove them
+  with `npx tsx --env-file=.env src/scripts/remove-retired-queues.ts --apply` from `backend/`. Run
+  it without `--apply` first to see what it would delete.
 
 ## Backups
 
