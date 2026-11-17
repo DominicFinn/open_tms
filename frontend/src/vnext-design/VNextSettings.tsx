@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2,
   Briefcase,
-  Warehouse,
   Bell,
   Plug,
   Palette,
@@ -11,11 +10,7 @@ import {
   Gavel,
   MapPin,
   Thermometer,
-  History,
-  QrCode,
   Loader2,
-  Printer,
-  Copy,
   ExternalLink,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -31,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { API_URL } from '../api';
 
 function Switch({
@@ -653,284 +647,6 @@ function BrokerageTab() {
   );
 }
 
-function WarehouseTab() {
-  const [magicLinksEnabled, setMagicLinksEnabled] = useState(true);
-  const [scanMode, setScanMode] = useState('hid');
-  const [users, setUsers] = useState<any[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [generatedLink, setGeneratedLink] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
-
-  useEffect(() => {
-    Promise.all([
-      fetch(`${API_URL}/api/v1/warehouse/settings`).then(r => r.json()),
-      fetch(`${API_URL}/api/v1/organization/users`).then(r => r.json()).catch(() => ({ data: [] })),
-    ])
-      .then(([settings, usersRes]) => {
-        if (settings.data) {
-          setMagicLinksEnabled(settings.data.magicLinksEnabled ?? true);
-          setScanMode(settings.data.warehouseScanMode || 'hid');
-        }
-        setUsers(usersRes.data || []);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveMessage(null);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/warehouse/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ magicLinksEnabled, warehouseScanMode: scanMode }),
-      });
-      if (res.ok) setSaveMessage({ text: 'Warehouse settings saved', variant: 'success' });
-      else setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
-    } catch {
-      setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const generateMagicLink = async () => {
-    if (!selectedUserId) return;
-    setGenerating(true);
-    setGeneratedLink('');
-    try {
-      const res = await fetch(`${API_URL}/api/v1/warehouse/auth/magic-link/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selectedUserId }),
-      });
-      const json = await res.json();
-      if (json.data?.token) {
-        setGeneratedLink(`${window.location.origin}/warehouse/login?token=${json.data.token}`);
-      } else {
-        setSaveMessage({ text: json.error || 'Failed to generate', variant: 'error' });
-      }
-    } catch {
-      setSaveMessage({ text: 'Failed to generate magic link', variant: 'error' });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const printQrCode = () => {
-    const userName = users.find(u => u.id === selectedUserId);
-    const name = userName ? `${userName.firstName} ${userName.lastName}` : 'User';
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html><head><title>Login QR Code - ${name}</title>
-      <style>
-        body { font-family: sans-serif; text-align: center; padding: 40px; }
-        .qr-container { display: inline-block; padding: 20px; border: 2px solid #333; border-radius: 12px; }
-        h2 { margin: 0 0 8px; }
-        p { color: #666; margin: 0 0 16px; font-size: 14px; }
-        img { display: block; margin: 0 auto 16px; }
-        .footer { font-size: 12px; color: #999; margin-top: 16px; }
-      </style></head><body>
-        <div class="qr-container">
-          <h2>Warehouse Login</h2>
-          <p>${name}</p>
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}" width="200" height="200" />
-          <p style="font-size: 11px; word-break: break-all; max-width: 300px;">${generatedLink}</p>
-          <div class="footer">Scan this QR code with your device camera to log in</div>
-        </div>
-        <script>setTimeout(() => window.print(), 500);</script>
-      </body></html>
-    `);
-    printWindow.document.close();
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {saveMessage && (
-        <Banner variant={saveMessage.variant} message={saveMessage.text} onClose={() => setSaveMessage(null)} />
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Warehouse className="h-4 w-4 text-primary" />
-            Warehouse app settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Switch
-              label="Magic link login (QR codes)"
-              checked={magicLinksEnabled}
-              onChange={setMagicLinksEnabled}
-            />
-            <p className="ml-6 mt-1 text-xs text-muted-foreground">
-              When enabled, admins can generate printable QR codes for warehouse users to log in without typing credentials.
-            </p>
-          </div>
-          <RadioGroup
-            label="Default scanner mode"
-            name="scanMode"
-            options={[
-              { value: 'hid', label: 'Built-in scanner (HID)' },
-              { value: 'camera', label: 'Camera' },
-            ]}
-            value={scanMode}
-            onChange={setScanMode}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => window.location.reload()}>Reset</Button>
-        <Button variant="gradient" onClick={handleSave} disabled={saving}>
-          <Save className="h-4 w-4" />
-          {saving ? 'Saving...' : 'Save settings'}
-        </Button>
-      </div>
-
-      {magicLinksEnabled && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <QrCode className="h-4 w-4 text-primary" />
-              Generate login QR code
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-              <div className="space-y-2">
-                <Label>Select user</Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a user..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((u: any) => (
-                      <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="gradient" onClick={generateMagicLink} disabled={!selectedUserId || generating}>
-                <QrCode className="h-4 w-4" />
-                {generating ? 'Generating...' : 'Generate QR code'}
-              </Button>
-            </div>
-
-            {generatedLink && (
-              <Card>
-                <CardContent className="flex flex-col items-center gap-3 py-6">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}`}
-                    alt="Login QR Code"
-                    width={200}
-                    height={200}
-                  />
-                  <p className="max-w-md break-all text-center text-xs text-muted-foreground">{generatedLink}</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => navigator.clipboard.writeText(generatedLink)}>
-                      <Copy className="h-4 w-4" />
-                      Copy link
-                    </Button>
-                    <Button variant="gradient" onClick={printQrCode}>
-                      <Printer className="h-4 w-4" />
-                      Print QR code
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
-            Login audit log
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LoginAuditPreview />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function LoginAuditPreview() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/warehouse/audit/logins?limit=20`)
-      .then(r => r.json())
-      .then(json => setLogs(json.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-6">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (logs.length === 0) {
-    return <p className="text-sm text-muted-foreground">No login activity yet.</p>;
-  }
-
-  return (
-    <div className="max-h-72 overflow-auto rounded-md border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 text-left">User</th>
-            <th className="px-3 py-2 text-left">Method</th>
-            <th className="px-3 py-2 text-left">Status</th>
-            <th className="px-3 py-2 text-left">Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((log: any) => (
-            <tr key={log.id} className="border-t">
-              <td className="px-3 py-2">{log.user?.firstName} {log.user?.lastName}</td>
-              <td className="px-3 py-2">
-                <Badge variant={log.method === 'magic_link' ? 'info' : 'secondary'}>
-                  {log.method === 'magic_link' ? 'QR / Magic Link' : log.method === 'password' ? 'Password' : log.method}
-                </Badge>
-              </td>
-              <td className={`px-3 py-2 ${log.success ? 'text-success' : 'text-destructive'}`}>
-                {log.success ? 'Success' : `Failed (${log.failReason})`}
-              </td>
-              <td className="px-3 py-2 text-xs text-muted-foreground">
-                {new Date(log.createdAt).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function VNextSettings() {
   return (
     <div className="space-y-6">
@@ -947,14 +663,12 @@ export default function VNextSettings() {
         <TabsList>
           <TabsTrigger value="general"><Building2 className="mr-1 h-4 w-4" />General</TabsTrigger>
           <TabsTrigger value="brokerage"><Briefcase className="mr-1 h-4 w-4" />Brokerage</TabsTrigger>
-          <TabsTrigger value="warehouse"><Warehouse className="mr-1 h-4 w-4" />Warehouse</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="mr-1 h-4 w-4" />Notifications</TabsTrigger>
           <TabsTrigger value="integrations"><Plug className="mr-1 h-4 w-4" />Integrations</TabsTrigger>
           <TabsTrigger value="theme"><Palette className="mr-1 h-4 w-4" />Theme</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="mt-6"><GeneralTab /></TabsContent>
         <TabsContent value="brokerage" className="mt-6"><BrokerageTab /></TabsContent>
-        <TabsContent value="warehouse" className="mt-6"><WarehouseTab /></TabsContent>
         <TabsContent value="notifications" className="mt-6"><NotificationsTab /></TabsContent>
         <TabsContent value="integrations" className="mt-6"><IntegrationsTab /></TabsContent>
         <TabsContent value="theme" className="mt-6"><ThemeTab /></TabsContent>

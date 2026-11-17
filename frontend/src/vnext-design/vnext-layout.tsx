@@ -4,7 +4,6 @@ import {
   AlarmClock,
   AlertTriangle,
   Archive,
-  ArrowDownToLine,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -31,11 +30,9 @@ import {
   HelpCircle,
   Hourglass,
   Network,
-  Inbox,
   Key,
   Landmark,
   LayoutDashboard,
-  LayoutGrid,
   ListChecks,
   Loader2,
   Locate,
@@ -46,18 +43,13 @@ import {
   MapPin,
   Menu,
   Moon,
-  Package,
   Palette,
-  RefreshCcw,
   Receipt,
   Route,
   Container,
-  Ruler,
-  Scale,
   Search,
   Settings as SettingsIcon,
   Shield,
-  ShoppingCart,
   SlidersHorizontal,
   StickyNote,
   Sun,
@@ -69,8 +61,6 @@ import {
   Undo2,
   Upload,
   Users,
-  Warehouse as WarehouseIcon,
-  Waves,
   Webhook,
   Wrench,
   X,
@@ -161,13 +151,20 @@ const APPS: AppDef[] = [
         { to: '/agent-decisions', icon: Bot, label: 'Agent Decisions' },
         { to: '/automation-rules', icon: Zap, label: 'Automation Rules' },
         { to: '/devices', icon: Locate, label: 'Devices' },
+        { to: '/cutoff-monitor', icon: AlarmClock, label: 'Cutoff At Risk' },
+      ]},
+      { title: 'Returns', items: [
+        { to: '/returns', icon: Undo2, label: 'Returns / RMA' },
+        { to: '/returns/refund-review', icon: Landmark, label: 'Refund Review' },
       ]},
       { title: 'Network', items: [
         { to: '/carriers', icon: Truck, label: 'Carriers' },
         { to: '/carrier-bidding', icon: Handshake, label: 'Carrier Bidding' },
+        { to: '/carrier-cutoffs', icon: Clock, label: 'Carrier Cutoffs' },
         { to: '/customers', icon: Users, label: 'Customers' },
         { to: '/locations', icon: MapPin, label: 'Locations' },
         { to: '/lanes', icon: Route, label: 'Lanes' },
+        { to: '/packaging-types', icon: Boxes, label: 'Packaging Types' },
       ]},
     ],
   },
@@ -246,42 +243,6 @@ const APPS: AppDef[] = [
     ],
   },
   {
-    key: 'warehouse', icon: WarehouseIcon, label: 'Warehouse', basePath: '/wms',
-    sections: [
-      { title: 'Warehouse', items: [
-        { to: '/wms', icon: LayoutDashboard, label: 'Dashboard', end: true },
-        { to: '/wms/operations', icon: BarChart3, label: 'Operations KPIs' },
-        { to: '/wms/zones', icon: LayoutGrid, label: 'Zones & Bins' },
-        { to: '/wms/inventory', icon: Package, label: 'Inventory' },
-        { to: '/wms/product-dimensions', icon: Ruler, label: 'Product Dimensions' },
-        { to: '/wms/carton-catalogue', icon: Package, label: 'Carton Catalogue' },
-        { to: '/wms/packaging-types', icon: Boxes, label: 'Packaging Types' },
-        { to: '/wms/cycle-counts', icon: ClipboardCheck, label: 'Cycle Counts' },
-        { to: '/wms/replenishment', icon: RefreshCcw, label: 'Replenishment' },
-      ]},
-      { title: 'Inbound', items: [
-        { to: '/wms/receiving-appointments', icon: Calendar, label: 'Appointments' },
-        { to: '/wms/receiving', icon: Inbox, label: 'Receiving' },
-        { to: '/wms/manifest', icon: Upload, label: 'Manifest Upload' },
-        { to: '/wms/putaway', icon: ArrowDownToLine, label: 'Putaway' },
-      ]},
-      { title: 'Outbound', items: [
-        { to: '/wms/waves', icon: Waves, label: 'Waves' },
-        { to: '/wms/picking', icon: ShoppingCart, label: 'Picking' },
-        { to: '/wms/packing', icon: Package, label: 'Packing' },
-        { to: '/wms/pack-audits', icon: Scale, label: 'Pack Audits' },
-        { to: '/wms/loading', icon: Truck, label: 'Staging' },
-        { to: '/wms/load-plans', icon: ClipboardCheck, label: 'Load Plans' },
-        { to: '/wms/cutoff-monitor', icon: AlarmClock, label: 'Cutoff At Risk' },
-        { to: '/wms/carrier-cutoffs', icon: Clock, label: 'Carrier Cutoffs' },
-      ]},
-      { title: 'Reverse Logistics', items: [
-        { to: '/wms/returns', icon: Undo2, label: 'Returns / RMA' },
-        { to: '/wms/returns/refund-review', icon: Landmark, label: 'Refund Review' },
-      ]},
-    ],
-  },
-  {
     key: 'integrations', icon: Network, label: 'Integrations', basePath: '/integrations',
     requiredAnyPermission: ['integrations:write', 'edi:write'],
     sections: [
@@ -320,9 +281,6 @@ const APPS: AppDef[] = [
         { to: '/settings/roles', icon: Shield, label: 'Roles & Permissions' },
         { to: '/settings/users', icon: Users, label: 'Users' },
         { to: '/settings/portal-users', icon: Key, label: 'Portal Users' },
-      ]},
-      { title: 'Apps', items: [
-        { to: '/warehouse', icon: WarehouseIcon, label: 'Warehouse App' },
       ]},
       { title: 'Development', items: [
         { to: '/style-guide', icon: Palette, label: 'Style Guide' },
@@ -534,7 +492,6 @@ function SearchResultRow({
 
 function detectApp(pathname: string): string {
   if (pathname.startsWith('/triage') || pathname.startsWith('/issues')) return 'triage';
-  if (pathname.startsWith('/wms')) return 'warehouse';
   if (pathname.startsWith('/quality')) return 'quality';
   if (pathname.startsWith('/finance')) return 'finance';
   if (pathname.startsWith('/integrations')) return 'integrations';

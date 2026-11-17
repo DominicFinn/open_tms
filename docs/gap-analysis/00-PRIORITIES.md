@@ -52,7 +52,7 @@ These are features that most TMS buyers consider non-negotiable. Without them, O
 - What-if scenario tool for lane planning
 
 ### 5. Driver Mobile App / POD Capture
-**Gap**: On roadmap but nothing built. Warehouse app exists but is warehouse-only.
+**Gap**: On roadmap but nothing built.
 **Why it matters**: Many small-to-mid carriers don't have their own ELD/app. A free driver app that captures POD, location, and status is a massive differentiator for open source. This also enables the "carrier portal" to extend to the field.
 **What to build**:
 - Mobile-responsive web app (PWA) for drivers

@@ -24,10 +24,6 @@ export default function ForShippers() {
       title: 'Financial Operations',
       description: 'Auto-invoicing on delivery, three-way carrier freight audit, quotes with revision tracking, LTL rating, and AR aging reports with CSV exports.',
     },
-    {
-      title: 'Warehouse Operations',
-      description: 'Mobile-first launch app with barcode scanning, IoT device pairing, and pre-flight checks. Magic link QR auth for floor staff.',
-    },
   ]
 
   return (
@@ -45,7 +41,7 @@ export default function ForShippers() {
             </h2>
             <p className="text-lg text-surface-400 leading-relaxed mb-12">
               From a single order to thousands of daily shipments, Open TMS scales with your operation.
-              Multi-app architecture means dispatchers, warehouse staff, and admins each get a purpose-built interface.
+              Dispatchers work in the operations app, and customers and carriers each get their own portal.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

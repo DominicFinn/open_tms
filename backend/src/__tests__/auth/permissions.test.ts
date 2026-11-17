@@ -24,7 +24,7 @@ describe('System Roles', () => {
     expect(roleNames).toContain('dispatcher');
     expect(roleNames).toContain('broker_admin');
     expect(roleNames).toContain('broker_agent');
-    expect(roleNames).toContain('warehouse');
+    expect(roleNames).not.toContain('warehouse');
     expect(roleNames).toContain('readonly');
     expect(roleNames).toContain('finance');
   });

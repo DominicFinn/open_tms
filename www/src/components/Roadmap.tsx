@@ -11,7 +11,6 @@ const completed = [
   'IoT GPS & Sensor Telemetry',
   'ETA Monitoring (TomTom/HERE/Valhalla)',
   'Triage & Issue Management',
-  'Warehouse Launch App',
   'Document Templates & PDF Generation',
   'Custom Fields with Versioning',
   'White-Label Theming',
@@ -28,18 +27,11 @@ const completed = [
   'EDI 210, 810, 820 Financial Transactions',
   'AR Aging & Financial Reports',
   'CSV Exports for Accounting',
-  'Warehouse Management (Receiving, Putaway, Picking, Packing, Load Plans)',
-  'Cycle Counting & Event-Driven Replenishment',
-  'Cartonization + Container Intelligence with Hazmat Segregation',
   'Pallet Types & Palletization Planner',
-  'Pack Audit (Scale + Dim-Weight Variance)',
   'Cutoff-at-Risk Monitor with Auto-Triage',
-  'Full Returns / RMA with 7 Dispositions + Carrier Labels',
+  'Returns / RMA with Carrier Labels & Refund Review',
   'Customer Portal + Developer Area (API Keys, Signed Webhooks, EDI)',
-  'EDI 940 / 945 (Warehouse Shipping Order + Advice)',
   'EDI 180 (Return Merchandise Authorization)',
-  'Operations KPI Dashboard',
-  'Warehouse Mobile PWA (Receive / Pack / Pick / Putaway / Returns)',
 ]
 
 const upcoming = [
@@ -49,7 +41,6 @@ const upcoming = [
   { title: 'Advanced Reporting', description: 'Operational dashboards, carrier scorecards, and lane spend analysis' },
   { title: 'Carrier Intelligence', description: 'Performance scoring, FMCSA integration, risk assessment, and onboarding workflows' },
   { title: 'Route Optimization', description: 'Multi-stop TSP solver, traffic analysis, and carbon footprint calculation' },
-  { title: 'Indoor RTLS Heatmap', description: 'Real-time location tracking of operators, forklifts, and trackable units inside the four walls' },
   { title: 'Live FedEx/UPS/DHL Return Label APIs', description: 'Real carrier API integrations for return label generation and pickup scheduling' },
 ]
 

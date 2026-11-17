@@ -65,8 +65,6 @@ async function wipe() {
   await prisma.eventSubscription.deleteMany();
   await prisma.domainEventLog.deleteMany();
   await prisma.auditLog.deleteMany();
-  await prisma.loginAuditLog.deleteMany();
-  await prisma.magicLink.deleteMany();
   await prisma.session.deleteMany();
   await prisma.webhookLog.deleteMany();
   await prisma.customerWebhookDelivery.deleteMany();
@@ -124,9 +122,6 @@ async function wipe() {
   await prisma.tenderOffer.deleteMany();
   await prisma.tender.deleteMany();
 
-  await prisma.shipmentAccessory.deleteMany();
-  await prisma.shipmentFlag.deleteMany();
-  await prisma.connectivityLog.deleteMany();
   await prisma.shipmentEvent.deleteMany();
   await prisma.load.deleteMany();
   await prisma.orderShipment.deleteMany();
@@ -161,32 +156,9 @@ async function wipe() {
 
   await prisma.packagingType.deleteMany();
 
-  // Warehouse PWA — wipe before Location (these all carry locationId FKs without cascade)
-  await prisma.indoorZoneAnchor.deleteMany();
-  await prisma.allocation.deleteMany();
-  await prisma.inventoryTransaction.deleteMany();
-  await prisma.packAudit.deleteMany();
-  await prisma.packLine.deleteMany();
-  await prisma.pickLine.deleteMany();
-  await prisma.receivingLine.deleteMany();
-  await prisma.waveOrder.deleteMany();
 
-  await prisma.putawayTask.deleteMany();
-  await prisma.packTask.deleteMany();
-  await prisma.pickTask.deleteMany();
-  await prisma.stagingAssignment.deleteMany();
-  await prisma.inventoryRecord.deleteMany();
-  await prisma.receivingTask.deleteMany();
-  await prisma.receivingAppointment.deleteMany();
 
-  await prisma.wave.deleteMany();
-  await prisma.waveTemplate.deleteMany();
-  await prisma.putawayRule.deleteMany();
-  await prisma.manifestUpload.deleteMany();
 
-  await prisma.warehouseBin.deleteMany();
-  await prisma.warehouseAisle.deleteMany();
-  await prisma.warehouseZone.deleteMany();
 
   await prisma.arrivalCriteria.deleteMany();
   await prisma.location.deleteMany();
@@ -219,8 +191,6 @@ async function seedOrganization() {
       distanceUnit: 'km',
       autoTenderEnabled: true,
       autoDeliverShipmentDocs: true,
-      magicLinksEnabled: true,
-      warehouseScanMode: 'camera',
       emailProvider: 'console',
       emailFromAddress: 'ops@meridian-tms.demo',
       emailFromName: 'Meridian Ops',
@@ -273,7 +243,7 @@ async function seedUsers(orgId: string) {
     }),
     prisma.user.create({
       data: {
-        email: 'warehouse@meridian-tms.demo',
+        email: 'viewer@meridian-tms.demo',
         passwordHash: pwd,
         firstName: 'Diego',
         lastName: 'Ramirez',
@@ -297,7 +267,7 @@ async function seedUsers(orgId: string) {
     { userId: users[0].id, roleName: 'admin' },
     { userId: users[1].id, roleName: 'dispatcher' },
     { userId: users[2].id, roleName: 'admin' },
-    { userId: users[3].id, roleName: 'warehouse' },
+    { userId: users[3].id, roleName: 'readonly' },
     { userId: users[4].id, roleName: 'admin' },
   ];
   for (const a of assignments) {
@@ -1254,10 +1224,6 @@ async function seedOrders(
           barcode: `9${randomBytes(6).toString('hex').toUpperCase()}`,
           packagingTypeId: s.palletType?.id || null,
           condition: 'good',
-          qualityStatus: 'available',
-          ownerCustomerId: cust.id,
-          lotNumber: s.temp !== 'ambient' ? `LOT-${daysAgo(7).toISOString().slice(0, 10)}-${u}` : null,
-          expiryDate: s.temp !== 'ambient' ? daysFromNow(180) : null,
         },
       });
     }
@@ -1449,10 +1415,6 @@ async function seedBulkOrders(
           barcode: `9${randomBytes(6).toString('hex').toUpperCase()}`,
           packagingTypeId: palletType?.id || null,
           condition: 'good',
-          qualityStatus: 'available',
-          ownerCustomerId: customer.id,
-          lotNumber: r.temp !== 'ambient' ? `LOT-${daysAgo(Math.min(30, ageDays + 3)).toISOString().slice(0, 10)}-${u}` : null,
-          expiryDate: r.temp !== 'ambient' ? daysFromNow(180 - ageDays) : null,
         },
       });
     }
@@ -1530,7 +1492,6 @@ async function seedShipments(
     let laneId: string | null = null;
     let carrierId: string | null = null;
     let trackingNumber: string | null = null;
-    let launchedAt: Date | null = null;
     if (launched) {
       const lane = lanes.find((l) => l.originId === order.originId && l.destinationId === order.destinationId);
       let carrier: any = null;
@@ -1542,7 +1503,6 @@ async function seedShipments(
       laneId = lane?.id || null;
       carrierId = carrier.id;
       trackingNumber = `TRK${randomBytes(5).toString('hex').toUpperCase()}`;
-      launchedAt = order.requestedPickupDate || daysAgo(1);
     }
 
     // Effective temperature range based on order temp control (backing data — kept even in draft).
@@ -1594,7 +1554,6 @@ async function seedShipments(
         laneId,
         carrierId,
         trackingNumber,
-        launchedAt,
         effectiveMinTemp: effMin,
         effectiveMaxTemp: effMax,
         effectiveAlertMinTemp: effAlertMin,
@@ -2874,7 +2833,7 @@ async function main() {
   console.log('  TMS admin:       admin@meridian-tms.demo       / Password1!');
   console.log('  TMS dispatcher:  dispatch@meridian-tms.demo    / Password1!');
   console.log('  TMS ops mgr:     ops-manager@meridian-tms.demo / Password1!');
-  console.log('  TMS warehouse:   warehouse@meridian-tms.demo   / Password1!');
+  console.log('  TMS read-only:   viewer@meridian-tms.demo      / Password1!');
   console.log('  TMS finance:     finance@meridian-tms.demo     / Password1!');
   console.log('  Customer portal: admin@nordic.demo             / Portal123!');
   console.log('  Customer portal: viewer@axiom.demo             / Portal123!');

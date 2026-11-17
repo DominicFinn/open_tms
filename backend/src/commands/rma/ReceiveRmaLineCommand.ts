@@ -5,13 +5,11 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 
 /**
- * Records physical receipt of a returned item at the dock.
- * Moves the item to the quarantine zone for inspection.
+ * Records physical receipt of a returned item, ready for inspection.
  */
 export interface ReceiveRmaLinePayload {
   rmaLineId: string;
   receivedQuantity: number;
-  quarantineBinId?: string;               // where the item is parked for inspection
   trackableUnitId?: string;               // if physically tracked
 }
 
@@ -56,35 +54,15 @@ export class ReceiveRmaLineCommandHandler extends BaseCommandHandler<
       });
       if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
     }
-    const bin = p.quarantineBinId
-      ? await tx.warehouseBin.findUnique({
-          where: { id: p.quarantineBinId, orgId: command.orgId },
-          select: { zoneId: true },
-        })
-      : null;
-    if (p.quarantineBinId && !bin) throw new Error(`Bin ${p.quarantineBinId} not found`);
 
     // Update the line
     await tx.rmaLine.update({
       where: { id: line.id, rma: { orgId: command.orgId } },
       data: {
         receivedQuantity: p.receivedQuantity,
-        currentBinId: p.quarantineBinId ?? line.currentBinId,
         trackableUnitId: p.trackableUnitId ?? line.trackableUnitId,
       },
     });
-
-    // Move the trackable unit if provided
-    if (p.trackableUnitId && p.quarantineBinId) {
-      await tx.trackableUnit.update({
-        where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
-        data: {
-          currentBinId: p.quarantineBinId,
-          currentZoneId: bin?.zoneId ?? null,
-          qualityStatus: 'quarantine',
-        },
-      });
-    }
 
     // If RMA was authorized, bump to received
     if (rma.status === 'authorized') {

@@ -3,11 +3,9 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { requireLocationForInventory } from '../inventoryLocation.js';
 
 /**
- * Completes an RMA after all lines are dispositioned.
- * Generates inventory movements for restock items and triggers credit note creation.
+ * Completes an RMA after all lines are dispositioned, and triggers credit note creation.
  */
 export interface CompleteRmaPayload {
   rmaId: string;
@@ -20,7 +18,7 @@ export const COMPLETE_RMA = 'rma.complete';
 
 export class CompleteRmaCommandHandler extends BaseCommandHandler<
   CompleteRmaPayload,
-  { id: string; status: string; actualRefundCents: number; restockTasksCreated: number }
+  { id: string; status: string; actualRefundCents: number }
 > {
   readonly commandType = COMPLETE_RMA;
 
@@ -32,7 +30,7 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
     command: Command<CompleteRmaPayload>,
     tx: TransactionClient,
     emit: EmitFn
-  ): Promise<{ id: string; status: string; actualRefundCents: number; restockTasksCreated: number }> {
+  ): Promise<{ id: string; status: string; actualRefundCents: number }> {
     const p = command.payload;
 
     const rma = await tx.rma.findUnique({
@@ -50,87 +48,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
 
     // Auto-calculate actual refund if not provided
     const actualRefundCents = p.actualRefundCents ?? rma.suggestedRefundCents;
-
-    // Create inventory movements for restock lines
-    let restockTasksCreated = 0;
-    for (const line of rma.lines) {
-      if (line.disposition === 'restock' && line.receivedQuantity > 0 && line.currentBinId) {
-        // Create an inventory record / transaction for the restocked items
-        const existingRecord = await tx.inventoryRecord.findFirst({
-          where: {
-            orgId: command.orgId,
-            binId: line.currentBinId,
-            sku: line.sku,
-            uomCode: 'EA',
-            lotNumber: null,
-            ownerCustomerId: null,
-          },
-        });
-
-        const bin = await tx.warehouseBin.findUnique({
-          where: { id: line.currentBinId, orgId: command.orgId },
-          select: { locationId: true },
-        });
-
-        if (bin && existingRecord) {
-          await tx.inventoryRecord.update({
-            where: { id: existingRecord.id, orgId: command.orgId },
-            data: {
-              quantityOnHand: { increment: line.receivedQuantity },
-              quantityAvailable: { increment: line.receivedQuantity },
-            },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryRecordId: existingRecord.id,
-              transactionType: 'receive',
-              quantityChange: line.receivedQuantity,
-              previousQuantity: existingRecord.quantityOnHand,
-              newQuantity: existingRecord.quantityOnHand + line.receivedQuantity,
-              reasonCode: 'return',
-              referenceType: 'rma',
-              referenceId: rma.id,
-              performedBy: command.actorId,
-              trackableUnitId: line.trackableUnitId,
-              orgId: command.orgId,
-            },
-          });
-        } else if (bin) {
-          const newRecord = await tx.inventoryRecord.create({
-            data: {
-              locationId: requireLocationForInventory(bin.locationId, `Bin ${line.currentBinId}`),
-              binId: line.currentBinId,
-              sku: line.sku,
-              uomCode: 'EA',
-              quantityOnHand: line.receivedQuantity,
-              quantityAvailable: line.receivedQuantity,
-              quantityAllocated: 0,
-              quantityOnHold: 0,
-              orgId: command.orgId,
-            },
-          });
-
-          await tx.inventoryTransaction.create({
-            data: {
-              inventoryRecordId: newRecord.id,
-              transactionType: 'receive',
-              quantityChange: line.receivedQuantity,
-              previousQuantity: 0,
-              newQuantity: line.receivedQuantity,
-              reasonCode: 'return',
-              referenceType: 'rma',
-              referenceId: rma.id,
-              performedBy: command.actorId,
-              trackableUnitId: line.trackableUnitId,
-              orgId: command.orgId,
-            },
-          });
-        }
-
-        restockTasksCreated++;
-      }
-    }
 
     // Complete the RMA
     const refundAdjusted = p.actualRefundCents !== undefined && p.actualRefundCents !== rma.suggestedRefundCents;
@@ -168,7 +85,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
         orderId: rma.orderId,
         actualRefundCents,
         suggestedRefundCents: rma.suggestedRefundCents,
-        restockTasksCreated,
         dispositions: rma.lines.map(l => ({ sku: l.sku, disposition: l.disposition, qty: l.receivedQuantity })),
       },
     }));
@@ -177,7 +93,6 @@ export class CompleteRmaCommandHandler extends BaseCommandHandler<
       id: rma.id,
       status: 'completed',
       actualRefundCents,
-      restockTasksCreated,
     };
   }
 }

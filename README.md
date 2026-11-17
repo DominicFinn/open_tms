@@ -22,24 +22,10 @@ See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](.
 
 ## Deploy
 
-Deploy your own Open TMS instance with one click:
-
-| Provider | Deploy | What you get |
-|----------|--------|--------------|
-| **DigitalOcean** | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/dominicfinn/open_tms/tree/main) | App Platform + Managed PostgreSQL |
-| **Microsoft Azure** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdominicfinn%2Fopen_tms%2Fmain%2Fazuredeploy.json) | Container Apps + PostgreSQL Flexible Server |
-| **Google Cloud** | [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/dominicfinn/open_tms&cloudshell_tutorial=DEPLOYMENT.md) | Cloud Run + Cloud SQL (guided setup) |
-| **AWS** | See [`cloudformation.yaml`](./cloudformation.yaml) | ECS Fargate + RDS PostgreSQL + ALB |
-| **Docker** | `docker compose up` | Local development stack |
+| Option | How | What you get |
+|--------|-----|--------------|
+| **Docker** | `docker compose up --build` | The full stack on one machine: database, API, worker, frontend, EDI collector and object storage |
 | **Your own server** | See [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) | Node + PostgreSQL + object storage + a reverse proxy, no managed services |
-
-> **AWS note:** Upload `cloudformation.yaml` to an S3 bucket, then use the [Launch Stack](https://console.aws.amazon.com/cloudformation/home#/stacks/new) wizard — or deploy via CLI:
-> ```bash
-> aws cloudformation create-stack --stack-name open-tms \
->   --template-body file://cloudformation.yaml \
->   --parameters ParameterKey=DBPassword,ParameterValue=YourSecurePassword123 \
->   --capabilities CAPABILITY_IAM
-> ```
 
 > **After deployment:** There is no self-registration or setup endpoint, and `POST /api/v1/seed` is disabled when `NODE_ENV=production`. Create your first login by running the seed script against the database: `cd backend && npx tsx src/scripts/comprehensive-seed.ts`. It prints the demo credentials when it finishes, and wipes existing data unless you pass `--no-wipe`.
 
@@ -68,7 +54,7 @@ Deploy your own Open TMS instance with one click:
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - Full-page map view with supercluster point clustering, entity switching (shipments/orders/trackable units), location markers, issue/SLA overlay with pulsing breach indicators, fullscreen control centre mode, and 30-second auto-refresh
 - **SLA Management** - Two-tier SLA policy hierarchy (org defaults + customer overrides) with 8 rule types: ETA delivery, issue response/resolution, dwell time, light/seal security events, and temperature excursions. Hybrid event-driven + cron-based breach detection with auto-issue creation. SLA dashboard with compliance rate, at-risk evaluations, and breach history.
-- **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
+- **Authentication & Authorization** - JWT sessions for internal users, separate logins for the customer and carrier portals, API keys for machines, RBAC with fine-grained permissions and custom roles, and account lockout. See [`docs/AUTH_GUIDE.md`](docs/AUTH_GUIDE.md)
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
 - **Quality Centre** - Dedicated quality management app with dashboard analytics, issue trends over time, aggregated quality metrics by carrier/lane/location/customer, CAPA management with 30/60/90-day follow-up tracking, SOP checklists with GDP audit workflows, carrier scorecards, lane quality analysis, and CAPA effectiveness reporting
@@ -151,13 +137,6 @@ Deploy your own Open TMS instance with one click:
          │  │ External     │  │ SMTP /       │   │ Carrier APIs │
          │  │ Webhooks     │  │ SendGrid     │   │ (DHL, FedEx) │
          │  └──────────────┘  └──────────────┘   └──────────────┘
-         │
-         │  ┌─────────────────┐
-         └─►│  Auth Service   │
-            │  Fastify :3002  │
-            │  JWT + OAuth    │
-            │  RBAC           │
-            └─────────────────┘
 ```
 
 **Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools — so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
@@ -201,7 +180,7 @@ See [Domain Behaviours](./docs/DOMAIN_BEHAVIOURS.md) for the complete reference 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 24+
 - Docker & Docker Compose
 - npm or yarn
 
@@ -273,30 +252,9 @@ curl -X POST http://localhost:3001/api/v1/seed
 - Create, edit, and delete records
 - View shipment details with interactive maps
 
-### 🛡️ Rate Limiting
-
-The demo deployment includes built-in rate limiting to protect against abuse:
-
-- **50 requests per minute** per IP address
-- **Automatic reset** every 60 seconds
-- **429 status code** when limit exceeded
-- **Clear error messages** with retry information
-
-IMPORTANT: If you are using the demo, please do not abuse the rate limit. If you need to make more requests, please contact me.
-
-Rate limiting is implemented in the demo backend (`backend/src/index-demo.ts`) and configured via the Docker container. See the [Dockerfile](./backend/Dockerfile) and [TypeScript configuration](./backend/tsconfig.json) for implementation details.
-
 ## 🌐 Deployment Options
 
-### 🎪 Demo Deployment (5 minutes)
-Perfect for showcasing the system to stakeholders:
-
-**[📖 Hosting a Demo on GCP →](./HOSTING-DEMO-GCP.md)**
-
-### 🏭 Production Deployment
-Complete production setup with monitoring and security:
-
-**[📖 Production Deployment Guide →](./DEPLOYMENT.md)**
+For a server of your own, without Docker, follow the [self-hosting guide](docs/SELF_HOSTING.md).
 
 ### 🐳 Docker Deployment
 Simple containerized deployment:
@@ -305,19 +263,11 @@ Simple containerized deployment:
 # Build and run with Docker Compose (includes worker)
 docker compose up --build -d
 
-# Or build individual services
-docker build -t open-tms-backend ./backend
-docker build -t open-tms-frontend ./frontend
-docker build -t open-tms-auth ./auth-service
+# Or build individual images. The build context is the repository root,
+# because the backend and frontend both depend on packages/shared
+docker build -f backend/Dockerfile -t open-tms-backend .
+docker build -f frontend/Dockerfile -t open-tms-frontend .
 ```
-
-> **Note**: The auth-service is not yet included in `docker-compose.yml`. Build and run it separately with:
-> ```bash
-> docker run -d -p 3002:3002 \
->   -e DATABASE_URL=postgres://tms:tms@host.docker.internal:55432/tms \
->   -e JWT_SECRET=your-secret \
->   open-tms-auth
-> ```
 
 ### 🔧 Running Workers
 
@@ -426,22 +376,6 @@ The backend includes a pluggable email service. By default it uses a console pro
 | `EMAIL_FROM_NAME` | `Open TMS` | Default sender display name |
 
 Email settings can also be managed per-organization via the Admin UI or the `PUT /api/v1/email/settings` endpoint.
-
-### 🔐 Auth Service Configuration
-
-The auth-service runs as a standalone Fastify service on port 3002.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | — | PostgreSQL connection string (shared with backend) |
-| `AUTH_PORT` | `3002` | Port for the auth service |
-| `JWT_SECRET` | `open-tms-dev-secret-change-in-production` | Secret for signing JWTs |
-| `JWT_ACCESS_EXPIRES_IN` | `900` | Access token TTL in seconds (15 min) |
-| `JWT_REFRESH_EXPIRES_IN` | `604800` | Refresh token TTL in seconds (7 days) |
-| `AUTH_SERVICE_URL` | `http://localhost:3002` | Base URL for OAuth callbacks |
-| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for OAuth redirects |
-
-On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispatcher, warehouse, readonly, customer) and create the initial admin user.
 
 ## 📚 API Documentation
 
@@ -654,19 +588,8 @@ open_tms/
 │   │   ├── scheduler.ts    # Per-partner polling scheduler
 │   │   └── config.ts       # Config from backend API
 │   └── Dockerfile          # Collector container
-├── auth-service/            # Standalone authentication & authorization service
-│   ├── src/
-│   │   ├── index.ts        # Entry point (Fastify, port 3002)
-│   │   ├── services/       # Auth, Token, OAuth, Password services
-│   │   ├── repositories/   # User, Role, Session, AuthProvider repos
-│   │   ├── routes/         # Auth, users, roles, setup, OAuth endpoints
-│   │   ├── middleware/      # JWT verification middleware
-│   │   └── di/             # Dependency injection container
-│   ├── Dockerfile          # Auth service container
-│   └── entrypoint.sh       # Runs migrations on startup
 ├── packages/
 │   └── shared/             # Shared TypeScript types
-├── terraform/              # Infrastructure as Code
 ├── .github/workflows/      # CI/CD pipelines
 ├── docs/                   # Integration guides
 │   ├── CUSTOMER_PORTAL_GUIDE.md
@@ -762,55 +685,27 @@ container.singleton(TOKENS.ICustomersRepository)
 ### Location Management
 - **Comprehensive address handling** with coordinates
 - **Geographic data support** for mapping
-- **Warehouse and retail location** management
+- **Warehouse, depot and retail locations** as pickup and delivery points
 - **Address validation** and formatting
 
-### Warehouse Management System (WMS)
-- **Location hierarchy** - Zones, aisles, and bins with capacity tracking, temperature zones, hazmat certification
-- **Bulk bin generation** - Pattern-based bin creation ({aisle}-{row}-{level}) with live preview
-- **Receiving** - Dock appointments, ASN-based and blind receiving, line-by-line inspection
-- **Cross-dock** - Flow-through workflow: received goods skip storage and sort directly to staging bins for outbound loading
-- **Returns / RMA** - Full returns lifecycle with 7 dispositions (restock, refurb, scrap, recycle, donate, rtv, customer_keeps), quarantine-first flow, partial returns, auto-calculated refunds with finance review queue. Five initiation channels: admin UI, customer portal (self-service request flow with list/new/detail pages and JWT-scoped label download), public REST API (customer-keyed), EDI 180 Return Merchandise Authorization (inbound request + outbound authorization response), and marketplace webhooks (roadmap). Return label generation and carrier pickup scheduling via provider-agnostic `IReturnLabelProvider` (Manual provider active; FedEx/UPS/DHL stubs for live carrier integration)
-- **Directed putaway** - Priority-based rules (SKU pattern, temperature, hazmat, customer, velocity), scan-to-confirm with deviation tracking, bin constraint validation, product consolidation
-- **Inventory tracking** - Real-time stock levels per bin with immutable transaction ledger, stock adjustments with reason codes, bin-to-bin transfers, per-SKU summary aggregation
-- **Wave planning** - Group orders into pick waves (discrete or batch strategy), inventory allocation on release
-- **Wave templates** - Automate wave creation with reusable templates (grouping rules, carrier cutoff times, min/max orders, cron schedules, auto-release)
-- **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
-- **Packing** - Pack station verification, line-by-line item confirmation
-- **Pack Audit** - Scale weight + cubiscan dim-weight variance checks at the pack station. Default ±10% tolerance (configurable per-audit), pass/warning/fail verdict auto-raises medium or high priority quality issues linked to the pack task. Expected weight auto-calculated from `ProductUom.weightGrams × quantity` across pack lines. Admin dashboard shows 30-day pass rate and variance trends
-- **Cutoff-at-Risk Monitor** - Per-carrier, per-day-of-week cutoff times with IANA timezone support. A pg-boss cron scans open shipments every 5 minutes, projects warehouse-ready time from remaining pick/pack/load work, and fires `shipment.cutoff_at_risk` with severity (minor/warning/critical). Warning and critical auto-raise triage issues linked to the shipment; dedup prevents spam while still escalating. Admin dashboard surfaces at-risk shipments and lets ops configure cutoffs per carrier
-- **Cartonization** - Recommends smallest viable shipping carton at pack time. ProductUom master data for SKU dimensions, CartonCatalogue per location, First-Fit-Decreasing algorithm with volume and weight scoring
-- **Loading** - Staging assignments at dock bins, batch loading completion
-- **Cycle counting** - Full warehouse, zone, and random sample counts with variance detection and auto-adjustment of inventory
-- **Replenishment** - Auto-replenish pick faces from bulk storage when stock drops below configured minimums
-- **Manifest ingestion** - CSV upload with column mapping templates and header-checksum auto-detection for reusable supplier formats
-- **Zone picking** - Sequential (pick-and-pass) and parallel (pick-and-merge) zone strategies with per-zone task tracking
-- **Product dimensions** - SKU-level dimension and weight master data (ProductUom) for cartonization and future palletization
-- **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
-- **Operations KPI dashboard** - Dedicated `/wms/operations` view with six KPI groups (throughput today vs 7-day, 30-day avg cycle times for pick / dock-to-stock / order-to-ship, pick accuracy + pack audit pass rate + inventory record accuracy, live work queue, exceptions rollup including cutoff-at-risk, bin utilization). Tone-coloured accuracy thresholds, clickable drill-downs, 60-second auto-refresh
-- **Pallet Types & Palletization** - `PalletType` catalog with one-click seed of 13 standard types (EUR1 / EUR2 / EUR3 / EUR6 half / US GMA 48×40 / US 42×42 / CHEP 1210 + 48×40 / AU 1165 / plastic + one-way + quarter display) plus full CRUD. Planner service computes cartons-per-layer (best of two orientations), layers (min of height- and weight-bound), stacked height and weight utilization. Recommender ranks all active pallet types for a given carton spec
-- **Container Intelligence** - Carton catalogue extended with temperature zone, insulation hours, tamper-evident flag, value class, hazmat UN classes, and material type. Recommender groups pack items by constraint profile (temperature + value + hazmat compatibility with UN segregation matrix), picks the smallest qualifying carton per group, and attaches required ancillaries (gel pack, dry ice, desiccant, fragile padding, tamper seal). Transit-hours aware: refrigerated packages past 24h transit automatically promote to dry ice
-- **Warehouse mobile app** - Pick task execution, putaway scan-to-confirm, receiving (ASN + blind) with per-line inspection, packing with barcode verification and carton selection, pack audit (scale + dim variance), and return receiving + inspection/disposition tasks - all on one unified task list with Receive / Putaway / Pick / Pack / Returns tabs. Supports Zebra / Honeywell RF gun barcode wedges alongside camera scanning
-- **147 tests** across 13 test suites covering the full goods flow
+### Returns, cutoffs and packaging
+- **Returns / RMA** - Returns lifecycle with 7 dispositions (restock, refurb, scrap, recycle, donate, rtv, customer_keeps), receipt and inspection against the RMA, partial returns, auto-calculated refunds with a finance review queue. Initiation channels: admin UI, customer portal (self-service request flow with list/new/detail pages and JWT-scoped label download), public REST API (customer-keyed) and EDI 180 Return Merchandise Authorization (inbound request + outbound authorization response). Return label generation and carrier pickup scheduling via provider-agnostic `IReturnLabelProvider` (Manual provider active; FedEx/UPS/DHL stubs for live carrier integration). Open TMS records the disposition; putting a returned item back into stock is a job for your warehouse system
+- **Cutoff-at-Risk Monitor** - Per-carrier, per-day-of-week cutoff times with IANA timezone support. A pg-boss cron scans open, carrier-assigned shipments every 5 minutes, allows a fixed handling time before each can be handed over (30 minutes by default), and fires `shipment.cutoff_at_risk` with severity (minor/warning/critical). Warning and critical auto-raise triage issues linked to the shipment; dedup prevents spam while still escalating. The Cutoff At Risk page lists flagged shipments, and Carrier Cutoffs configures the times per carrier
+- **Packaging Types & Palletization** - Packaging catalogue (pallets, cartons, crates, drums, totes and more) with a one-click seed of standard types (EUR1 / EUR2 / EUR3 / EUR6 half / US GMA 48×40 / US 42×42 / CHEP 1210 + 48×40 / AU 1165 / plastic + one-way + quarter display) plus full CRUD. Planner service computes cartons-per-layer (best of two orientations), layers (min of height- and weight-bound), stacked height and weight utilization. Recommender ranks all active pallet types for a given carton spec
+
+Warehouse management and inventory were removed in November 2026 ([ADR 0007](docs/adr/0007-tms-only-in-typescript.md)). The last commit that carries them is tagged `last-with-wms`.
 
 ### Bill of Lading (BOL) workflow
 
-The BOL is an **immutable** document. Its content is captured as a metadata snapshot at generation time and frozen — re-opening the document later does not pull fresh data from the shipment. Generating a BOL too early therefore produces a permanently empty document, so generation is gated to the end of the WMS flow.
+The BOL is an **immutable** document. Its content is captured as a metadata snapshot at generation time and frozen, so re-opening the document later does not pull fresh data from the shipment. Generating a BOL too early therefore produces a permanently incomplete document, so generation is guarded.
 
-**Intended flow (the only path that produces a fully populated BOL):**
+**Generation (`POST /api/v1/documents/generate/bol`)** is on demand, from the shipment detail page or the API, and refuses with `400` until the shipment carries enough detail:
 
-1. Order created → assigned to shipment
-2. Pick task created → handheld scans (or admin "complete pick")
-3. Load plan created with vehicle / dock / driver
-4. Lines loaded onto vehicle (handheld scans or admin "Load all")
-5. Load plan completed + sealed → BOL is auto-generated here. `POST /api/v1/load-plans/:id/complete` synchronously calls `DocumentGenerationService.generateBOL` after the load plan transitions to `completed`, capturing vehicle, driver, stops, orders, trackable units, and line items.
+- the shipper and consignee are set
+- at least one order is attached
+- every line item describes the goods, with a piece count and a weight
 
-**Manual generation (`POST /api/v1/documents/generate/bol`)** is still supported for re-issuing a BOL or for admin testing, but it is guarded:
-
-- `400` if the shipment has no orders attached
-- `400` if every attached order has zero trackable units **and** zero line items
-
-The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate. Once picking and loading have produced units/line items the same call succeeds and stores the immutable snapshot.
+`evaluateBolReadiness` is the single check, shared by the route and the frontend button. The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate.
 
 **Viewing the PDF.** `GET /api/v1/documents/:id/download` is JWT-protected. Plain `<a href>` navigation bypasses the global `window.fetch` interceptor in `frontend/src/authFetch.ts`, so the link arrives without an Authorization header and the backend returns `401 "Authorization header required"`. The BOL view's Download button instead does an authenticated `fetch`, reads the response as a blob, and synthesises a click on a hidden `<a download>`. The pattern lives in [`VNextBolView.handleDownload`](frontend/src/vnext-design/VNextBolView.tsx) and should be reused for any other JWT-protected file download — a system-wide signed-URL or download-cookie scheme is a separate, larger change.
 
@@ -880,7 +775,6 @@ Each app has its own layout component (`layout.tsx`, `integrations-layout.tsx`, 
 - **Input validation** with Zod schemas
 - **SQL injection protection** via Prisma ORM
 - **CORS configuration** for secure cross-origin requests
-- **Rate limiting** for demo protection (50 requests/minute per IP)
 - **Environment variable** management
 - **Soft delete** for data preservation
 
@@ -928,7 +822,7 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/DominicFinn/open_tms/discussions) for questions and ideas
 - 🐛 **Issues**: [GitHub Issues](https://github.com/DominicFinn/open_tms/issues) for bug reports and feature requests
-- 📖 **Documentation**: Check the [deployment guide](./DEPLOYMENT.md) and deploy your own instance to access interactive API docs at `/docs`
+- 📖 **Documentation**: Check the [self-hosting guide](docs/SELF_HOSTING.md) and deploy your own instance to access interactive API docs at `/docs`
 
 ## 📄 License
 
@@ -936,7 +830,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Documentation**: Check the [deployment guide](./DEPLOYMENT.md)
+- **Documentation**: Check the [self-hosting guide](docs/SELF_HOSTING.md)
 - **Issues**: [GitHub Issues](https://github.com/DominicFinn/open_tms/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/DominicFinn/open_tms/discussions)
 

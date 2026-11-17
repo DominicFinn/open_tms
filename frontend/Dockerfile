@@ -1,7 +1,7 @@
 # Frontend Dockerfile
 # Build context must be the repository root (npm workspaces monorepo), e.g.:
 #   docker build -f frontend/Dockerfile -t open-tms-frontend .
-FROM public.ecr.aws/docker/library/node:20-alpine AS deps
+FROM public.ecr.aws/docker/library/node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
 COPY backend/package.json ./backend/package.json
@@ -9,7 +9,7 @@ COPY frontend/package.json ./frontend/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm install
 
-FROM public.ecr.aws/docker/library/node:20-alpine AS build
+FROM public.ecr.aws/docker/library/node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

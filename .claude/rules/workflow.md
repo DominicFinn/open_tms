@@ -5,14 +5,11 @@
 **Work is tracked in GitHub Issues, organised on a GitHub Project board.** The issue number is the
 thread tying issue → branch → commit → PR together.
 
-### Area prefixes
+### Title prefix
 
-Title issues with the area they belong to:
-
-- **TMS** — transport management work (shipments, orders, tendering, EDI, financials, tracking)
-- **WMS** — warehouse work (receiving, picking, packing, inventory, warehouse PWA)
-
-e.g. `TMS: cutoff risk issues don't auto-resolve on recovery`, `WMS: pack audit misses short picks`.
+Title issues with a `TMS:` prefix, e.g. `TMS: cutoff risk issues don't auto-resolve on recovery`.
+The prefix dates from when the repo also carried a warehouse system. It stays so that old and new
+issues sort and search the same way.
 
 ### Rules
 
@@ -23,7 +20,7 @@ e.g. `TMS: cutoff risk issues don't auto-resolve on recovery`, `WMS: pack audit 
 - **Read the issue before implementing.** Acceptance criteria and comments routinely carry
   constraints that never made the title.
 - **Every open issue sits on the [Open TMS board](https://github.com/users/DominicFinn/projects/3)**
-  with a *Theme* and a *Horizon* (Now, Next, Later), and a `TMS` or `WMS` label. The themes match
+  with a *Theme* and a *Horizon* (Now, Next, Later), and the `TMS` label. The themes match
   the sections of `roadmap.md`.
 - **Move the issue as you go**: put it *In Progress* when you start, and move it to *Done* when the
   work is merged. Leave a closing comment describing what actually changed, especially where the
@@ -80,7 +77,7 @@ git fetch origin
 git worktree add ../open_tms-412 -b tms/412-cutoff-auto-resolve origin/main
 ```
 
-- Branch name carries the issue number: `tms/412-<slug>` or `wms/412-<slug>`
+- Branch name carries the issue number: `tms/412-<slug>`
 - **Always branch from `origin/main`**
 - Worktrees live as **siblings of the repo** (`../open_tms-412`). If you put them inside the repo
   instead, the path **must** be gitignored — `.claude/worktrees/` already is.

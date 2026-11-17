@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import Home from './pages/Home'
 import Blog from './pages/Blog'
@@ -8,7 +8,6 @@ import Operations from './pages/features/Operations'
 import Triage from './pages/features/Triage'
 import Quality from './pages/features/Quality'
 import Reports from './pages/features/Reports'
-import Warehouse from './pages/features/Warehouse'
 import AiAgents from './pages/features/AiAgents'
 import Financial from './pages/features/Financial'
 import Layout from './components/Layout'
@@ -30,7 +29,7 @@ export default function App() {
         <Route path="/features/triage" element={<Triage />} />
         <Route path="/features/quality" element={<Quality />} />
         <Route path="/features/reports" element={<Reports />} />
-        <Route path="/features/warehouse" element={<Warehouse />} />
+        <Route path="/features/warehouse" element={<Navigate to="/blog/open-tms-back-to-tms" replace />} />
         <Route path="/features/ai-agents" element={<AiAgents />} />
         <Route path="/features/financial" element={<Financial />} />
         <Route path="/blog" element={<Blog />} />

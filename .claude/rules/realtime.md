@@ -8,8 +8,8 @@ paths:
 # Real-time & Broadcasting
 
 > **Current state:** there is no WebSocket/SSE transport in this codebase yet. Several pages poll on
-> a timer instead (`VNextShipmentMap`, `VNextSlaDashboard`, `VNextWmsOperationsDashboard`,
-> `WarehouseShipments`, and `VNextShipmentDetail`'s Events/Telemetry tabs). These rules define what
+> a timer instead (`VNextShipmentMap`, `VNextSlaDashboard`, and `VNextShipmentDetail`'s
+> Events/Telemetry tabs). These rules define what
 > live data must look like when the transport lands, and set the ceiling on polling until then.
 
 ## If we're doing broadcasting, do broadcasting — we don't poll

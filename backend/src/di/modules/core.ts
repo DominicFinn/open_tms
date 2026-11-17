@@ -67,6 +67,8 @@ import { TriageRepository } from '../../repositories/TriageRepository.js';
 import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js';
 
 export function registerCoreDependencies(prisma: PrismaClient): void {
+  // Lets other modules find an open issue without reading the issue table (#359)
+
   // Register repositories as singletons (they're stateless, so we can reuse instances)
   container.singleton(TOKENS.ICustomersRepository).toFactory(() => {
     return new CustomersRepository(container.resolve(TOKENS.PrismaClient));

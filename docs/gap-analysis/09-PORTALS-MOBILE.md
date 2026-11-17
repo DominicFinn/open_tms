@@ -36,21 +36,6 @@
 
 ## Mobile Capabilities - What's Built
 
-### Warehouse App (Mobile-First Web)
-- Password login + magic link/QR code login
-- Location selection with preference memory
-- Shipment list filtered by warehouse (filter chips, search, barcode scan-to-filter)
-- Shipment detail (read-only: route, customer, dates, carrier, driver, orders, trackable units)
-- Shipment flagging with resolution workflow
-- 4-step launch wizard (assign trackers, add accessories, pair units with devices, review)
-- HID barcode scanner support (Zebra/Honeywell)
-- Camera-based barcode scanning fallback (native BarcodeDetector API)
-- IoT device assignment at shipment and trackable unit level
-- Stale shipment archive
-- WiFi connectivity monitoring
-- Admin shipment creation from warehouse
-- Touch-optimized for small Android/Zebra screens
-
 ### Carrier Portal (Mobile-Responsive)
 - Tender view and bid submission
 - Bid history and tender history with win rate

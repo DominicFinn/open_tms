@@ -1,26 +1,11 @@
 # Roadmap Backlog
 
-The open work behind each theme in [roadmap.md](../../roadmap.md), for everything except FinnWMS,
-which has its own file ([finnwms.md](finnwms.md)). Shipped work is in [completed.md](completed.md).
+The open work behind each theme in [roadmap.md](../../roadmap.md). Shipped work is in
+[completed.md](completed.md).
 
 Items here are candidates, not commitments. When a theme is picked up, its items become GitHub
 issues on the [Open TMS board](https://github.com/users/DominicFinn/projects/3) and
 come off this list. Where an issue already exists it's linked.
-
-## Split programme
-
-Tracked in detail in [split-finntms-finnwms.md](split-finntms-finnwms.md).
-
-- #297 gives `InventoryRecord` a facility, so the `locationId` soft references can be dropped.
-  This is the last piece of phase 2a
-- Phase 2b: `HandlingUnit`, so stock can exist without a TMS order
-- Phase 2c: polymorphic `Allocation` demand reference
-- Phase 2d and 2e: carton cleanup, `OrgWmsSettings` carve-out
-- Phase 3: `ENABLED_MODULES` composition, `OrgApp` entitlements and `GET /api/v1/apps`,
-  `packages/contracts`, warehouse PWA split, delete `auth-service/`, per-product frontend builds
-- Phase 4: standalone FinnWMS install, including demand intake that writes WMS fulfilment orders
-  directly (940, API, manifest)
-- Phase 5: inventory as its own module with a `Product` SKU master
 
 ## Platform hardening
 
@@ -33,7 +18,6 @@ Security, tenancy and correctness gaps. See the security rule for the reasoning 
   the frontend). No issue yet
 - #316: RMA label provider called inside a transaction
 - #170: `AuditHandler` logs the actor's name
-- #308: warehouse password login imports bcrypt, which isn't a dependency
 
 Internal user auth, carried over from the old roadmap:
 
@@ -80,6 +64,7 @@ The work that was on the Shipments v1 board: making the core shipment flow behav
 - #247: some shipments open a "not found" page from the list
 - #249: tab-switch scroll lands in the wrong place on detail pages
 - #199: shipment delete should be admin-only and soft
+- #399: a cutoff issue stays open after its shipment departs
 - #202: `CreateShipmentCommand` publishes to two queues nobody consumes
 - #149: test overriding a lane's default carrier on a shipment
 - #151: decide what a rate confirmation should contain
@@ -127,10 +112,10 @@ The executive dashboard exists. Background in
 ## Developer experience and deployment
 
 - #298: jest never exits cleanly
-- #292: compose, README and CloudFormation build from the old Docker context (#114 and #146 are
-  the user reports)
-- #110: the DigitalOcean deploy button looks for a template that doesn't exist
-- #293: README describes a demo deployment and rate limiting that don't exist (#111 asks for a demo)
+- #111: a hosted demo people can try
+- #402: `Session` and `AuthProvider` tables have no reader, and the forgot-password stub logs the
+  email
+- #403: internal user routes need `users:*`
 - #124: retire `vnext` from the frontend
 - #115: architecture site for the ADRs
 - Observability: Prometheus format and Grafana dashboards on `/metrics`, OpenTelemetry, queue
@@ -168,8 +153,7 @@ is the regulatory UI and reporting.
 
 Items that don't belong to a theme yet.
 
-- Warehouse app: order creation, offline queue, false-start detection for IoT devices, admin
-  shipment management, Flutter native build, geofence-based ready to in-transit transition
+- False-start detection for IoT devices, and a geofence-based ready to in-transit transition
 - AI: visual node builder for skill chains, prompts that learn from human overrides, predictive
   dashboards
 - Multi-language support with RTL

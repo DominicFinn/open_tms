@@ -41,9 +41,6 @@ import type { IOrderDeliveryService } from './services/OrderDeliveryService.js';
 import type { IArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
 import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
 import { SkillRegistry } from './services/skills/SkillRegistry.js';
-import { DocumentGenerationService, IDocumentGenerationService } from './services/DocumentGenerationService.js';
-import { DocumentTemplateRepository } from './repositories/DocumentTemplateRepository.js';
-import { GeneratedDocumentRepository } from './repositories/GeneratedDocumentRepository.js';
 import { CreateIssueSkill } from './services/skills/CreateIssueSkill.js';
 import { EscalateIssueSkill } from './services/skills/EscalateIssueSkill.js';
 import { SendEmailSkill } from './services/skills/SendEmailSkill.js';
@@ -186,19 +183,7 @@ async function startWorker() {
     }
     console.log(`[Worker] Skill registry: ${skillRegistry.getAll().length} skills registered`);
 
-    // Document generation is what turns a completed load plan into a BOL. The worker builds its
-    // own services rather than using the container, so it needs binary storage to be available;
-    // without it there is no BOL subscriber and loads still complete and seal.
-    const documentService: IDocumentGenerationService | undefined = storageProvider
-      ? new DocumentGenerationService(
-          prisma,
-          new DocumentTemplateRepository(prisma),
-          new GeneratedDocumentRepository(prisma),
-          storageProvider
-        )
-      : undefined;
-
-    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, commandBus, skillRegistry, documentService);
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, commandBus, skillRegistry);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

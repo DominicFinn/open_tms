@@ -6,7 +6,7 @@ what applies everywhere.
 
 ## Project Structure
 
-- **Monorepo** with `backend/`, `frontend/`, `edi-collector/`, `packages/shared/`, `www/`
+- **Monorepo** with `backend/`, `frontend/`, `edi-collector/`, `packages/shared/` and `www/`. Open TMS is a TMS only, in TypeScript (ADR 0007)
 - Root `package.json` has hoisted `node_modules`; run `npm install` from root
 - Backend: Fastify + TypeScript + Prisma + PostgreSQL (port 3001)
 - Frontend: React 18 + TypeScript + Vite (port 5173)
@@ -21,8 +21,8 @@ Always loaded:
 | `.claude/rules/cqrs-and-events.md` | Command handlers, events, projections, **the mandatory checklist for any new entity**, test requirements |
 | `.claude/rules/security.md` | Tenancy as a security boundary, auth guards, validation, **rate limiting**, headers, webhooks, PII, secrets |
 | `.claude/rules/error-handling-and-logging.md` | try/catch at the edges, **no PII in logs**, structured logging, complexity limit |
-| `.claude/rules/language-and-tooling.md` | TypeScript everywhere — **no new JavaScript projects** |
-| `.claude/rules/workflow.md` | GitHub Issues + Projects, TMS/WMS prefixes, `gh` CLI, worktrees, tidy-up |
+| `.claude/rules/language-and-tooling.md` | **TypeScript throughout** (ADR 0007), no second backend language, no new JavaScript projects |
+| `.claude/rules/workflow.md` | GitHub Issues + Projects, the `TMS:` prefix, `gh` CLI, worktrees, tidy-up |
 | `.claude/rules/pre-commit-checklist.md` | Walk before every PR |
 | `.claude/rules/feature-tracking.md` | `.tracking/<feature>.md` planning files for multi-layer work |
 
@@ -30,7 +30,7 @@ Loaded when you touch matching files:
 
 | Rule | Scope |
 |---|---|
-| `.claude/rules/module-boundaries.md` | `backend/src/**` — **the tms/wms dependency DAG**, crossing a boundary by event or port, the exception burn-down |
+| `.claude/rules/module-boundaries.md` | `backend/src/**`: **the module dependency DAG** (core, finance, quality, tms), crossing a boundary by event or interface, the exception burn-down |
 | `.claude/rules/backend.md` | `backend/src/**` — API envelope, DI, repositories, read models, file storage |
 | `.claude/rules/multi-tenancy.md` | `backend/src/**` — `orgId`, `req.orgId`, per-surface scope helpers |
 | `.claude/rules/api-design.md` | `backend/src/routes/**` — REST, envelope, pagination, **HTTP status codes**, schema validation |

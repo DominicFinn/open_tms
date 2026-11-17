@@ -62,6 +62,7 @@ and priorities). Newest entries append at the bottom of their phase; new phases 
 - **Ship Several Customers' Orders Together (#329, part 5)** - "Ship together" on the orders list works across customers: one click makes one shipment per customer, all on a new consolidation. Each customer's portal shows only their own shipment and its live position, never the run or other customers' freight.
 - **Other Stops (#345)** - Waypoints can be other stops, neither pickup nor drop: fuel, rest, customs, cross-dock, hub, inspection or other, with an optional name. Tracking records when the truck arrived and left without moving any orders, lane stops tagged with those purposes carry over to shipments, consolidation runs reorder them freely, and customers don't see them.
 - **Drawn Geofences Drive Arrivals (#347)** - Ping matching uses the geofence drawn on a location, circle or polygon, instead of the older arrival criterion. Redrawing a location's geofence takes effect on the next ping, and a location with only a drawn geofence gets arrivals. WiFi and BLE criteria still apply.
+- **Journey Report Covers Every Stop (#348)** - The full-journey report lists every stop in order, with its type, status, arrival and departure, and flags departures that were inferred from reaching a later stop. On a route that ends back at a location it already visited, the destination is the final visit.
 - **Events Reach Handlers in Every Deployment (#327)** - With the API's embedded workers turned off, events it published used to be recorded and then delivered to nothing, so projections, notifications and webhooks never ran. A process that runs no handlers now hands events to a dispatch queue that the worker fans out. The standalone worker uses the same DI container as the API, and both register the command-driven handlers (issue engine, auto-replenishment, route planning) with the full command bus, whether or not an LLM is configured.
 - **Exceptions** - Exception status with type classification, resolution workflow, event-driven notifications, ETA-based auto-detection
 - **Normalised Tracking Pings (#323)** - Every IoT payload (System Loco or the generic webhook) is parsed into one internal ping: device timestamp, position, a readings array (temperature, battery, light, pressure) and a readings count. Generic pings now store their telemetry against the registered device (idempotent on retry) and drive arrivals, origin departure and journey checkpoints, which previously only System Loco did. Arrival, departure, checkpoint and order-delivery times use the device's timestamp instead of processing time. Checkpoints skipped between sparse pings are filled in on the planned route with interpolated times.
@@ -116,24 +117,12 @@ and priorities). Newest entries append at the bottom of their phase; new phases 
 - **Automation Rule Engine** - ConditionEvaluator (10 operators), AutomationRuleHandler, unified condition format, promote from decisions, API with dry-run, frontend rule builder
 - **Skills System** - ISkill interface, SkillRegistry, 6 built-in skills (create_issue, escalate_issue, add_comment, contact_driver, send_email, call_webhook), TemplateResolver, SkillChainExecutor with branching, SkillConfig/SkillChain models, admin UI
 
-### **Phase 11: Warehouse Shipment App** DONE
-- **Warehouse Login & Auth** - Password + magic link/QR code login, audit log, account lockout
-- **Location Selection** - Location selector on first login, preferred location saved to profile
-- **Shipment List** - Today's work filtered by origin warehouse, filter chips, search, scan-to-filter, auto-refresh
-- **Shipment Detail** - Full details (route, customer, dates, carrier, driver, vehicle), orders/units, flag button with resolution workflow
-- **Launch Wizard** - 4-step flow: assign IoT trackers, add accessories, pair trackable units, review/launch
-- **IoT Device Integration** - Device lookup by barcode, assignment warnings, shipment/unit level assignment
-- **Archive** - Stale shipments (>2 days) on separate screen
-- **Barcode Scanning** - HID scanner support (Zebra/Honeywell), rapid keystroke detection, manual fallback, camera-based fallback (BarcodeDetector API)
-- **WiFi Monitoring** - Offline/online event logging, duration tracking
-- **Mobile-First Design** - Bottom nav, touch-optimized, keyboard-aware, CSS custom properties
-
 ---
 
 ## Shipped after the April 2026 reorientation
 
 Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks live in
-[backlog.md](backlog.md) and [finnwms.md](finnwms.md).
+[backlog.md](backlog.md).
 
 ### Carrier integrations: US LTL (Sep 2026)
 
@@ -264,109 +253,29 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
   - New `shipments:share` permission gates issuing, editing, revoking and reading the access log,
     plus the Shared links tab on shipment detail.
 
-### Inventory companion app, first slice (#233)
+### Returns, cutoffs, packaging and the customer developer area
 
-  - First slice landed (#233): a lighter, standalone "inventory app" mobile-web surface
-    (`frontend/src/inventory-app/`) on top of the existing `inventory` module — read-only stock
-    levels + a new `InventoryObservation` ledger for ad hoc scan/spot-check records, behind a new
-    narrower `scope: 'inventory'` session JWT. Mobile-web first, deliberately, to validate the API
-    contract before committing to a native Android client. `Product` SKU master still not
-    introduced — `sku` stays a bare string, per this phase's own note above
-- [x] `InventoryObservation` ledger entity + `inventory_observation.record` command (#233)
-- [x] `scope: 'inventory'` JWT, narrower than `scope: 'warehouse'` (read levels + record
-      observations only)
-- [x] Mobile-web levels view + scan/observation flow, reusing the warehouse PWA's scanning hooks
+Shipped alongside the warehouse work and kept when the warehouse modules were removed (#392).
+Where an entry mentions `/wms/...` pages, those now live at `/returns`, `/cutoff-monitor`,
+`/carrier-cutoffs` and `/packaging-types`.
 
-### WMS v1
-
-- **Location Hierarchy** DONE
-  - WarehouseZone, WarehouseAisle, WarehouseBin models with capacity denormalization
-  - Bulk bin generation (grid pattern), walk sequence, temperature/hazmat attributes
-  - Bin types: pallet, shelf, floor, dock door, staging, pack station
-  - 14 command handler tests
-- **Inventory Foundation (digital twin)** DONE (partial)
-  - TrackableUnit nesting (parentUnitId), lot/expiry/receivedAt, currentBinId, currentZoneId
-  - `ownerCustomerId` for 3PL multi-client segregation
-  - `qualityStatus` (available/hold/quarantine/damaged)
-  - InventoryRecord (read model) + InventoryTransaction (immutable ledger)
-  - Stock adjust (with reason codes) and bin-to-bin transfer commands
-  - Per-bin detail view and per-SKU summary aggregation
-  - ProductUom model in schema
-  - 11 command handler tests
-  - Cycle counting: full, zone, and random sample types, auto-adjust inventory on completion, variance detection events (5 tests)
-  - Replenishment rules: min/max thresholds per SKU per pick-face bin, manual check trigger, auto-creates putaway tasks, deduplication (6 tests)
-  - ProductUom CRUD: SKU dimensions/weights management UI, barcode/GTIN tracking, dimension lookup API for cartonization
-  - CartonCatalogue CRUD: per-location carton sizes with cost tracking
-  - CartonizationService: First-Fit-Decreasing recommendation (ProductUom dims -> OrderLineItem fallback), volume + weight utilization scoring, alternative carton suggestions (7 tests)
-- **Receiving** DONE (partial)
-  - ReceivingAppointment (scheduled dock time), ReceivingTask, ReceivingLine
-  - ASN-based and blind receiving, inspection workflow
-  - 10 command handler tests
-- **Putaway** DONE
-  - PutawayRule (SKU pattern, temperature, hazmat, velocity, customer, unit type)
-  - PutawayTask (directed, manual, replenishment)
-  - `next_available_in_zone` resolver with walk sequence + capacity + consolidation preference
-  - Scan-to-confirm with deviation tracking, bin constraint validation (temperature, hazmat)
-  - Auto-generates InventoryRecord + InventoryTransaction on completion
-  - 9 command handler tests
-- **Allocation Engine** DONE (partial)
-  - Allocation model (soft/hard states)
-  - Hard allocation on wave release (FIFO), multi-bin split allocation
-- **Pick & Pack** DONE (partial)
-  - Wave creation with auto-generated wave numbers, WaveOrder join
-  - Wave release: hard-allocates inventory, generates PickTasks with walk-sequence-sorted PickLines
-  - PickTask + PickLine with walk-sequence ordering
-  - Two strategies: discrete (one task per order), batch (one task for wave)
-  - Short-pick handling: backorder / cancel_line with allocation release
-  - PackTask + PackLine with verification, auto-complete
-  - Auto-complete cascade: line -> task -> wave
-  - 9 wave/pick tests + 9 packing/loading tests
-  - WaveTemplate: create templates with grouping rules, cutoff time, min/max orders, cron schedule, auto-release. Apply template to auto-create waves from eligible orders (6 tests)
-  - Zone pick strategy: sequential (pick-and-pass) and parallel (pick-and-merge) modes, zonePickMode on Wave/WaveTemplate, zoneSequence on PickTask, startedAt/completedAt timestamps for SLA (2 tests)
-  - CartonizationService: First-Fit-Decreasing recommendation with ProductUom + OrderLineItem fallback, volume + weight utilization, alternatives. Carton catalogue CRUD. Product dimensions CRUD. Recommendation wired into pack task detail page (7 tests)
-  - ✅ PackAudit for weight/dim-weight variance
-    - `PackAudit` model with expected/actual weight and LWH dims, computed weight and dim-weight variance percent, per-audit tolerance, verdict (pass/warning/fail), optional issueId link
-    - Verdict logic: `|variance| ≤ tolerance` = pass, `≤ 2x tolerance` = warning, otherwise fail. Default tolerance 10%, configurable per-audit
-    - Expected weight auto-computed from `ProductUom.weightGrams × expectedQuantity` across pack lines; caller can override
-    - Dim-weight uses industry standard `(L×W×H cm) / 5000 = kg` formula; only compared when a carton is linked and all actual dims are captured
-    - Warning auto-creates a medium-priority quality issue on the triage kanban; fail creates a high-priority issue - both link back to the `pack_task` via `sourceEntityType/sourceEntityId`
-    - Events: `pack.audit_recorded` (every audit), `pack.audit_variance_detected` (warning/fail only)
-    - Admin: `/wms/pack-audits` - sortable list with 30-day stats (total, pass rate, warnings, failures), filterable by verdict, one-click jump to the raised issue
-    - Warehouse mobile: `/warehouse/tasks/pack-audit/:packTaskId` - shows expected weight, scale input, optional LWH inputs, notes, and previous-audit history. Submit returns an immediate pass/warning/fail tile
-    - Routes: `POST/GET /api/v1/pack-audits`, `GET /api/v1/pack-audits/stats`, `GET /api/v1/warehouse/pack-tasks/:id/audit-context`
-    - 10 command tests (expected-weight auto-calculation, verdict boundaries, override behavior, dim-weight math, validation failures)
-  - ✅ `shipment.cutoff_at_risk` events
-    - New `CarrierCutoff` model - per-day-of-week cutoff times with IANA timezone and optional service level + per-location override
-    - `ShipmentCutoffMonitorService` evaluates open, carrier-assigned shipments against today's cutoff; projected ready time = now + (pendingPicks × 45min) + (pendingPacks × 15min) + (no load plan ? 30min : 0) - all buffers configurable
-    - Severity: minor (≥30 min buffer, dashboard-only), warning (<30 min), critical (<10 min or already past)
-    - Warning auto-creates a medium-priority triage issue; critical creates high-priority; both link to the shipment via `sourceEntityType: shipment`. Re-use the same issue across escalations - no spam
-    - Dedup: same-severity re-notification only after a 30-min window; escalation fires immediately and reuses the existing issue
-    - Events: `shipment.cutoff_at_risk` (with severity, cutoffAt, projectedReadyAt, bufferMinutes, blockingStage, pending work counts, issueId), `shipment.cutoff_cleared` (reserved)
-    - pg-boss cron worker (`cutoff-monitor`, default `*/5 * * * *`, configurable via `CUTOFF_MONITOR_CRON`)
-    - Admin: `/wms/cutoff-monitor` at-risk dashboard + `/wms/carrier-cutoffs` config page. Plus REST: carrier cutoff CRUD, at-risk list, single-shipment evaluate (no notify), manual full run
-    - 24 tests (timezone day-of-week, local-time construction, cutoff resolution, severity bands, projected-ready calc, evaluateShipment full flow, dedup window + escalation)
-- **Loading & BOL** DONE
-  - StagingAssignment creation with unit location tracking
-  - Batch loading completion (clears unit location - on vehicle)
-  - LoadPlan model with reverse load-sequence (lines ordered by stop sequence)
-  - BOL auto-generated on `load_plan.completed` via DocumentGenerationService
-  - Seal capture + dock door assignment on load plan create/complete
-  - BOL readiness gate (#78): a BOL is legally required cargo data, but Open TMS treats that data as optional, so generation is blocked (sync + async endpoints) and the manual "Generate BOL" button greys out until the shipment has a shipper/consignee, attached orders, and every order line item carries a goods description, quantity, and weight. `evaluateBolReadiness` (single source of truth) drives both the API guards and the button state; missing requirements are surfaced inline on the shipment Documents tab
-  - 4 command handler tests + 6 BOL readiness tests
-- **Cross-dock** DONE
-  - When ReceivingTask has crossDock=true, CompleteReceiving skips putaway and sorts directly to staging bins
-  - Units moved to staging/shipping_dock/cross_dock zone bins
-  - StagingAssignments created with order linkage for outbound routing
-  - cross_dock.sorted event emitted with sort stats
-  - 2 tests (cross-dock sort + non-crossdock control)
+- **Cutoff-at-risk monitor** ✅
+  - New `CarrierCutoff` model - per-day-of-week cutoff times with IANA timezone and optional service level + per-location override
+  - `ShipmentCutoffMonitorService` evaluates open, carrier-assigned shipments against today's cutoff; projected ready time = now + a fixed handling allowance (`minutesToReady`, default 30 minutes). Before the warehouse modules were removed it was built from open pick, pack and load-plan work
+  - Severity: minor (≥30 min buffer, dashboard-only), warning (<30 min), critical (<10 min or already past)
+  - Warning auto-creates a medium-priority triage issue; critical creates high-priority; both link to the shipment via `sourceEntityType: shipment`. Re-use the same issue across escalations - no spam
+  - Dedup: same-severity re-notification only after a 30-min window; escalation fires immediately and reuses the existing issue
+  - Events: `shipment.cutoff_at_risk` (with severity, cutoffAt, projectedReadyAt and bufferMinutes), `shipment.cutoff_cleared`
+  - pg-boss cron worker (`cutoff-monitor`, default `*/5 * * * *`, configurable via `CUTOFF_MONITOR_CRON`)
+  - Admin: `/wms/cutoff-monitor` at-risk dashboard + `/wms/carrier-cutoffs` config page. Plus REST: carrier cutoff CRUD, at-risk list, single-shipment evaluate (no notify), manual full run
+  - 24 tests (timezone day-of-week, local-time construction, cutoff resolution, severity bands, projected-ready calc, evaluateShipment full flow, dedup window + escalation)
 - **Returns / RMA** DONE (core)
   - Rma + RmaLine models with 7 dispositions: restock, refurb, scrap, recycle, donate, rtv, customer_keeps
   - Partial returns (subset of order line quantity)
-  - Quarantine/QA flow: returned items go to quarantine zone first, inspector sets final disposition, then routed (putaway for restock, refurb zone for refurb, outbound queue for scrap/recycle/donate/rtv)
+  - Inspection flow: returned items are received against the RMA, then an inspector sets the final disposition
   - Auto-calculated refund with finance review queue (finance can override suggested amount)
   - 6 command handlers: Create, Authorize, Reject, ReceiveLine, InspectLine, Complete
   - 9 API endpoints for list/detail/create/authorize/reject/receive/inspect/complete/refund-queue
-  - Inventory movements on restock: new InventoryRecord + InventoryTransaction (type: receive, reason: return)
   - Admin pages: RMA list, multi-step create form, detail with inline inspection/completion, refund review queue
   - 15 command handler tests
   - Full specification in `docs/RETURNS_SPECIFICATION.md`
@@ -376,11 +285,6 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
     - `/customer-portal/returns/:id` - return detail with status explanation, refund summary, return shipping panel (label download + pickup info)
     - 5 backend endpoints: list, detail, create (with order-scope check), label download, eligible-orders helper
     - JWT-scoped to the authenticated customer; uses `CREATE_RMA` with `initiatedVia: customer_portal` and `autoAuthorize: false`
-  - ✅ Warehouse mobile: return receiving task + inspection/disposition task
-    - `/warehouse/tasks/return-receive/:id` - mobile-first receive flow: per-line received-qty input, progress tracking, auto-routes to inspection when all lines received
-    - `/warehouse/tasks/return-inspect/:id` - mobile-first inspect flow: per-line condition (pass/fail/partial_damage) + disposition (7 options, with hints), notes, one-tap submit
-    - `GET /api/v1/warehouse/rmas?stage=receive|inspect|any` - enriched list with `linesToReceive` / `linesToInspect` counts; supports `rmaNumber` exact lookup for scanned RMA labels
-    - Returns tab added to WarehouseTasks alongside Picking and Putaway
   - ✅ Return label generation + pickup scheduling
     - `IReturnLabelProvider` interface + Manual provider (v1 default) + FedEx/UPS/DHL stubs for future live integrations
     - Commands: GenerateReturnLabel, SchedulePickup, CancelPickup (all transactional, emit domain events)
@@ -391,7 +295,7 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
     - Carrier fields: returnLabelProvider, returnLabelAccountNumber, returnLabelDefaultService
     - VNextWmsReturnDetail has a Return Shipping panel with inline generate/schedule/cancel forms
     - 12 additional tests (27 total RMA)
-- **WMS EDI** ✅
+- **EDI 940, 945 and 180** ✅
   - EDI 940 (Warehouse Shipping Order, inbound) - `EDI940ParseService` extracts W05 header, N1 address loops (ST/SF/WH), G62 requested ship dates, W66 carrier + SCAC, NTE free-form notes, W01 line detail with UOM, G69 descriptions, N9 lot / customer line refs. `/api/v1/edi/940/inbound` dispatches `CREATE_ORDER` with `importSource: 'edi_940'`; `/preview` parses without persisting
   - EDI 945 (Warehouse Shipping Advice, outbound) - `EDI945Service` emits W06 header, N1 loops, G62 actual ship date, W27 carrier/tracking, W12 item detail with shipment status codes (CC = complete, PC = partial, CN = cancelled), line-level N9 for tracking/lot/customer refs, W03 totals. `Edi945AutoSendHandler` subscribes to `shipment.delivered` and delivers via SFTP/HTTP to any trading partner with outbound 945 enabled; `/api/v1/edi/945/generate` for manual generation
   - EDI 180 (Return Merchandise Authorization and Notification) - inbound parser creates Rma, outbound generator emits return authorization. Routed via existing universal EDI inbound endpoint and TradingPartner infrastructure.
@@ -406,17 +310,6 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
   - **Integration Logs** at `/customer-portal/developer/logs`: paginated `EdiTransactionLog` list filtered by the customer's trading partners, with direction and transaction-type filters
   - **Developer Dashboard** at `/customer-portal/developer`: overview tiles for API keys, webhooks, trading partners, 7-day EDI activity, plus quick-start and signing/security guidance
   - 14 tests (signing, pattern matching, delivery success/failure, timeout handling)
-- **Warehouse Operations Dashboard** ✅
-  - Single endpoint `GET /api/v1/wms/operations-dashboard` returns six KPI groups in parallel queries
-  - **Throughput** today vs last 7 days: receipts, putaways, picks, packs, shipments dispatched
-  - **Cycle times** (30-day): avg pick cycle (completedAt - startedAt), dock-to-stock (putaway.updatedAt - receivingTask.createdAt), order-to-ship (first dispatch - order.createdAt), plus sample counts
-  - **Quality & accuracy** (30-day): pick accuracy (completed / (completed + short_pick)), pack audit pass rate, inventory record accuracy (1 - Σ|variance| / Σ expected) computed from recent cycle count lines
-  - **Live work queue**: pending pick / putaway / pack tasks, active waves, receiving-in-progress counts
-  - **Exceptions**: open issues with critical breakdown, cutoff-at-risk shipments (critical + warning), returns-in-progress, open pack-audit-fail issues
-  - **Capacity**: total bins, bins with inventory, utilization percent
-  - Frontend page at `/wms/operations` with KPI cards grouped by section. Tone coloring (success/warning/error) on accuracy metrics and capacity utilization. Auto-refreshes every 60s. Clickable cards drill to the related operational page (picks → /wms/picking, cutoff → /wms/cutoff-monitor, etc.)
-  - Sidebar entry "Operations KPIs" alongside the WMS Dashboard
-  - 13 service tests (throughput windowing, cycle time math, pick accuracy, pack pass rate, inventory accuracy from cycle counts, null-sample handling, bin utilization, cutoff exception rollup)
 - **Pallet Types & Palletization** ✅ (foundation)
   - `PalletType` catalog model: unique `(orgId, code)`, external dimensions (mm), tare + max-load (grams), optional max stack height, material (wood/plastic/metal/cardboard/composite), reusable/ISPM-15/stackable/active flags
   - `TrackableUnit.palletTypeId` FK so pallet-level units reference their spec (nullable - legacy / ad-hoc pallets unaffected)
@@ -427,41 +320,6 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
   - Endpoints: `POST /api/v1/pallet-types/:id/plan`, `POST /api/v1/pallet-types/recommend`, plus full CRUD (create/update/delete with soft-deactivation when referenced by TrackableUnits)
   - Admin page `/wms/pallet-types` - table with code, name, dimensions in cm, tare/max-load in kg, chip badges for reusable / ISPM-15 / stackable, "Load standard types" one-click seed, create/edit modal
   - 11 planner tests (orientation optimization, height limit, weight limit, utilization math, null-height-cap path, recommendation ranking, inactive filtering, tie-break)
-- **Container Intelligence at Pack Time** ✅ (v1 engine)
-  - `CartonCatalogue` gains 8 container-intelligence fields: `temperatureZone` (any / ambient / refrigerated / frozen / dry_ice), `insulated` + `insulationHours`, `tamperEvident`, `valueClass` (any / standard / high_value), `hazmatRated` + `hazmatClasses[]` (UN class codes), `materialType` (corrugated / plastic / metal / foam / composite)
-  - `ContainerIntelligenceService.recommend(items, cartons, options)` groups items into constraint-compatible packages, picks the smallest qualifying carton per group, and returns required ancillaries (gel_pack / dry_ice / desiccant / fragile_padding / tamper_seal) + special handling flags (hazmat / high_value / fragile) + per-package reasons
-  - Constraint enforcement baked in: non-ambient cargo requires strict temperature match (no "any" fallback for refrigerated/frozen); hazmat cargo requires hazmat-rated carton approved for every class in the group; non-hazmat cargo is kept out of dedicated-hazmat cartons; high-value cargo requires explicit high-value carton
-  - Hazmat segregation matrix (UN classes 1 / 2.1 / 2.3 / 3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 6.1 / 8) splits incompatible classes into separate packages (e.g., class 3 flammables away from class 5.1 oxidizers)
-  - Transit-hours upgrade: refrigerated packages heading past 24h transit automatically get dry_ice added with a warning
-  - `POST /api/v1/containers/recommend` endpoint returns full package plan with volume/weight utilization and total container cost
-  - Carton catalogue admin UI extended with all the new fields: temperature zone selector, insulation hours, tamper-evident toggle, value class, material, hazmat classes list, plus per-row chips in the table
-  - 36 tests covering input validation, best-fit sizing, temperature grouping, hazmat segregation (compatible and incompatible class pairs), value-class routing, fragile ancillaries, multi-split combinations, reason strings, cost/weight totals
-- **Warehouse Mobile App Extensions** DONE (v1)
-  - Pick task execution (line-by-line with quantity confirmation)
-  - Putaway task execution (scan-to-confirm destination bin)
-  - Return receiving flow (scan RMA, receive per-line with qty input, auto-routes to inspection)
-  - Return inspection / disposition flow (two-column disposition picker with hints, pass/fail/partial_damage, notes, customer-preferred disposition pre-selected)
-  - Pack audit flow (scale input with optional LWH dims, immediate pass/warning/fail verdict, raises quality issue on variance)
-  - Receiving flow (scan SKU → enter received qty + inspection status, unified across ASN and blind)
-  - Packing flow (line-by-line item verification with barcode scan, carton recommendation, complete task when all lines packed)
-  - Receiving appointment check-in flow (today's scheduled arrivals, one-tap check-in before receiving)
-  - Barcode wedge keyboard hook (`useBarcodeScanner`) supports Zebra / Honeywell RF guns that emit rapid keystrokes + Enter
-  - Unified task list with Picking / Putaway / Returns / Receive / Pack tabs; bottom nav surfaces Arrivals alongside Tasks
-- **WMS v1 Gap Close-Out** ✅
-  - Wave auto-release worker - `WaveAutoReleaseService` + pg-boss cron (`wave-auto-release`, default every 5 min). Templates with `autoRelease=true` and a `releaseSchedule` (HH:MM or simple cron) + `cutoffTime` fallback fire `APPLY_WAVE_TEMPLATE` when due. `lastAutoReleasedAt` dedup stamp prevents re-firing within a 12h window. Configurable via `WAVE_AUTO_RELEASE_CRON`
-  - Pack audit events (`pack.audit_recorded`, `pack.audit_variance_detected`) now subscribed by `CustomerWebhookHandler` via pack task → order → customer resolver so third-party integrations receive them as webhooks (issue creation moved after commit via `PackAuditIssueHandler` → `CREATE_ISSUE` in #131, so the issues reach the read model and triage board)
-  - Receiving Appointments admin UI at `/wms/receiving-appointments` - date-filterable list with one-click check-in and cancel; new appointment form with carrier, trailer, seal, ASN reference, dock bin picker. Exposes `/api/v1/receiving/appointments/:id/check-in` and `/cancel` endpoints
-  - Receiving Appointments mobile flow at `/warehouse/appointments` - today's arrivals with status chips and single-tap check-in, accessible from the bottom nav
-  - Fixes from audit gaps 1-3: WaveTemplate `zonePickMode` wired end-to-end, `/cycle-counts/:id` `params` schema added, `ManifestUpload.location` relation + FK migration
-  - 16 new tests (WaveAutoReleaseService: HH:MM + cron parsing, schedule-due logic, dedup window, runOnce dispatch / skip / failure paths; CustomerWebhookHandler: subscription patterns, pack task → order → customer resolver, graceful skip for missing data)
-
-- **Event-driven auto-replenishment** ✅
-  - `AutoReplenishmentHandler` subscribes to `pick_line.completed` and `inventory.adjusted`
-  - Resolves location via PickTask → locationId (for pick events) or WarehouseBin → locationId (for adjust events)
-  - Dispatches `CHECK_REPLENISHMENT` scoped to the affected `(locationId, sku)` so only matching rules are evaluated
-  - Replenishment tasks fire the moment inventory drops - no waiting for a cron sweep - while the command-level dedup still prevents duplicate putaway tasks
-  - 7 tests covering subscription patterns, both location resolution paths, direct-payload path, missing sku / missing lookup graceful skip, dispatch-error resilience
-
 - **Customer webhook retry with exponential backoff** ✅
   - `CustomerWebhookDeliveryService.retry(deliveryId)` re-sends a failed delivery with a fresh HMAC signature and `X-OpenTms-Retry` header; increments `attemptCount` atomically
   - `findEligibleForRetry(maxAttempts, now)` selects `status='failed'` deliveries whose age has cleared the backoff window for their current attempt
@@ -481,3 +339,11 @@ Moved out of `roadmap.md` in Sep 2026 (#319). Items still open from these tracks
 ### Internal user auth
 
 - **Role & permission management UI** ✅ (#142) - create/edit/delete custom roles from /settings with a grouped permission picker (catalogue-driven, so new permission families appear automatically); system roles locked in the UI and on the API (seeder re-syncs them on boot); roles:read/roles:write guards added to all role routes, closing a privilege-escalation hole where any authenticated user could create and self-assign a '*' role
+
+### Back to a TMS only (Nov 2026)
+
+- **ADR 0007** (#392) ✅ - Open TMS is a transport management system only and stays on TypeScript. The product split (ADR 0002) and the port to C# (ADR 0004, 0005, 0006) are superseded. The last commit carrying the removed code is tagged `last-with-wms`
+- **Frontend** (#393) ✅ - the WMS admin pages, the inventory app and the warehouse app are removed. Packaging types, the cutoff monitor, carrier cutoffs and the RMA pages moved to `/packaging-types`, `/cutoff-monitor`, `/carrier-cutoffs` and `/returns`, and old `/wms`, `/warehouse` and `/inventory-app` URLs redirect
+- **Backend** (#394) ✅ - the `wms` and `inventory` modules, the dock app, the ports, the event bridge and `services/wms` are removed, and one migration drops their 42 tables and the warehouse columns on `TrackableUnit`. RMAs are received and inspected without bins. The cutoff monitor allows a fixed handling time per shipment. `wms:*` permissions became `returns:*`, and tokens carrying a `scope` claim are refused. The module boundary check covers `core`, `finance`, `quality` and `tms`
+- **Docs and website** (#395) ✅ - rules, ADRs, guides, README and the marketing site describe a TMS only
+- **Repo tidy** (#396) ✅ - `auth-service/` (a standalone service nothing ran), `frontend-shadcn-preview/`, the one-click cloud deploy templates (DigitalOcean, Azure, Google Cloud, AWS, Terraform) and their guides, `style-guide.html` and two stale audit notes are removed. Docker Compose and `docs/SELF_HOSTING.md` are the two supported ways to run it, and Compose now builds from the repository root (#292). The README no longer describes a demo deployment or API-wide rate limiting that did not exist (#293), and `docs/AUTH_GUIDE.md` describes the backend's own auth

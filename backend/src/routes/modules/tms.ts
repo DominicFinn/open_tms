@@ -1,5 +1,5 @@
 /**
- * FinnTMS routes: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
+ * TMS routes: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
  *
  * Module: tms. Registered by index.ts, which owns the server lifecycle and the JWT scope.
  * See .claude/rules/module-boundaries.md for what this module may depend on.
@@ -48,11 +48,9 @@ import { etaMonitorRoutes } from '../etaMonitor.js';
 import { slaRoutes } from '../sla.js';
 import { slaReportRoutes } from '../slaReports.js';
 import { mapRoutes } from '../map.js';
-import { manifestIngestionRoutes } from '../manifestIngestion.js';
 import { rmaRoutes } from '../rma.js';
 import { cutoffMonitorRoutes } from '../cutoffMonitor.js';
 import { packagingTypesRoutes } from '../packagingTypes.js';
-import { containerIntelligenceRoutes } from '../containerIntelligence.js';
 import { edi940Routes } from '../edi940.js';
 import { customerRmaApiRoutes } from '../customerRmaApi.js';
 import { edi180Routes } from '../edi180.js';
@@ -120,11 +118,9 @@ export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Prom
   await app.register(slaRoutes);
   await app.register(slaReportRoutes);
   await app.register(mapRoutes);
-  await app.register(manifestIngestionRoutes);
   await app.register(rmaRoutes);
   await app.register(cutoffMonitorRoutes);
   await app.register(packagingTypesRoutes);
-  await app.register(containerIntelligenceRoutes);
   await app.register(edi940Routes);
   await app.register(customerRmaApiRoutes);
   await app.register(edi180Routes);

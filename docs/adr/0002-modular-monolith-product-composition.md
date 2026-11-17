@@ -1,9 +1,12 @@
 # ADR 0002: Modular Monolith with Build-Time Product Composition (FinnTMS / FinnWMS)
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0007](0007-tms-only-in-typescript.md), which drops the product split and removes the
+  warehouse and inventory modules. Earlier partly superseded by
+  [ADR 0004](0004-port-to-csharp-starting-with-finnwms.md). The module map and its import check
+  survive, over `core`, `finance`, `quality` and `tms`
 - **Date:** 2026-08-16
 - **Relates to:** the split announced in the `open-tms-is-changing` article
-  (`www/src/content/articles.ts`), `docs/roadmap/split-finntms-finnwms.md`
+  (`www/src/content/articles.ts`)
 
 ## Context
 

@@ -28,7 +28,7 @@ export interface CheckResult {
 
 export const exceptionKey = (edge: { from: string; to: string }): string => `${edge.from} -> ${edge.to}`;
 
-async function listSourceFiles(root: string, prefix = ''): Promise<string[]> {
+export async function listSourceFiles(root: string, prefix = ''): Promise<string[]> {
   const entries = await readdir(path.join(root, prefix), { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {

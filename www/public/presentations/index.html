@@ -151,11 +151,6 @@
     flex-shrink: 0;
   }
   .card.tms .card-icon { color: var(--p300); }
-  .card.wms .card-icon {
-    color: var(--cyan);
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(59, 130, 246, 0.14));
-    border-color: rgba(6, 182, 212, 0.25);
-  }
   .card.edi .card-icon {
     color: var(--a400);
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.12));
@@ -165,6 +160,12 @@
     color: #fca5a5;
     background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(234, 179, 8, 0.14));
     border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .card.ltl .card-icon {
+    color: #86efac;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(59, 130, 246, 0.14));
+    border-color: rgba(34, 197, 94, 0.25);
   }
 
   .card-eyebrow {
@@ -252,14 +253,6 @@
         <span class="card-cta">Open deck <span class="arrow">→</span></span>
       </a>
 
-      <a class="card wms" href="wms-presentation.html">
-        <div class="card-icon">WMS</div>
-        <div class="card-eyebrow">Operations</div>
-        <h2>Inside the Warehouse</h2>
-        <p>A walk through the warehouse module: receiving, putaway, locations, picking and packing, and how warehouse events flow back into shipments and orders.</p>
-        <span class="card-cta">Open deck <span class="arrow">→</span></span>
-      </a>
-
       <a class="card edi" href="edi-flow-presentation.html">
         <div class="card-icon">EDI</div>
         <div class="card-eyebrow">Integration</div>
@@ -273,6 +266,14 @@
         <div class="card-eyebrow">Exception Handling</div>
         <h2>The Incident Manager</h2>
         <p>How Open TMS detects, triages, and resolves operational incidents. The AI triage agent, the issue kanban, automation rules, skills, and how decisions get logged for audit and promoted to deterministic rules.</p>
+        <span class="card-cta">Open deck <span class="arrow">→</span></span>
+      </a>
+
+      <a class="card ltl" href="ltl-tendering-presentation.html">
+        <div class="card-icon">LTL</div>
+        <div class="card-eyebrow">Planning &amp; Tendering</div>
+        <h2>LTL and Carrier Tendering</h2>
+        <p>How we think freight should go from order to booked truck to paid invoice: LTL pricing, when to consolidate, tendering a run, award, rate confirmations and settlement. A working proposal, with what's built and what's still to do.</p>
         <span class="card-cta">Open deck <span class="arrow">→</span></span>
       </a>
     </div>

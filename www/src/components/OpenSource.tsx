@@ -36,8 +36,8 @@ const benefits: Array<{ title: string; description: string; icon: React.ReactEle
     ),
   },
   {
-    title: 'Deploy Anywhere',
-    description: 'Docker Compose for local dev, one-click deploys for AWS, GCP, Azure, and DigitalOcean. Terraform configs included. Your infrastructure, your rules.',
+    title: 'Run It Yourself',
+    description: 'Docker Compose brings up the whole stack on one machine. A self-hosting guide covers a server of your own with Node, PostgreSQL and object storage, and no managed services.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />

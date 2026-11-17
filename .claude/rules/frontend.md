@@ -1,7 +1,6 @@
 ---
 paths:
   - "frontend/src/**/*.{ts,tsx,css}"
-  - "frontend-shadcn-preview/**/*.{ts,tsx,css}"
 ---
 
 # Frontend Conventions
@@ -38,7 +37,6 @@ design-system rule for component and token detail.
 | `frontend/src/vnext-design/vnext-layout.tsx` | Main operations app |
 | `frontend/src/customer-portal-layout.tsx` | Customer portal |
 | `frontend/src/carrier-portal-layout.tsx` | Carrier portal |
-| `frontend/src/warehouse/warehouse-layout.tsx` | Warehouse PWA |
 
 ## Accessibility
 

@@ -20,6 +20,7 @@ import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
 import { IOrderConversionService } from '../services/OrderConversionService.js';
 import { IShipmentRouteRepository } from '../repositories/ShipmentRouteRepository.js';
+import { buildJourneyReport } from '../services/tracking/journeyReport.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
 // Normalizes to a full ISO string.
@@ -540,45 +541,17 @@ export async function shipmentRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Shipments'],
       summary: 'Shipment full-journey proof',
-      description: 'Returns the origin departure, in-transit route checkpoints, and destination arrival recorded for a shipment as proof of a continuous journey.',
+      description: 'Returns every stop in sequence with its arrival and departure (flagging departures inferred from reaching a later stop), the in-transit route checkpoints, and the origin and destination summary, as proof of a continuous journey.',
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = req.orgId!;
-    const shipment = await server.prisma.shipment.findFirst({
-      where: { id, orgId, deletedAt: null },
-      select: {
-        originId: true,
-        destinationId: true,
-        stops: { select: { locationId: true, status: true, actualArrival: true, actualDeparture: true } },
-      },
-    });
-    if (!shipment) {
+    const journey = await shipmentRoutesRepo.findJourney(req.orgId!, id);
+    if (!journey) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
     }
-
-    const originStop = shipment.stops.find((s) => s.locationId === shipment.originId) ?? null;
-    const destinationStop = shipment.stops.find((s) => s.locationId === shipment.destinationId) ?? null;
-
-    const checkpoints = await server.prisma.shipmentJourneyCheckpoint.findMany({
-      where: { shipmentId: id, orgId: req.orgId! },
-      orderBy: { checkpointIndex: 'asc' },
-    });
-
-    return {
-      data: {
-        origin: originStop
-          ? { status: originStop.status, actualArrival: originStop.actualArrival, actualDeparture: originStop.actualDeparture }
-          : null,
-        checkpoints,
-        destination: destinationStop
-          ? { status: destinationStop.status, actualArrival: destinationStop.actualArrival }
-          : null,
-      },
-      error: null,
-    };
+    return { data: buildJourneyReport(journey), error: null };
   });
 
   // Exception-signal + issue activity for the shipment — data behind the

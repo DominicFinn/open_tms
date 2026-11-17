@@ -2,8 +2,7 @@
  * Issue Type registry — the deterministic catalogue of issue types the Issue
  * Engine knows how to raise, escalate, and resolve.
  *
- * v1 is code-defined and built-in. Types span domains (shipment exceptions,
- * WMS pack audits) — each declares its own sourceEntityType. A DB-backed,
+ * v1 is code-defined and built-in. Each type declares its own sourceEntityType. A DB-backed,
  * admin-editable version is a roadmap item ("Admin-editable Issue Types
  * (DB-backed)") — when that lands, this registry becomes the seed/fallback.
  *
@@ -23,8 +22,7 @@ export type IssueTypeKey =
   | 'shipment_eta_delay'
   | 'shipment_misship'
   | 'shipment_temperature'
-  | 'shipment_tamper_light'
-  | 'pack_audit_variance';
+  | 'shipment_tamper_light';
 
 export interface IssueTypeRaiseRule {
   /** Number of signals within `windowMinutes` needed to raise the issue. */
@@ -45,15 +43,14 @@ export interface IssueTypeDef {
   name: string;
   /**
    * What Issue.sourceEntityType the engine stamps on issues of this type
-   * ('shipment', 'pack_task', ...). The engine must never assume a domain:
-   * WMS types raise against warehouse entities (#133).
+   * ('shipment', ...). The engine must never assume one: a type may raise against any
+   * entity (#133).
    */
   sourceEntityType: string;
   /**
    * Payload key holding the source entity id on trigger/recovery events.
    * Falls back to event.entityId when the key is absent — note the entity
-   * that emitted the event is not always the source entity (a pack audit
-   * event's entityId is the audit, but issues attach to the pack task).
+   * that emitted the event is not always the source entity.
    */
   entityIdField: string;
   /** Coarse Issue.category bucket for the existing filters. */
@@ -164,20 +161,6 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     slaMinutes: 60,
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['cold_chain.excursion_detected'],
-    recoveryEvents: [],
-  },
-  pack_audit_variance: {
-    key: 'pack_audit_variance',
-    name: 'Pack audit variance',
-    sourceEntityType: 'pack_task',
-    entityIdField: 'packTaskId',
-    category: 'exception',
-    defaultPriority: 'medium',
-    latched: true, // the variance happened — investigated and closed by a person, never auto-resolved
-    baseConfidence: 70, // scale-derived weight variance is seldom spurious
-    slaMinutes: 240,
-    raise: { thresholdCount: 1, windowMinutes: 60 },
-    triggerEvents: ['pack.audit_variance_detected'],
     recoveryEvents: [],
   },
   shipment_tamper_light: {

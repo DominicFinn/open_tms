@@ -2,8 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { createHmac } from 'crypto';
 
 /**
- * JWT payload structure from the auth service.
- * Shared with auth-service/src/services/TokenService.ts
+ * JWT payload for an internal user session, as minted by AuthService.
  */
 export interface JWTPayload {
   sub: string;
@@ -13,11 +12,10 @@ export interface JWTPayload {
   organizationId?: string;
   customerId?: string;
   /**
-   * 'warehouse' = PWA session, accepted only on warehouse/WMS task routes.
-   * 'inventory' = the lighter inventory-app session (#233), accepted only on inventory
-   * read/observation routes — narrower than 'warehouse', no adjust/transfer or cycle-count access.
+   * A surface restriction carried by sessions the removed warehouse and inventory apps minted.
+   * Nothing issues one any more, and verifyJWT refuses a token that has it.
    */
-  scope?: 'warehouse' | 'inventory';
+  scope?: string;
   iat?: number;
   exp?: number;
   iss?: string;
@@ -91,67 +89,19 @@ function verifyJWT(token: string): JWTPayload {
     throw new Error('Invalid issuer');
   }
 
+  // SECURITY: a scoped token was a restricted warehouse or inventory session. The routes it was
+  // restricted to are gone, so honouring it now would turn a leaked operative token into a full
+  // admin session. Refuse it until it expires.
+  if (payload.scope !== undefined) {
+    throw new Error('Scoped sessions are no longer accepted');
+  }
+
   return payload;
 }
 
 /**
- * Routes a warehouse-scoped session may reach: the PWA surface itself plus
- * the WMS task routes its screens call (pick/pack/putaway/receiving/returns,
- * pack audits, carton catalogue). Read-only carriers/customers lookups are
- * allowed for the create-shipment screen. Everything else on the admin API
- * is off-limits to a scoped token — a magic link can hang on a printed QR
- * code, so a leaked one must not open the whole system.
- */
-const WAREHOUSE_SCOPE_PREFIXES = [
-  '/api/v1/warehouse/',
-  '/api/v1/pick-tasks',
-  '/api/v1/pick-lines/',
-  '/api/v1/pack-tasks',
-  '/api/v1/pack-lines/',
-  '/api/v1/pack-audits',
-  '/api/v1/putaway/',
-  '/api/v1/receiving/',
-  '/api/v1/rmas',
-  '/api/v1/rma-lines/',
-  '/api/v1/carton-catalogue',
-];
-const WAREHOUSE_SCOPE_READONLY_PREFIXES = [
-  '/api/v1/carriers',
-  '/api/v1/customers',
-];
-
-function warehouseScopeAllows(method: string, url: string): boolean {
-  const path = url.split('?')[0];
-  if (WAREHOUSE_SCOPE_PREFIXES.some(p => path.startsWith(p))) return true;
-  if (method === 'GET' && WAREHOUSE_SCOPE_READONLY_PREFIXES.some(p => path.startsWith(p))) return true;
-  return false;
-}
-
-/**
- * Routes an inventory-scoped session may reach (#233): read access to stock levels and
- * warehouse topology, plus recording new observations. No adjust/transfer and no cycle-count
- * access — deliberately narrower than the 'warehouse' scope, since this token is meant for a
- * lightweight, less-trusted mobile client.
- */
-const INVENTORY_SCOPE_READONLY_PREFIXES = [
-  '/api/v1/inventory',
-  '/api/v1/warehouse/zones',
-  '/api/v1/warehouse/bins',
-  '/api/v1/warehouse/locations',
-];
-
-function inventoryScopeAllows(method: string, url: string): boolean {
-  const path = url.split('?')[0];
-  // POST /api/v1/inventory/observations is the one write this scope may perform.
-  if (method === 'POST' && path === '/api/v1/inventory/observations') return true;
-  if (method === 'GET' && INVENTORY_SCOPE_READONLY_PREFIXES.some(p => path.startsWith(p))) return true;
-  return false;
-}
-
-/**
  * Fastify preHandler hook: extracts and validates JWT from Authorization header.
- * Sets req.user if valid. Sends 401 if missing or invalid, 403 when a
- * warehouse-scoped session tries to reach a non-warehouse route.
+ * Sets req.user if valid. Sends 401 if missing or invalid.
  */
 export async function authenticateJWT(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const authHeader = req.headers.authorization;
@@ -167,16 +117,6 @@ export async function authenticateJWT(req: FastifyRequest, reply: FastifyReply):
     payload = verifyJWT(token);
   } catch {
     reply.code(401).send({ data: null, error: 'Invalid or expired token' });
-    return;
-  }
-
-  if (payload.scope === 'warehouse' && !warehouseScopeAllows(req.method, req.url)) {
-    reply.code(403).send({ data: null, error: 'Warehouse session cannot access this resource' });
-    return;
-  }
-
-  if (payload.scope === 'inventory' && !inventoryScopeAllows(req.method, req.url)) {
-    reply.code(403).send({ data: null, error: 'Inventory session cannot access this resource' });
     return;
   }
 
@@ -363,7 +303,7 @@ export async function optionalAuth(req: FastifyRequest): Promise<void> {
  * Issued by POST /api/v1/share/:token/authenticate once the recipient has supplied the access
  * code. It carries the link it came from and the sections that link grants, and it is scoped to
  * a single shipment. `iss` is `open-tms-share`, which no other guard accepts, so a viewer token
- * cannot reach the admin API, either portal, or the warehouse surface.
+ * cannot reach the admin API or either portal.
  *
  * The granted sections travel in the token for convenience, but the share read path re-checks
  * them against the stored link on every request — a link edited or revoked mid-session takes

@@ -42,14 +42,12 @@ import {
 
 /**
  * Shared mapping from a signal's severity band onto an issue priority.
- * Pack audits report `verdict` rather than `severity`; both feed this map.
  */
 const SEVERITY_TO_PRIORITY: Record<string, IssuePriority> = {
   minor: 'low',
   minor_delay: 'low',
   warning: 'medium',
   critical: 'high',
-  fail: 'high',
 };
 
 const OPEN_STATUSES = ['open', 'in_progress'];
@@ -218,9 +216,8 @@ export class IssueEngineHandler implements IEventHandler {
 
   /**
    * Resolve the source entity the issue attaches to, via the type's declared
-   * payload key. Falls back to event.entityId, which is NOT always right (a
-   * pack audit event's entityId is the audit row) — types whose emitting
-   * entity differs from the source entity must declare entityIdField.
+   * payload key. Falls back to event.entityId, which is not always right: a type
+   * whose emitting entity differs from the source entity must declare entityIdField.
    */
   private entityId(event: DomainEvent, type: IssueTypeDef): string {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
@@ -229,8 +226,8 @@ export class IssueEngineHandler implements IEventHandler {
 
   private signalPriority(event: DomainEvent, type: IssueTypeDef): IssuePriority {
     if (type.ignoreSignalSeverity) return type.defaultPriority;
-    const p = (event.payload as { severity?: string; verdict?: string }) ?? {};
-    const band = p.severity ?? p.verdict;
+    const p = (event.payload as { severity?: string }) ?? {};
+    const band = p.severity;
     return (band && SEVERITY_TO_PRIORITY[band]) || type.defaultPriority;
   }
 
@@ -248,15 +245,9 @@ export class IssueEngineHandler implements IEventHandler {
     const label = type.sourceEntityType.replace(/_/g, ' ');
     const bits = [`${type.name} detected for ${label} ${ref}.`, `Priority: ${priority}.`];
     if (p.severity) bits.push(`Severity: ${p.severity}.`);
-    if (p.verdict) bits.push(`Verdict: ${p.verdict}.`);
     if (p.bufferMinutes != null) bits.push(`Buffer: ${p.bufferMinutes} min.`);
-    if (p.blockingStage) bits.push(`Blocking stage: ${p.blockingStage}.`);
     if (p.delayMinutes != null) bits.push(`Delay: ${p.delayMinutes} min.`);
     if (p.excursionType) bits.push(`Excursion: ${p.excursionType}.`);
-    if (p.expectedWeightGrams != null && p.actualWeightGrams != null) {
-      bits.push(`Expected ${p.expectedWeightGrams}g, actual ${p.actualWeightGrams}g (tolerance ±${p.tolerance}%).`);
-    }
-    if (p.notes) bits.push(`Auditor notes: ${p.notes}`);
     return bits.join(' ');
   }
 }

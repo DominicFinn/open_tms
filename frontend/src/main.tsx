@@ -159,71 +159,16 @@ import VNextQualityCarrierScorecard from './vnext-design/VNextQualityCarrierScor
 import VNextQualityLaneAnalysis from './vnext-design/VNextQualityLaneAnalysis';
 import VNextQualityCapaEffectiveness from './vnext-design/VNextQualityCapaEffectiveness';
 
-// WMS Pages (VNext)
-import VNextWmsDashboard from './vnext-design/VNextWmsDashboard';
-import VNextWmsOperationsDashboard from './vnext-design/VNextWmsOperationsDashboard';
+// Packaging, cutoffs and returns
 import VNextPackagingTypes from './vnext-design/VNextPackagingTypes';
-import VNextWmsZones from './vnext-design/VNextWmsZones';
-import VNextWmsInventory from './vnext-design/VNextWmsInventory';
-import VNextWmsReceiving from './vnext-design/VNextWmsReceiving';
-import VNextWmsPutaway from './vnext-design/VNextWmsPutaway';
-import VNextWmsWaves from './vnext-design/VNextWmsWaves';
-import VNextWmsPicking from './vnext-design/VNextWmsPicking';
-import VNextWmsPacking from './vnext-design/VNextWmsPacking';
-import VNextWmsPackAudits from './vnext-design/VNextWmsPackAudits';
-import VNextWmsReceivingAppointments from './vnext-design/VNextWmsReceivingAppointments';
 import VNextCutoffDashboard from './vnext-design/VNextCutoffDashboard';
 import VNextCarrierCutoffs from './vnext-design/VNextCarrierCutoffs';
-import VNextWmsLoading from './vnext-design/VNextWmsLoading';
-import VNextWmsCreateZone from './vnext-design/VNextWmsCreateZone';
-import VNextWmsZoneDetail from './vnext-design/VNextWmsZoneDetail';
-import VNextWmsBulkBins from './vnext-design/VNextWmsBulkBins';
-import VNextWmsCreateReceiving from './vnext-design/VNextWmsCreateReceiving';
-import VNextWmsReceivingDetail from './vnext-design/VNextWmsReceivingDetail';
-import VNextWmsPutawayDetail from './vnext-design/VNextWmsPutawayDetail';
-import VNextWmsCreateWave from './vnext-design/VNextWmsCreateWave';
-import VNextWmsWaveDetail from './vnext-design/VNextWmsWaveDetail';
-import VNextWmsPickTaskDetail from './vnext-design/VNextWmsPickTaskDetail';
-import VNextWmsPackTaskDetail from './vnext-design/VNextWmsPackTaskDetail';
-import VNextWmsCreateBin from './vnext-design/VNextWmsCreateBin';
-import VNextWmsCycleCounts from './vnext-design/VNextWmsCycleCounts';
-import VNextWmsCycleCountDetail from './vnext-design/VNextWmsCycleCountDetail';
-import VNextWmsReplenishment from './vnext-design/VNextWmsReplenishment';
-import VNextWmsWaveTemplates from './vnext-design/VNextWmsWaveTemplates';
-import VNextWmsManifestUpload from './vnext-design/VNextWmsManifestUpload';
-import VNextWmsProductUom from './vnext-design/VNextWmsProductUom';
-import VNextWmsCartonCatalogue from './vnext-design/VNextWmsCartonCatalogue';
-import VNextWmsLoadPlan from './vnext-design/VNextWmsLoadPlan';
-import VNextWmsReturns from './vnext-design/VNextWmsReturns';
-import VNextWmsCreateReturn from './vnext-design/VNextWmsCreateReturn';
-import VNextWmsReturnDetail from './vnext-design/VNextWmsReturnDetail';
-import VNextWmsRefundReview from './vnext-design/VNextWmsRefundReview';
+import VNextReturns from './vnext-design/VNextReturns';
+import VNextCreateReturn from './vnext-design/VNextCreateReturn';
+import VNextReturnDetail from './vnext-design/VNextReturnDetail';
+import VNextRefundReview from './vnext-design/VNextRefundReview';
 
-// Warehouse App
-import { WarehouseLayout } from './warehouse/warehouse-layout';
-import WarehouseLogin from './warehouse/WarehouseLogin';
-import WarehouseSelectLocation from './warehouse/WarehouseSelectLocation';
-import WarehouseShipments from './warehouse/WarehouseShipments';
-import WarehouseShipmentDetail from './warehouse/WarehouseShipmentDetail';
-import WarehouseArchive from './warehouse/WarehouseArchive';
-import WarehouseCreateShipment from './warehouse/WarehouseCreateShipment';
-import WarehouseSettings from './warehouse/WarehouseSettings';
-import WarehouseTasks from './warehouse/WarehouseTasks';
-import WarehousePickTask from './warehouse/WarehousePickTask';
-import WarehousePutawayTask from './warehouse/WarehousePutawayTask';
-import WarehouseReturnReceive from './warehouse/WarehouseReturnReceive';
-import WarehouseReturnInspect from './warehouse/WarehouseReturnInspect';
-import WarehousePackAudit from './warehouse/WarehousePackAudit';
-import WarehouseAppointments from './warehouse/WarehouseAppointments';
-import WarehouseReceive from './warehouse/WarehouseReceive';
 
-// Inventory App (#233)
-import { InventoryAppLayout } from './inventory-app/inventory-app-layout';
-import InventoryAppLogin from './inventory-app/InventoryAppLogin';
-import InventoryAppSelectLocation from './inventory-app/InventoryAppSelectLocation';
-import InventoryAppLevels from './inventory-app/InventoryAppLevels';
-import InventoryAppScan from './inventory-app/InventoryAppScan';
-import WarehousePack from './warehouse/WarehousePack';
 import './shadcn-tokens.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -286,34 +231,6 @@ root.render(
           <Route path="developer/webhooks" element={<CustomerWebhooks />} />
           <Route path="developer/edi" element={<CustomerEdiSetup />} />
           <Route path="developer/logs" element={<CustomerIntegrationLogs />} />
-        </Route>
-
-        {/* Warehouse App (standalone — outside main layout) */}
-        <Route path="/warehouse/login" element={<WarehouseLogin />} />
-        <Route path="/warehouse/select-location" element={<WarehouseSelectLocation />} />
-        <Route path="/warehouse" element={<WarehouseLayout />}>
-          <Route index element={<WarehouseShipments />} />
-          <Route path="shipments/:id" element={<WarehouseShipmentDetail />} />
-          <Route path="archive" element={<WarehouseArchive />} />
-          <Route path="create" element={<WarehouseCreateShipment />} />
-          <Route path="tasks" element={<WarehouseTasks />} />
-          <Route path="tasks/pick/:id" element={<WarehousePickTask />} />
-          <Route path="tasks/putaway/:id" element={<WarehousePutawayTask />} />
-          <Route path="tasks/return-receive/:id" element={<WarehouseReturnReceive />} />
-          <Route path="tasks/return-inspect/:id" element={<WarehouseReturnInspect />} />
-          <Route path="tasks/pack-audit/:id" element={<WarehousePackAudit />} />
-          <Route path="tasks/receive/:id" element={<WarehouseReceive />} />
-          <Route path="tasks/pack/:id" element={<WarehousePack />} />
-          <Route path="appointments" element={<WarehouseAppointments />} />
-          <Route path="settings" element={<WarehouseSettings />} />
-        </Route>
-
-        {/* Inventory App (#233) — standalone, lighter sibling of the warehouse PWA */}
-        <Route path="/inventory-app/login" element={<InventoryAppLogin />} />
-        <Route path="/inventory-app/select-location" element={<InventoryAppSelectLocation />} />
-        <Route path="/inventory-app" element={<InventoryAppLayout />}>
-          <Route index element={<InventoryAppLevels />} />
-          <Route path="scan" element={<InventoryAppScan />} />
         </Route>
 
         {/* Main app (VNext layout) — requires internal user auth */}
@@ -462,47 +379,14 @@ root.render(
           <Route path="finance/margin-reports" element={<VNextMarginReports />} />
           <Route path="finance/commissions" element={<VNextCommissions />} />
 
-          {/* WMS */}
-          <Route path="wms" element={<VNextWmsDashboard />} />
-          <Route path="wms/operations" element={<VNextWmsOperationsDashboard />} />
-          <Route path="wms/packaging-types" element={<VNextPackagingTypes />} />
-          <Route path="wms/zones" element={<VNextWmsZones />} />
-          <Route path="wms/zones/create" element={<VNextWmsCreateZone />} />
-          <Route path="wms/zones/:id" element={<VNextWmsZoneDetail />} />
-          <Route path="wms/zones/:id/edit" element={<VNextWmsCreateZone />} />
-          <Route path="wms/zones/:zoneId/bins/bulk" element={<VNextWmsBulkBins />} />
-          <Route path="wms/zones/:zoneId/bins/create" element={<VNextWmsCreateBin />} />
-          <Route path="wms/bins/create" element={<VNextWmsCreateBin />} />
-          <Route path="wms/inventory" element={<VNextWmsInventory />} />
-          <Route path="wms/receiving" element={<VNextWmsReceiving />} />
-          <Route path="wms/receiving/create" element={<VNextWmsCreateReceiving />} />
-          <Route path="wms/manifest" element={<VNextWmsManifestUpload />} />
-          <Route path="wms/receiving/:id" element={<VNextWmsReceivingDetail />} />
-          <Route path="wms/putaway" element={<VNextWmsPutaway />} />
-          <Route path="wms/putaway/:id" element={<VNextWmsPutawayDetail />} />
-          <Route path="wms/waves" element={<VNextWmsWaves />} />
-          <Route path="wms/waves/create" element={<VNextWmsCreateWave />} />
-          <Route path="wms/waves/templates" element={<VNextWmsWaveTemplates />} />
-          <Route path="wms/waves/:id" element={<VNextWmsWaveDetail />} />
-          <Route path="wms/picking" element={<VNextWmsPicking />} />
-          <Route path="wms/picking/:id" element={<VNextWmsPickTaskDetail />} />
-          <Route path="wms/packing" element={<VNextWmsPacking />} />
-          <Route path="wms/packing/:id" element={<VNextWmsPackTaskDetail />} />
-          <Route path="wms/pack-audits" element={<VNextWmsPackAudits />} />
-          <Route path="wms/receiving-appointments" element={<VNextWmsReceivingAppointments />} />
-          <Route path="wms/cutoff-monitor" element={<VNextCutoffDashboard />} />
-          <Route path="wms/carrier-cutoffs" element={<VNextCarrierCutoffs />} />
-          <Route path="wms/loading" element={<VNextWmsLoading />} />
-          <Route path="wms/cycle-counts" element={<VNextWmsCycleCounts />} />
-          <Route path="wms/cycle-counts/:id" element={<VNextWmsCycleCountDetail />} />
-          <Route path="wms/replenishment" element={<VNextWmsReplenishment />} />
-          <Route path="wms/product-dimensions" element={<VNextWmsProductUom />} />
-          <Route path="wms/carton-catalogue" element={<VNextWmsCartonCatalogue />} />
-          <Route path="wms/load-plans" element={<VNextWmsLoadPlan />} />
-          <Route path="wms/returns" element={<VNextWmsReturns />} />
-          <Route path="wms/returns/create" element={<VNextWmsCreateReturn />} />
-          <Route path="wms/returns/refund-review" element={<VNextWmsRefundReview />} />
-          <Route path="wms/returns/:id" element={<VNextWmsReturnDetail />} />
+          {/* Packaging, cutoffs and returns */}
+          <Route path="packaging-types" element={<VNextPackagingTypes />} />
+          <Route path="cutoff-monitor" element={<VNextCutoffDashboard />} />
+          <Route path="carrier-cutoffs" element={<VNextCarrierCutoffs />} />
+          <Route path="returns" element={<VNextReturns />} />
+          <Route path="returns/create" element={<VNextCreateReturn />} />
+          <Route path="returns/refund-review" element={<VNextRefundReview />} />
+          <Route path="returns/:id" element={<VNextReturnDetail />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>
@@ -524,6 +408,16 @@ root.render(
           {/* Redirect legacy /admin paths to /settings */}
           <Route path="admin" element={<Navigate to="/settings" replace />} />
           <Route path="admin/*" element={<Navigate to="/settings" replace />} />
+
+          {/* The pages that sat under /wms moved, and the warehouse surfaces are gone. Old bookmarks
+              land somewhere useful instead of on a blank page. */}
+          <Route path="wms/returns/*" element={<Navigate to="/returns" replace />} />
+          <Route path="wms/cutoff-monitor" element={<Navigate to="/cutoff-monitor" replace />} />
+          <Route path="wms/carrier-cutoffs" element={<Navigate to="/carrier-cutoffs" replace />} />
+          <Route path="wms/packaging-types" element={<Navigate to="/packaging-types" replace />} />
+          <Route path="wms/*" element={<Navigate to="/" replace />} />
+          <Route path="warehouse/*" element={<Navigate to="/" replace />} />
+          <Route path="inventory-app/*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
       </MapProvider>

@@ -20,7 +20,6 @@ export class CustomerWebhookHandler implements IEventHandler {
     'order.created', 'order.confirmed', 'order.delivered', 'order.cancelled', 'order.status_changed',
     'shipment.dispatched', 'shipment.delivered', 'shipment.exception', 'shipment.status_changed',
     'invoice.created', 'invoice.sent', 'invoice.paid',
-    'pack.audit_recorded', 'pack.audit_variance_detected',
   ];
   readonly options: SubscribeOptions = {
     concurrency: 5,
@@ -34,7 +33,7 @@ export class CustomerWebhookHandler implements IEventHandler {
   }
 
   async handle(event: DomainEvent): Promise<void> {
-    const customerId = await this.resolveCustomerId(event);
+    const customerId = this.resolveCustomerId(event);
     if (!customerId) return;
 
     const hooks = await this.prisma.customerWebhook.findMany({
@@ -62,29 +61,12 @@ export class CustomerWebhookHandler implements IEventHandler {
   }
 
   /**
-   * Resolve the relevant customerId for an event. Most domain events carry it
-   * directly in the payload (rma, order, shipment, invoice). Pack audit events
-   * don't - they reference a packTaskId, so we resolve via PackTask → Order.customerId.
+   * Resolve the relevant customerId for an event. The subscribed events (rma, order, shipment,
+   * invoice) carry it directly in the payload.
    */
-  private async resolveCustomerId(event: DomainEvent): Promise<string | null> {
+  private resolveCustomerId(event: DomainEvent): string | null {
     const payload = event.payload as Record<string, unknown> | null;
     if (payload && typeof payload.customerId === 'string') return payload.customerId;
-
-    if (event.type === 'pack.audit_recorded' || event.type === 'pack.audit_variance_detected') {
-      const packTaskId = payload?.packTaskId as string | undefined;
-      if (!packTaskId) return null;
-      const task = await this.prisma.packTask.findUnique({
-        where: { id: packTaskId, orgId: event.orgId },
-        select: { orderId: true },
-      });
-      if (!task?.orderId) return null;
-      const order = await this.prisma.order.findUnique({
-        where: { id: task.orderId, orgId: event.orgId },
-        select: { customerId: true },
-      });
-      return order?.customerId ?? null;
-    }
-
     return null;
   }
 }

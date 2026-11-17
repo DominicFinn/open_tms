@@ -14,7 +14,7 @@ first).**
 | # | Step | Who | How | Notes |
 |---|------|-----|-----|-------|
 | A1 | Deploy + database migrated | IT/admin | `run.sh` (local) or a cloud template | Backend :3001, Frontend :5173, Postgres :55432 |
-| A2 | Create the **first admin user + Organization** | First admin | Bootstrap (see runbook). In the `run.sh` stack this is done by `npm run seed`, which also creates demo data; in a clean production deploy, `auth-service`'s `POST /api/v1/auth/setup` | Setup only works when **no users exist** |
+| A2 | Create the **first admin user + Organization** | First admin | Bootstrap (see runbook). In the `run.sh` stack this is done by `npm run seed`, which also creates demo data; in a clean production deploy, run the seed script against the database (see "First login" in `docs/SELF_HOSTING.md`) | There is no setup endpoint and no self-registration |
 | A3 | Log in | Admin | `POST /api/v1/auth/login` → JWT | Use the JWT as `Authorization: Bearer <token>` for all internal API calls |
 
 ---
@@ -30,7 +30,7 @@ shapes everything after.
 | B2 | Brokerage identity | `mcNumber`, `bondAmountCents`, `bondExpirationDate`, `operatingAuthorityStatus`, `minMarginPercent`, `marginAlertEnabled` | **[Broker]** (and brokering 3PLs) |
 | B3 | Units of measure | `weightUnit`, `dimUnit`, `temperatureUnit`, `distanceUnit` | All |
 | B4 | Tracking unit model | `trackingMode` (`group`/`item`), `trackableUnitType` (`pallet`/`tote`/`box`/`stillage`/`custom`), `customUnitName` | All |
-| B5 | Operational toggles | `autoTenderEnabled`, `defaultGeofenceRadiusMeters`, `autoDeliverShipmentDocs`, `magicLinksEnabled`, `warehouseScanMode` | All |
+| B5 | Operational toggles | `autoTenderEnabled`, `defaultGeofenceRadiusMeters`, `autoDeliverShipmentDocs` | All |
 | B6 | Email delivery | `emailProvider` (`console`/`smtp`/`sendgrid`/`ses`), `emailEnabled`, `emailFrom*`, SMTP creds | All (keep `console` for testing) |
 | B7 | Maps key (route planning + deviation) | `googleMapsApiKey` | Needed for lane planned-routes & deviation alerts |
 | B8 | LLM key (AI triage) | `llmProvider`, `llmApiKey`, `llmModel`, `llmEnabled` | Optional; enables the triage agent |

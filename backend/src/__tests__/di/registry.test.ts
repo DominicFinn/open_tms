@@ -31,10 +31,8 @@ describe('registerDependencies', () => {
       expect.arrayContaining([
         'issue.create',
         'invoice.create',
-        'inventory.adjust',
         'capa.create',
         'shipment.create',
-        'wave.create',
       ])
     );
   });
@@ -48,7 +46,7 @@ describe('registerDependencies', () => {
 
   it('binds the tokens the modules own', () => {
     expect(container.has(TOKENS.IOrdersRepository)).toBe(true);
-    expect(container.has(TOKENS.IReceivingRepository)).toBe(true);
+    expect(container.has(TOKENS.ICarriersRepository)).toBe(true);
     expect(container.has(TOKENS.IInvoiceRepository)).toBe(true);
     expect(container.has(TOKENS.IIssueRepository)).toBe(true);
   });

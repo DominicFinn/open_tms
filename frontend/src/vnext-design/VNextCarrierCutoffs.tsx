@@ -98,7 +98,7 @@ export default function VNextCarrierCutoffs() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Carrier Cutoffs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Configure the latest handoff time per day for each carrier. The cutoff monitor compares projected warehouse-ready time against these rows and raises an issue when shipments are at risk.
+          Configure the latest handoff time per day for each carrier. The cutoff monitor compares each open shipment's projected ready time against these rows and raises an issue when shipments are at risk.
         </p>
       </div>
 

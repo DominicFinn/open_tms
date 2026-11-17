@@ -2,7 +2,7 @@
   {
     "from": "routes/charges.ts",
     "to": "services/RatingService.ts",
-    "reason": "Charge creation re-rates through the TMS rating engine. Finance sits in core's tier so a standalone FinnWMS can bill, which means rating has to arrive as a DI port. Burn down with a RatingPort."
+    "reason": "Charge creation re-rates through the TMS rating engine. Finance sits below tms, so rating has to arrive through a DI-resolved interface. Burn down with a rating interface in finance that tms implements."
   },
   {
     "from": "routes/coldChain.ts",
@@ -17,16 +17,11 @@
   {
     "from": "routes/locations.ts",
     "to": "repositories/ArrivalCriteriaRepository.ts",
-    "reason": "Location is the conflated TMS node / WMS facility root. Resolves in Phase 2 when Facility lands and the geographic half stays in tms."
+    "reason": "Location is core, and arrival criteria are tms. Burn down by moving the arrival criteria lookup behind an event or a DI-resolved interface."
   },
   {
     "from": "services/LocationResolutionService.ts",
     "to": "repositories/ArrivalCriteriaRepository.ts",
-    "reason": "Same Location conflation as above."
-  },
-  {
-    "from": "routes/manifestIngestion.ts",
-    "to": "commands/warehouse/CreateReceivingTaskCommand.ts",
-    "reason": "Manifest ingest creates a warehouse receiving task directly. Phase 4 demand intake makes this an event a WMS-only install can also serve."
+    "reason": "Same Location to arrival criteria leak as above."
   }
 ]
