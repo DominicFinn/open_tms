@@ -127,21 +127,8 @@ git push origin feature/your-feature-name
 - A code editor (VS Code recommended)
 
 ### Local Development
-```bash
-# Install dependencies
-npm install
 
-# Start the database
-docker compose up -d db
-
-# Start development servers
-npm run dev
-
-# Access the application
-# Frontend: http://localhost:5174
-# Backend: http://localhost:3001
-# API Docs: http://localhost:3001/docs
-```
+After cloning your fork, follow the README’s [Quick Start](README.md#-quick-start) for local development, including database setup.
 
 ### Project Structure
 ```
