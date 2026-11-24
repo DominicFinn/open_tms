@@ -14,7 +14,7 @@ This is in active development without a release version yet! When stable I'll ta
 
 ## Contributing
 
-Open TMS is under active development. We welcome contributions — feature requests, bug reports, code, and documentation improvements are all appreciated.
+Open TMS is under active development. We welcome contributions - feature requests, bug reports, code, and documentation improvements are all appreciated.
 
 See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](./roadmap.md) for what's planned.
 
@@ -96,7 +96,7 @@ See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](.
 - **Database Migrations** - Prisma-powered database management (45+ models)
 - **Dependency Injection** - Custom DI container with Symbol-based tokens
 - **Metrics & Monitoring** - `/metrics` endpoint with read model lag detection, event throughput, queue depths
-- **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats — ready for data warehouse and ML pipeline consumption
+- **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats - ready for data warehouse and ML pipeline consumption
 - **Location Auto-Creation** - Automatic location resolution from raw address data. Locations matched by name+city or created with default geofence arrival criteria. Shipment completion auto-triggered when destination arrival criteria are met.
 - **Full-Journey Proof** - Continuous, event-backed proof a shipment travelled from origin to destination: a departure event when the device leaves the origin geofence, ~10 in-transit checkpoints as it crosses segments of the planned route, and an arrival event at the destination. Query via `GET /api/v1/shipments/:id/journey`.
 - **Auto-Tender** - Automatic broadcast tenders created for laneless shipments when enabled (org setting). All active carriers receive offers simultaneously.
@@ -139,7 +139,7 @@ See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](.
          │  └──────────────┘  └──────────────┘   └──────────────┘
 ```
 
-**Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools — so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
+**Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools - so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
 
 ### Backend Architecture
 
@@ -160,11 +160,11 @@ Routes (HTTP) ─── validate (Zod) ──→ CommandBus.dispatch()
                                             Notifications)
 ```
 
-**Write side** — Commands execute inside transactions, emit domain events after commit:
+**Write side** - Commands execute inside transactions, emit domain events after commit:
 - 20+ command handlers across 7 entity types (Orders, Shipments, Carriers, Customers, Locations, Lanes, Issues)
-- Every write publishes to the immutable DomainEventLog — no silent mutations
+- Every write publishes to the immutable DomainEventLog - no silent mutations
 
-**Read side** — Projection handlers build denormalized read models from events:
+**Read side** - Projection handlers build denormalized read models from events:
 - 6 read model tables optimized for list queries (no joins needed)
 - Eventual consistency with configurable projection concurrency
 
@@ -204,7 +204,7 @@ This script will:
 - ✅ Start the backend server
 - ✅ Start the frontend development server
 
-> **Note**: The run script starts workers embedded in the API process for simplicity. For production, run workers in separate containers — see [Running Workers](#-running-workers) below.
+> **Note**: The run script starts workers embedded in the API process for simplicity. For production, run workers in separate containers - see [Running Workers](#-running-workers) below.
 
 #### Manual Setup
 
@@ -282,7 +282,7 @@ The system uses **event-driven background workers** for sending emails, firing w
 
 #### Quick Start (Development)
 
-For local development, the `run.sh` script runs workers embedded in the API process — no extra setup needed.
+For local development, the `run.sh` script runs workers embedded in the API process - no extra setup needed.
 
 #### Docker Compose (Recommended for Production)
 
@@ -344,7 +344,7 @@ PostgreSQL defaults to 100 connections. Here's the math:
 |-----------|-----------|-----------------|-------|
 | API server | 1 | 10 | 10 |
 | Worker | 3 | 5 | 15 |
-| pg-boss overhead | — | — | ~7 |
+| pg-boss overhead | - | - | ~7 |
 | **Total** | | | **~32** |
 
 This leaves plenty of headroom. For larger deployments (10+ workers), add [PgBouncer](https://www.pgbouncer.org/) as a connection multiplexer.
@@ -354,9 +354,9 @@ This leaves plenty of headroom. For larger deployments (10+ workers), add [PgBou
 Worker containers log to stdout. Use `docker compose logs worker -f` to tail worker output.
 
 For a deeper look at queue health, the API exposes queue monitoring endpoints:
-- `GET /api/v1/queues/stats` — queue sizes, active/completed/failed counts
-- `GET /api/v1/queues/:name/stats` — stats for a specific queue
-- `GET /api/v1/queues/activity` — hourly activity data for dashboards
+- `GET /api/v1/queues/stats` - queue sizes, active/completed/failed counts
+- `GET /api/v1/queues/:name/stats` - stats for a specific queue
+- `GET /api/v1/queues/activity` - hourly activity data for dashboards
 
 See the full architecture design in [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md).
 
@@ -370,8 +370,8 @@ The backend includes a pluggable email service. By default it uses a console pro
 | `SMTP_HOST` | `localhost` | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP server port |
 | `SMTP_SECURE` | `false` | Use TLS (`true` for port 465) |
-| `SMTP_USER` | — | SMTP authentication username |
-| `SMTP_PASSWORD` | — | SMTP authentication password |
+| `SMTP_USER` | - | SMTP authentication username |
+| `SMTP_PASSWORD` | - | SMTP authentication password |
 | `EMAIL_FROM_ADDRESS` | `noreply@opentms.local` | Default sender address |
 | `EMAIL_FROM_NAME` | `Open TMS` | Default sender display name |
 
@@ -574,12 +574,10 @@ open_tms/
 ├── frontend/               # React application
 │   ├── src/
 │   │   ├── pages/          # Page components
-│   │   ├── components/     # Reusable components (AppBar, AppSwitcher, etc.)
-│   │   ├── layout.tsx      # Operations app layout
-│   │   ├── integrations-layout.tsx  # Integrations app layout
-│   │   ├── admin-layout.tsx # Admin app layout
-│   │   ├── ThemeProvider.tsx # Theme context — loads DB theme, caches per session
-│   │   └── theme.css       # Material Design 3 CSS custom properties
+│   │   ├── vnext-design/   # Main UI: vnext-layout.tsx (the one app layout) and the VNext* pages
+│   │   ├── components/     # Reusable components (ui/, brand/, editors, dialogs, etc.)
+│   │   ├── ThemeProvider.tsx # Theme context - loads DB theme, caches per session
+│   │   └── shadcn-tokens.css # Tailwind layers and the shadcn/ui CSS variables
 │   └── Dockerfile          # Frontend container
 ├── edi-collector/           # SFTP EDI collection service
 │   ├── src/
@@ -707,11 +705,11 @@ The BOL is an **immutable** document. Its content is captured as a metadata snap
 
 `evaluateBolReadiness` is the single check, shared by the route and the frontend button. The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate.
 
-**Viewing the PDF.** `GET /api/v1/documents/:id/download` is JWT-protected. Plain `<a href>` navigation bypasses the global `window.fetch` interceptor in `frontend/src/authFetch.ts`, so the link arrives without an Authorization header and the backend returns `401 "Authorization header required"`. The BOL view's Download button instead does an authenticated `fetch`, reads the response as a blob, and synthesises a click on a hidden `<a download>`. The pattern lives in [`VNextBolView.handleDownload`](frontend/src/vnext-design/VNextBolView.tsx) and should be reused for any other JWT-protected file download — a system-wide signed-URL or download-cookie scheme is a separate, larger change.
+**Viewing the PDF.** `GET /api/v1/documents/:id/download` is JWT-protected. Plain `<a href>` navigation bypasses the global `window.fetch` interceptor in `frontend/src/authFetch.ts`, so the link arrives without an Authorization header and the backend returns `401 "Authorization header required"`. The BOL view's Download button instead does an authenticated `fetch`, reads the response as a blob, and synthesises a click on a hidden `<a download>`. The pattern lives in [`VNextBolView.handleDownload`](frontend/src/vnext-design/VNextBolView.tsx) and should be reused for any other JWT-protected file download - a system-wide signed-URL or download-cookie scheme is a separate, larger change.
 
-### Trading partners — soft delete
+### Trading partners - soft delete
 
-Trading partners support soft delete (`Comment` does too — see below). `DELETE /api/v1/trading-partners/:id` sets `TradingPartner.deletedAt` + `deletedBy` and disables `active` / `inboundEnabled` / `outboundEnabled` so the polling worker stops touching the partner immediately. The row is preserved because `EdiTransactionLog` rows reference it for audit. The list endpoint hides soft-deleted partners by default; pass `?includeDeleted=true` to see them. The frontend (`VNextTradingPartners`) shows a trash icon next to Edit on every row.
+Trading partners support soft delete (`Comment` does too - see below). `DELETE /api/v1/trading-partners/:id` sets `TradingPartner.deletedAt` + `deletedBy` and disables `active` / `inboundEnabled` / `outboundEnabled` so the polling worker stops touching the partner immediately. The row is preserved because `EdiTransactionLog` rows reference it for audit. The list endpoint hides soft-deleted partners by default; pass `?includeDeleted=true` to see them. The frontend (`VNextTradingPartners`) shows a trash icon next to Edit on every row.
 
 Migration: `backend/prisma/migrations/20260430_trading_partner_soft_delete` adds the columns and an index.
 
@@ -721,9 +719,9 @@ Migration: `backend/prisma/migrations/20260430_trading_partner_soft_delete` adds
 
 The polymorphic `Comment` model (issues, shipments, orders) supports edit and delete:
 
-- **POST /api/v1/comments** — author identity is taken from `req.user.sub` and the user's `firstName`/`lastName` are looked up from the DB; `createdAt` is set by Prisma. Frontend never has to send these.
-- **PUT /api/v1/comments/:id** — author-only edit. Bumps `updatedAt`; the UI shows an `(edited)` marker when `updatedAt > createdAt`.
-- **DELETE /api/v1/comments/:id** — soft delete. Sets `Comment.deletedAt` + `deletedBy` rather than removing the row, so the audit trail is preserved. Author or admin (role `admin` / permission `comments:*` / `*`) can delete; the list endpoint hides soft-deleted rows by default and exposes `?includeDeleted=true` for admins.
+- **POST /api/v1/comments** - author identity is taken from `req.user.sub` and the user's `firstName`/`lastName` are looked up from the DB; `createdAt` is set by Prisma. Frontend never has to send these.
+- **PUT /api/v1/comments/:id** - author-only edit. Bumps `updatedAt`; the UI shows an `(edited)` marker when `updatedAt > createdAt`.
+- **DELETE /api/v1/comments/:id** - soft delete. Sets `Comment.deletedAt` + `deletedBy` rather than removing the row, so the audit trail is preserved. Author or admin (role `admin` / permission `comments:*` / `*`) can delete; the list endpoint hides soft-deleted rows by default and exposes `?includeDeleted=true` for admins.
 
 Migration: `backend/prisma/migrations/20260430_comment_soft_delete` adds `deletedAt` + `deletedBy` columns and an index.
 
@@ -743,32 +741,33 @@ Migration: `backend/prisma/migrations/20260430_comment_soft_delete` adds `delete
 
 ## 🎨 Frontend Theming
 
-The frontend uses a **CSS custom properties** system based on Material Design 3 tokens. All colors are defined in `frontend/src/theme.css` and must never be hardcoded in components.
+The frontend uses a **CSS custom properties** system based on Material Design 3 tokens. The base tokens live in `frontend/src/shadcn-tokens.css`.
 
 ### Architecture
 
-1. **`theme.css`** defines all CSS custom properties (`:root` block) — canonical color tokens, aliases, spacing, shadows, overlays, and map marker colors.
+1. **`shadcn-tokens.css`** defines the base CSS custom properties: the `--shadcn-*` color tokens in the `:root` block (dark is the default; light mode comes through `[data-theme='light']`).
 2. **`ThemeProvider.tsx`** is a React context that loads theme overrides from `GET /api/v1/theme` on mount. Overrides are applied to `document.documentElement.style` and cached in `sessionStorage` using `themeUpdatedAt` for invalidation.
 3. **`useTheme()` hook** provides `hasLogo`, `logoUrl`, `themeUpdatedAt`, and `reloadTheme()` to any component.
 4. **Admin > Theme & Branding** page lets admins customize colors via color pickers with live preview and upload an organization logo.
 
 ### Rules for Contributors
 
-- **Never hardcode colors** in components — always use `var(--token-name)` in CSS or inline styles.
-- **Never import colors from JS** — all color values come from CSS custom properties.
+- **Never hardcode colors** in components - always use `var(--token-name)` in CSS or inline styles.
+- **Never import colors from JS** - all color values come from CSS custom properties.
 - **Use existing aliases** (`--color-primary`, `--color-error`, `--overlay-bg`, `--marker-origin`, etc.) rather than referencing raw tokens directly.
-- **For new color needs**, add a CSS variable to `theme.css` first, then reference it.
+- **For new color needs**, add a CSS variable to `shadcn-tokens.css` first, then reference it.
 - **Modal overlays** use `var(--overlay-bg)`, **modal shadows** use `var(--modal-shadow)`.
 - **Map markers** use `var(--marker-origin)`, `var(--marker-destination)`, `var(--marker-stop)`, `var(--marker-default)`.
 
 ### Multi-App Layout
 
-The frontend has three "apps" selectable via the AppSwitcher:
-- **Operations** (`/`) — Shipments, orders, lanes, carriers, customers
-- **Integrations** (`/integrations`) — API keys, webhooks, EDI
-- **Admin** (`/admin`) — Settings, theme, document templates, custom fields
+The frontend has several "apps" selectable from the app switcher in the sidebar. They are defined in the `APPS` list in `frontend/src/vnext-design/vnext-layout.tsx`, and the switcher only shows the apps the signed-in user has permission for:
+- **Operations** (`/`) - Shipments, orders, lanes, carriers, customers
+- **Triage** (`/triage`), **Reports** (`/reports`), **Finance** (`/finance`) and **Quality** (`/quality`)
+- **Integrations** (`/integrations`) - API keys, webhooks, EDI
+- **Admin** (`/settings`) - Settings, theme, document templates, custom fields
 
-Each app has its own layout component (`layout.tsx`, `integrations-layout.tsx`, `admin-layout.tsx`) with a dedicated sidebar.
+All of these apps share one layout component, `vnext-layout.tsx`, and each app supplies its own sidebar sections. The Integrations app also nests a `VNextIntegrationsLayout` inside it.
 
 ## 🔒 Security Features
 
@@ -843,7 +842,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Marketing Site
 
-The `www/` directory contains the Open TMS marketing and landing page — a standalone React + Vite + Tailwind CSS site deployable to Firebase Hosting (or any static host).
+The `www/` directory contains the Open TMS marketing and landing page - a standalone React + Vite + Tailwind CSS site deployable to Firebase Hosting (or any static host).
 
 ```bash
 cd www
